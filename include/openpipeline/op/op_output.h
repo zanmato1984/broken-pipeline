@@ -9,7 +9,7 @@
 #include <openpipeline/concepts.h>
 #include <openpipeline/task/resumer.h>
 
-namespace openpipeline::pipeline {
+namespace openpipeline::op {
 
 template <OpenPipelineTraits Traits>
 class OpOutput {
@@ -102,5 +102,4 @@ class OpOutput {
   std::variant<task::ResumerPtr, std::optional<typename Traits::Batch>> payload_;
 };
 
-}  // namespace openpipeline::pipeline
-
+}  // namespace openpipeline::op
