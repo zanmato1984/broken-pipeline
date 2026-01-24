@@ -70,7 +70,7 @@ Defined in `include/openpipeline/task/task_status.h`:
 
 ### OpOutput (Operator → Pipeline driver)
 
-Defined in `include/openpipeline/op/op_output.h`:
+Defined in `include/openpipeline/op/op.h`:
 
 The most important distinction:
 - `PIPE_SINK_NEEDS_MORE`: operator needs more upstream input.
