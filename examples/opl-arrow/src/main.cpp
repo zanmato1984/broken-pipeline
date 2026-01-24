@@ -105,12 +105,12 @@ int main() {
   opl_arrow::PassThroughPipe pipe;
   opl_arrow::RowCountSink sink;
 
-  openpipeline::pipeline::LogicalPipeline<Traits> logical(
-      "P", {openpipeline::pipeline::LogicalPipeline<Traits>::Channel{&source, {&pipe}}},
+  openpipeline::pipeline::Pipeline<Traits> pipeline(
+      "P", {openpipeline::pipeline::Pipeline<Traits>::Channel{&source, {&pipe}}},
       &sink);
 
   const std::size_t dop = 2;
-  auto groups = openpipeline::pipeline::CompileTaskGroups<Traits>(logical, dop);
+  auto groups = openpipeline::pipeline::CompileTaskGroups<Traits>(pipeline, dop);
 
   opl_arrow::Context context;
   openpipeline::task::TaskContext<Traits> task_ctx;

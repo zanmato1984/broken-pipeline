@@ -14,7 +14,7 @@ What this project provides:
 - Generic `Task` / `TaskGroup` protocol (`Continue/Blocked/Yield/Finished/Cancelled`)
 - Generic `Resumer` / `Awaiter` interfaces and factories (scheduler-owned)
 - Generic operator interfaces (`SourceOp` / `PipeOp` / `SinkOp`) and `OpOutput`
-- `LogicalPipeline`
+- `Pipeline`
 - Optional helper: `CompileTaskGroups` (internally splits into physical stages via implicit sources)
 
 What this project intentionally does **not** provide:
@@ -106,7 +106,7 @@ Then include:
 #include <openpipeline/openpipeline.h>
 ```
 
-To compile a `LogicalPipeline` into runnable `TaskGroup`s (optional helper):
+To compile a `Pipeline` into runnable `TaskGroup`s (optional helper):
 
 ```cpp
 #include <openpipeline/pipeline/compile.h>
@@ -169,7 +169,7 @@ Key conventions:
   - `Batch` means “new upstream input”
   - `nullopt` means “resume internal output / continue after blocked/yield”
 
-## Compiling a LogicalPipeline into TaskGroups
+## Compiling a Pipeline into TaskGroups
 
 Include:
 
@@ -180,13 +180,13 @@ Include:
 Then:
 
 ```cpp
-openpipeline::pipeline::LogicalPipeline<Traits> logical(
+openpipeline::pipeline::Pipeline<Traits> pipeline(
   "P",
   { {source0, {pipe0, pipe1}}, {source1, {pipe0, pipe1}} },  // channels
   sink
 );
 
-auto groups = openpipeline::pipeline::CompileTaskGroups<Traits>(logical, /*dop=*/8);
+auto groups = openpipeline::pipeline::CompileTaskGroups<Traits>(pipeline, /*dop=*/8);
 ```
 
 The returned `groups` are ordered. A typical driver/scheduler would execute them in order
@@ -194,7 +194,7 @@ and stop on the first error. openpipeline does not provide this scheduler.
 
 ## Notes on Lifetime and Threading
 
-- `LogicalPipeline` stores raw pointers to operators; you own the operator lifetimes.
+- `Pipeline` stores raw pointers to operators; you own the operator lifetimes.
 - A scheduler must not execute the same task instance concurrently.
 - Different `TaskId` instances within a `TaskGroup` may run concurrently (that is the
   point of `dop`).

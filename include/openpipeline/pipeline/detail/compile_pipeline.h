@@ -9,12 +9,12 @@
 
 #include <openpipeline/concepts.h>
 #include <openpipeline/pipeline/detail/physical_pipeline.h>
-#include <openpipeline/pipeline/logical_pipeline.h>
+#include <openpipeline/pipeline/pipeline.h>
 
 namespace openpipeline::pipeline::detail {
 
 /**
- * @brief Internal compiler that splits a `LogicalPipeline` into `PhysicalPipeline` stages.
+ * @brief Internal compiler that splits a `Pipeline` into `PhysicalPipeline` stages.
  *
  * Splitting rule (current):
  * - Only pipe implicit sources (`PipeOp::ImplicitSource()`) create stage boundaries.
@@ -27,8 +27,7 @@ namespace openpipeline::pipeline::detail {
 template <OpenPipelineTraits Traits>
 class PipelineCompiler {
  public:
-  explicit PipelineCompiler(const pipeline::LogicalPipeline<Traits>& logical_pipeline)
-      : logical_pipeline_(logical_pipeline) {}
+  explicit PipelineCompiler(const pipeline::Pipeline<Traits>& pipeline) : pipeline_(pipeline) {}
 
   PhysicalPipelines<Traits> Compile() && {
     ExtractTopology();
@@ -40,10 +39,10 @@ class PipelineCompiler {
   void ExtractTopology() {
     std::unordered_map<op::PipeOp<Traits>*, op::SourceOp<Traits>*> pipe_source_map;
 
-    for (auto& channel : logical_pipeline_.Channels()) {
+    for (auto& channel : pipeline_.Channels()) {
       std::size_t id = 0;
       topology_.emplace(channel.source_op,
-                        std::pair<std::size_t, typename pipeline::LogicalPipeline<Traits>::Channel>{
+                        std::pair<std::size_t, typename pipeline::Pipeline<Traits>::Channel>{
                             id++, channel});
       sources_keep_order_.push_back(channel.source_op);
 
@@ -55,14 +54,14 @@ class PipelineCompiler {
             auto* implicit_source = implicit_source_up.get();
             pipe_source_map.emplace(pipe, implicit_source);
 
-            typename pipeline::LogicalPipeline<Traits>::Channel new_channel{
+            typename pipeline::Pipeline<Traits>::Channel new_channel{
                 implicit_source,
                 std::vector<op::PipeOp<Traits>*>(channel.pipe_ops.begin() + i + 1,
                                                  channel.pipe_ops.end())};
 
             topology_.emplace(
                 implicit_source,
-                std::pair<std::size_t, typename pipeline::LogicalPipeline<Traits>::Channel>{
+                std::pair<std::size_t, typename pipeline::Pipeline<Traits>::Channel>{
                     id++, std::move(new_channel)});
             sources_keep_order_.push_back(implicit_source);
             implicit_sources_keepalive_.emplace(implicit_source,
@@ -102,10 +101,10 @@ class PipelineCompiler {
       std::transform(
           logical_channels.begin(), logical_channels.end(), physical_channels.begin(),
           [&](auto& channel) -> typename PhysicalPipeline<Traits>::Channel {
-            return {channel.source_op, std::move(channel.pipe_ops), logical_pipeline_.Sink()};
+            return {channel.source_op, std::move(channel.pipe_ops), pipeline_.Sink()};
           });
 
-      auto name = "PhysicalPipeline" + std::to_string(id) + "(" + logical_pipeline_.Name() +
+      auto name = "PhysicalPipeline" + std::to_string(id) + "(" + pipeline_.Name() +
                   ")";
       physical_pipelines.emplace_back(std::move(name), std::move(physical_channels),
                                       std::move(sources_keepalive));
@@ -114,10 +113,10 @@ class PipelineCompiler {
     return physical_pipelines;
   }
 
-  const pipeline::LogicalPipeline<Traits>& logical_pipeline_;
+  const pipeline::Pipeline<Traits>& pipeline_;
 
   std::unordered_map<op::SourceOp<Traits>*,
-                     std::pair<std::size_t, typename pipeline::LogicalPipeline<Traits>::Channel>>
+                     std::pair<std::size_t, typename pipeline::Pipeline<Traits>::Channel>>
       topology_;
   std::vector<op::SourceOp<Traits>*> sources_keep_order_;
   std::unordered_map<op::SourceOp<Traits>*, std::unique_ptr<op::SourceOp<Traits>>>
@@ -125,14 +124,14 @@ class PipelineCompiler {
 
   std::map<std::size_t,
            std::pair<std::vector<std::unique_ptr<op::SourceOp<Traits>>>,
-                     std::vector<typename pipeline::LogicalPipeline<Traits>::Channel>>>
+                     std::vector<typename pipeline::Pipeline<Traits>::Channel>>>
       physical_pipelines_;
 };
 
 template <OpenPipelineTraits Traits>
 PhysicalPipelines<Traits> CompilePhysicalPipelines(
-    const pipeline::LogicalPipeline<Traits>& logical_pipeline) {
-  return PipelineCompiler<Traits>(logical_pipeline).Compile();
+    const pipeline::Pipeline<Traits>& pipeline) {
+  return PipelineCompiler<Traits>(pipeline).Compile();
 }
 
 }  // namespace openpipeline::pipeline::detail

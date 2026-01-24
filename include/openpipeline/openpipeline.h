@@ -28,11 +28,11 @@
  * Public surface (via this umbrella header):
  * - `openpipeline::task::*`: tasks, task groups, resumer/awaiter, task status
  * - `openpipeline::op::*`: operator interfaces and `OpOutput`
- * - `openpipeline::pipeline::LogicalPipeline`: the logical pipeline graph container
+ * - `openpipeline::pipeline::Pipeline`: the pipeline graph container
  *
  * Optional helper (intentionally *not* included here):
  * - `#include <openpipeline/pipeline/compile.h>` provides
- *   `openpipeline::pipeline::CompileTaskGroups(...)`, which compiles a `LogicalPipeline`
+ *   `openpipeline::pipeline::CompileTaskGroups(...)`, which compiles a `Pipeline`
  *   into an ordered list of `TaskGroup`s by internally splitting it into *physical*
  *   stages (based on pipe implicit sources) and wrapping each stage in a generic
  *   `PipelineTask` state machine.
@@ -49,4 +49,4 @@
 
 #include <openpipeline/op/op_output.h>
 #include <openpipeline/op/op.h>
-#include <openpipeline/pipeline/logical_pipeline.h>
+#include <openpipeline/pipeline/pipeline.h>

@@ -10,13 +10,13 @@
 #include <openpipeline/concepts.h>
 #include <openpipeline/pipeline/detail/compile_pipeline.h>
 #include <openpipeline/pipeline/detail/pipeline_task.h>
-#include <openpipeline/pipeline/logical_pipeline.h>
+#include <openpipeline/pipeline/pipeline.h>
 #include <openpipeline/task/task_group.h>
 
 namespace openpipeline::pipeline {
 
 /**
- * @brief Compile a `LogicalPipeline` into an ordered list of `TaskGroup`s.
+ * @brief Compile a `Pipeline` into an ordered list of `TaskGroup`s.
  *
  * This is an optional helper that provides a *generic pipeline runtime*:
  * - It internally splits the logical pipeline into one or more *physical* stages using
@@ -37,13 +37,12 @@ namespace openpipeline::pipeline {
  * - It does not attempt to parallelize stages or schedule a stage DAG; it simply returns
  *   a linear list whose order preserves the implicit-source stage dependencies.
  *
- * @param logical_pipeline A logical pipeline referencing user-owned operator instances.
+ * @param pipeline A pipeline referencing user-owned operator instances.
  * @param dop Parallelism for the generated stage `TaskGroup`s.
  */
 template <OpenPipelineTraits Traits>
-task::TaskGroups<Traits> CompileTaskGroups(const LogicalPipeline<Traits>& logical_pipeline,
-                                           std::size_t dop) {
-  auto physical_pipelines = detail::CompilePhysicalPipelines<Traits>(logical_pipeline);
+task::TaskGroups<Traits> CompileTaskGroups(const Pipeline<Traits>& pipeline, std::size_t dop) {
+  auto physical_pipelines = detail::CompilePhysicalPipelines<Traits>(pipeline);
 
   task::TaskGroups<Traits> task_groups;
   task_groups.reserve(physical_pipelines.size() + 1);
@@ -75,7 +74,7 @@ task::TaskGroups<Traits> CompileTaskGroups(const LogicalPipeline<Traits>& logica
 
   // Run sink frontend(s) once after all physical pipeline stages complete.
   {
-    auto fe = logical_pipeline.Sink()->Frontend();
+    auto fe = pipeline.Sink()->Frontend();
     task_groups.insert(task_groups.end(),
                        std::make_move_iterator(fe.begin()),
                        std::make_move_iterator(fe.end()));
