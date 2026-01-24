@@ -11,6 +11,13 @@
 
 namespace openpipeline::pipeline::detail {
 
+/**
+ * @brief Internal representation of a physical pipeline stage.
+ *
+ * A physical pipeline is a subset of a logical pipeline after splitting on
+ * `PipeOp::ImplicitSource()` boundaries. It is intentionally in `pipeline::detail`
+ * because openpipeline’s public surface is focused on the protocol/interfaces.
+ */
 template <OpenPipelineTraits Traits>
 class PhysicalPipeline {
  public:
@@ -61,4 +68,3 @@ template <OpenPipelineTraits Traits>
 using PhysicalPipelines = std::vector<PhysicalPipeline<Traits>>;
 
 }  // namespace openpipeline::pipeline::detail
-

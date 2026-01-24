@@ -17,6 +17,25 @@
 
 namespace openpipeline::pipeline::detail {
 
+/**
+ * @brief Internal pipeline runtime: drive a PhysicalPipeline as a Task.
+ *
+ * `PipelineTask` is the generic "engine" behind `pipeline::CompileTaskGroups`.
+ *
+ * Key properties:
+ * - **Small-step**: one invocation performs bounded work and returns `TaskStatus` to let a
+ *   scheduler decide when/where to run the next step.
+ * - **Explicit flow control**: operators return `op::OpOutput` values that encode
+ *   "needs more input", "has more output", "blocked", "yield", etc.
+ * - **Multiplexing across channels**: a physical pipeline may contain multiple channels
+ *   (multiple sources feeding the same sink). A single task instance tries channels in
+ *   order and, when one channel blocks, it can continue to make progress on others.
+ *
+ * Threading model:
+ * - A `TaskGroup` typically schedules `dop` independent instances of this task.
+ * - Each task instance uses its `TaskId` as a `ThreadId` index into per-lane state.
+ * - The scheduler must not execute the same task instance concurrently.
+ */
 template <OpenPipelineTraits Traits>
 class PipelineTask {
  public:
@@ -348,4 +367,3 @@ class PipelineTask {
 };
 
 }  // namespace openpipeline::pipeline::detail
-

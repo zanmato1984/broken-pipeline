@@ -18,6 +18,17 @@ class TaskGroup {
   using Status = Result<Traits, void>;
   using NotifyFinishFunc = std::function<Status(const TaskContext<Traits>&)>;
 
+  /**
+   * @brief A conceptual group of N parallel instances of the same task.
+   *
+   * - `num_tasks` defines the group parallelism (often equals pipeline DOP).
+   * - If provided, `cont` runs exactly once after all task instances finish successfully.
+   * - `notify` is an optional hook to stop "possibly infinite" tasks from waiting
+   *   (e.g., tell a sink to stop expecting more input).
+   *
+   * openpipeline does not provide a scheduler, so the exact ordering/thread of
+   * `notify` and `cont` is scheduler-defined.
+   */
   TaskGroup(std::string name, std::string desc, Task<Traits> task, std::size_t num_tasks,
             std::optional<Continuation<Traits>> cont = std::nullopt,
             NotifyFinishFunc notify = {})

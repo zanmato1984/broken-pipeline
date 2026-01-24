@@ -15,6 +15,31 @@
 
 namespace openpipeline::pipeline {
 
+/**
+ * @brief Compile a `LogicalPipeline` into an ordered list of `TaskGroup`s.
+ *
+ * This is an optional helper that provides a *generic pipeline runtime*:
+ * - It internally splits the logical pipeline into one or more *physical* stages using
+ *   `PipeOp::ImplicitSource()` (implemented in internal `pipeline/detail/` headers).
+ * - Each physical stage is wrapped into a `pipeline::detail::PipelineTask`, which is a
+ *   state machine driving `Source/Pipe/Drain/Sink` step-by-step and mapping operator
+ *   signals (`OpOutput`) into task signals (`TaskStatus`).
+ *
+ * Output ordering:
+ * - For each physical stage:
+ *   1) append all `SourceOp::Frontend()` task groups for that stage's sources
+ *   2) append one `TaskGroup` that runs the stage `PipelineTask` with parallelism = `dop`
+ * - After all physical stages, append `SinkOp::Frontend()` task groups once.
+ *
+ * What this helper does *not* do:
+ * - It does not execute anything; you must provide a scheduler to run the returned task
+ *   groups.
+ * - It does not attempt to parallelize stages or schedule a stage DAG; it simply returns
+ *   a linear list whose order preserves the implicit-source stage dependencies.
+ *
+ * @param logical_pipeline A logical pipeline referencing user-owned operator instances.
+ * @param dop Parallelism for the generated stage `TaskGroup`s.
+ */
 template <OpenPipelineTraits Traits>
 task::TaskGroups<Traits> CompileTaskGroups(const LogicalPipeline<Traits>& logical_pipeline,
                                            std::size_t dop) {

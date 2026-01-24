@@ -13,6 +13,17 @@
 
 namespace openpipeline::pipeline::detail {
 
+/**
+ * @brief Internal compiler that splits a `LogicalPipeline` into `PhysicalPipeline` stages.
+ *
+ * Splitting rule (current):
+ * - Only pipe implicit sources (`PipeOp::ImplicitSource()`) create stage boundaries.
+ * - When a pipe provides an implicit source, the downstream pipe chain becomes a new
+ *   channel rooted at that implicit source in a later physical stage.
+ *
+ * This is intentionally internal because openpipeline’s public surface is protocol-first.
+ * Users typically consume it via `pipeline::CompileTaskGroups`.
+ */
 template <OpenPipelineTraits Traits>
 class PipelineCompiler {
  public:
@@ -125,4 +136,3 @@ PhysicalPipelines<Traits> CompilePhysicalPipelines(
 }
 
 }  // namespace openpipeline::pipeline::detail
-

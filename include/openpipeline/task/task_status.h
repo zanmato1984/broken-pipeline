@@ -8,6 +8,19 @@
 
 namespace openpipeline::task {
 
+/**
+ * @brief The control protocol between a Task and a Scheduler.
+ *
+ * openpipeline tasks are **small-step and repeatable**: a scheduler repeatedly invokes
+ * a task until it returns `Finished`/`Cancelled` or an error.
+ *
+ * - `Continue`: still running; scheduler may invoke again immediately or later.
+ * - `Blocked(awaiter)`: cannot make progress; scheduler must wait/suspend on `awaiter`.
+ * - `Yield`: task is about to do a long synchronous operation and requests yielding.
+ *   A scheduler may migrate it to another pool/priority class.
+ * - `Finished`: completed successfully.
+ * - `Cancelled`: cancelled due to external reasons (often sibling failure).
+ */
 class TaskStatus {
  public:
   enum class Code {
@@ -67,4 +80,3 @@ class TaskStatus {
 };
 
 }  // namespace openpipeline::task
-
