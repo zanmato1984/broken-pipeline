@@ -45,7 +45,6 @@
 #include <openpipeline/task/task_context.h>
 #include <openpipeline/task/task_group.h>
 #include <openpipeline/task/task.h>
-#include <openpipeline/task/task_status.h>
 
 #include <openpipeline/op/op.h>
 #include <openpipeline/pipeline/pipeline.h>

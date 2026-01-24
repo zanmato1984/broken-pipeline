@@ -13,7 +13,6 @@
 #include <openpipeline/op/op.h>
 #include <openpipeline/pipeline/detail/physical_pipeline.h>
 #include <openpipeline/task/task.h>
-#include <openpipeline/task/task_status.h>
 
 namespace openpipeline {
 

@@ -60,7 +60,7 @@ This architecture is what lets openpipeline be both:
 
 ### TaskStatus (Task → Scheduler)
 
-Defined in `include/openpipeline/task/task_status.h`:
+Defined in `include/openpipeline/task/task.h`:
 
 - `Continue`: task is still running; scheduler may invoke again.
 - `Blocked(awaiter)`: task cannot proceed until awaited condition is resumed.
