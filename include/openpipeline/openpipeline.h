@@ -22,7 +22,7 @@
  *
  * The design goal is to let you plug in your own:
  * - batch type (your `Traits::Batch`)
- * - error/result type (your `Traits::Result<T>`)
+ * - status/result types (your `Traits::Status` and `Traits::Result<T>`)
  * - scheduler primitives (your `Resumer`/`Awaiter` implementations + factories)
  *
  * Public surface (via this umbrella header):

@@ -15,7 +15,7 @@ namespace openpipeline {
 template <OpenPipelineTraits Traits>
 class TaskGroup {
  public:
-  using Status = Result<Traits, void>;
+  using Status = openpipeline::Status<Traits>;
   using NotifyFinishFunc = std::function<Status(const TaskContext<Traits>&)>;
 
   /**
@@ -50,7 +50,7 @@ class TaskGroup {
 
   Status NotifyFinish(const TaskContext<Traits>& ctx) const {
     if (!notify_) {
-      return Traits::Ok();
+      return Traits::Status::OK();
     }
     return notify_(ctx);
   }

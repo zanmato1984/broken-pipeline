@@ -91,14 +91,13 @@ Other notable signals:
 Your `Traits` must define:
 - `using Batch = ...;` (movable)
 - `using Context = ...;` (any type, can be `std::monostate`)
-- `template<class T> using Result = ...;` (your result type)
-- `static Result<void> Ok();`
-- `template<class T> static Result<T> Ok(T value);`
-- `template<class T> static bool IsOk(const Result<T>&);`
-- `template<class T> static T& Value(Result<T>&);`
-- `template<class T> static const T& Value(const Result<T>&);`
-- `template<class T> static T Take(Result<T>&&);`
-- `template<class U, class T> static Result<U> ErrorFrom(const Result<T>&);`
+- `using Status = ...;` (Arrow-style status type)
+- `template<class T> using Result = ...;` (Arrow-style result type)
+
+Required surface:
+- `Status::OK()` and `status.ok()`
+- `result.ok()`, `result.status()`, and `result.ValueOrDie()` (lvalue/const/rvalue)
+- `Result<T>(T)` for success and `Result<T>(Status)` for error
 
 openpipeline defines `openpipeline::TaskId` and `openpipeline::ThreadId` as `std::size_t`,
 so you do not provide id types in your `Traits`.
@@ -117,44 +116,46 @@ To compile a `Pipeline` into runnable `TaskGroup`s (optional helper):
 
 ## Minimal Traits Example (no dependencies)
 
-Below is a small “result” implementation built on `std::variant` just to satisfy the
-concept. In real code you can map this to `std::expected`-like types.
+Below is a small Arrow-shaped `Status`/`Result<T>` built on `std::variant` just to satisfy
+the concept.
 
 ```cpp
-struct Error { std::string msg; };
+struct Status {
+  static Status OK() { return Status(); }
+  Status() = default;
+  explicit Status(std::string msg) : msg_(std::move(msg)) {}
+
+  bool ok() const { return msg_.empty(); }
+  const std::string& message() const { return msg_; }
+
+ private:
+  std::string msg_;
+};
 
 template<class T>
-struct Result { std::variant<T, Error> v; };
+class Result {
+ public:
+  Result(T value) : data_(std::move(value)) {}
+  Result(Status status) : data_(std::move(status)) {}
 
-template<>
-struct Result<void> { std::variant<std::monostate, Error> v; };
+  bool ok() const { return std::holds_alternative<T>(data_); }
+  Status status() const { return ok() ? Status::OK() : std::get<Status>(data_); }
+
+  T& ValueOrDie() & { return std::get<T>(data_); }
+  const T& ValueOrDie() const & { return std::get<T>(data_); }
+  T ValueOrDie() && { return std::move(std::get<T>(data_)); }
+
+ private:
+  std::variant<T, Status> data_;
+};
 
 struct Traits {
   using Batch = MyBatch;
   using Context = MyQueryContext;
+  using Status = ::Status;
 
   template<class T>
   using Result = ::Result<T>;
-
-  static Result<void> Ok() { return {std::monostate{}}; }
-
-  template<class T>
-  static Result<T> Ok(T value) { return {std::move(value)}; }
-
-  template<class T>
-  static bool IsOk(const Result<T>& r) { return std::holds_alternative<T>(r.v); }
-
-  template<class T>
-  static T& Value(Result<T>& r) { return std::get<T>(r.v); }
-
-  template<class T>
-  static const T& Value(const Result<T>& r) { return std::get<T>(r.v); }
-
-  template<class T>
-  static T Take(Result<T>&& r) { return std::move(std::get<T>(r.v)); }
-
-  template<class U, class T>
-  static Result<U> ErrorFrom(const Result<T>& r) { return {std::get<Error>(r.v)}; }
 };
 ```
 

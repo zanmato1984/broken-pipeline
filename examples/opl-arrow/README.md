@@ -4,8 +4,7 @@ Standalone example project showing how to adopt `openpipeline` in an Apache Arro
 codebase.
 
 This example demonstrates:
-- Implementing the required `Traits` adapter using Arrow's `arrow::Result<T>` and
-  `arrow::Status`.
+- Declaring a `Traits` type that aliases Arrow's `arrow::Status` and `arrow::Result<T>`.
 - Using an Arrow-native batch type (`std::shared_ptr<arrow::RecordBatch>`).
 - Compiling a `Pipeline` into `TaskGroup`s via `openpipeline::CompileTaskGroups`.
 

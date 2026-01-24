@@ -9,14 +9,20 @@
 #include <openpipeline/pipeline/compile.h>
 
 #include "arrow_traits.h"
-#include "demo_ops.h"
+#include "arrow_op.h"
 
 namespace {
 
 using Traits = opl_arrow::Traits;
+template <class T>
+using Result = Traits::template Result<T>;
+using Status = Traits::Status;
 
-arrow::Status RunTaskGroup(const openpipeline::TaskGroup<Traits>& group,
-                           const openpipeline::TaskContext<Traits>& task_ctx) {
+using TaskContext = openpipeline::TaskContext<Traits>;
+using TaskGroup = openpipeline::TaskGroup<Traits>;
+using TaskGroups = openpipeline::TaskGroups<Traits>;
+
+Status RunTaskGroup(const TaskGroup& group, const TaskContext& task_ctx) {
   std::vector<bool> done(group.NumTasks(), false);
   std::size_t done_count = 0;
 
@@ -72,18 +78,17 @@ arrow::Status RunTaskGroup(const openpipeline::TaskGroup<Traits>& group,
     }
   }
 
-  return arrow::Status::OK();
+  return Status::OK();
 }
 
-arrow::Status RunTaskGroups(const openpipeline::TaskGroups<Traits>& groups,
-                            const openpipeline::TaskContext<Traits>& task_ctx) {
+Status RunTaskGroups(const TaskGroups& groups, const TaskContext& task_ctx) {
   for (const auto& group : groups) {
     auto st = RunTaskGroup(group, task_ctx);
     if (!st.ok()) {
       return st;
     }
   }
-  return arrow::Status::OK();
+  return Status::OK();
 }
 
 }  // namespace
@@ -112,24 +117,24 @@ int main() {
   auto groups = openpipeline::CompileTaskGroups<Traits>(pipeline, dop);
 
   opl_arrow::Context context;
-  openpipeline::TaskContext<Traits> task_ctx;
+  TaskContext task_ctx;
   task_ctx.context = &context;
-  task_ctx.resumer_factory = []() -> Traits::Result<openpipeline::ResumerPtr> {
+  task_ctx.resumer_factory = []() -> Result<openpipeline::ResumerPtr> {
     return arrow::Result<openpipeline::ResumerPtr>(
         arrow::Status::NotImplemented("resumer_factory not used in demo"));
   };
   task_ctx.single_awaiter_factory =
-      [](openpipeline::ResumerPtr) -> Traits::Result<openpipeline::AwaiterPtr> {
+      [](openpipeline::ResumerPtr) -> Result<openpipeline::AwaiterPtr> {
     return arrow::Result<openpipeline::AwaiterPtr>(
         arrow::Status::NotImplemented("single_awaiter_factory not used in demo"));
   };
   task_ctx.any_awaiter_factory =
-      [](openpipeline::Resumers) -> Traits::Result<openpipeline::AwaiterPtr> {
+      [](openpipeline::Resumers) -> Result<openpipeline::AwaiterPtr> {
     return arrow::Result<openpipeline::AwaiterPtr>(
         arrow::Status::NotImplemented("any_awaiter_factory not used in demo"));
   };
   task_ctx.all_awaiter_factory =
-      [](openpipeline::Resumers) -> Traits::Result<openpipeline::AwaiterPtr> {
+      [](openpipeline::Resumers) -> Result<openpipeline::AwaiterPtr> {
     return arrow::Result<openpipeline::AwaiterPtr>(
         arrow::Status::NotImplemented("all_awaiter_factory not used in demo"));
   };

@@ -21,6 +21,15 @@
 
 namespace opl_arrow {
 
+using Batch = Traits::Batch;
+using TaskContext = openpipeline::TaskContext<Traits>;
+using OpOutput = openpipeline::OpOutput<Traits>;
+using OpResult = openpipeline::OpResult<Traits>;
+using PipelineSource = openpipeline::PipelineSource<Traits>;
+using PipelineDrain = openpipeline::PipelineDrain<Traits>;
+using PipelinePipe = openpipeline::PipelinePipe<Traits>;
+using PipelineSink = openpipeline::PipelineSink<Traits>;
+
 inline arrow::Result<std::shared_ptr<arrow::RecordBatch>> MakeInt32Batch(
     const std::shared_ptr<arrow::Schema>& schema, std::int32_t start, std::int32_t length) {
   arrow::Int32Builder b;
@@ -47,14 +56,13 @@ class BatchesSource final : public openpipeline::SourceOp<Traits> {
         batches_(std::move(batches)),
         next_(0) {}
 
-  openpipeline::PipelineSource<Traits> Source() override {
-    return [this](const openpipeline::TaskContext<Traits>& /*ctx*/,
-                  openpipeline::ThreadId /*thread_id*/) -> openpipeline::OpResult<Traits> {
+  PipelineSource Source() override {
+    return [this](const TaskContext& /*ctx*/, openpipeline::ThreadId /*thread_id*/) -> OpResult {
       const std::size_t idx = next_.fetch_add(1);
       if (idx >= batches_.size()) {
-        return Traits::Ok(openpipeline::OpOutput<Traits>::Finished());
+        return OpResult(OpOutput::Finished());
       }
-      return Traits::Ok(openpipeline::OpOutput<Traits>::SourcePipeHasMore(batches_[idx]));
+      return OpResult(OpOutput::SourcePipeHasMore(batches_[idx]));
     };
   }
 
@@ -73,18 +81,17 @@ class PassThroughPipe final : public openpipeline::PipeOp<Traits> {
  public:
   PassThroughPipe() : PipeOp("PassThroughPipe", "Forward input batches unchanged") {}
 
-  openpipeline::PipelinePipe<Traits> Pipe() override {
-    return [](const openpipeline::TaskContext<Traits>& /*ctx*/,
-              openpipeline::ThreadId /*thread_id*/,
-              std::optional<Traits::Batch> input) -> openpipeline::OpResult<Traits> {
+  PipelinePipe Pipe() override {
+    return [](const TaskContext& /*ctx*/, openpipeline::ThreadId /*thread_id*/,
+              std::optional<Batch> input) -> OpResult {
       if (!input.has_value()) {
-        return Traits::Ok(openpipeline::OpOutput<Traits>::PipeSinkNeedsMore());
+        return OpResult(OpOutput::PipeSinkNeedsMore());
       }
-      return Traits::Ok(openpipeline::OpOutput<Traits>::PipeEven(std::move(*input)));
+      return OpResult(OpOutput::PipeEven(std::move(*input)));
     };
   }
 
-  openpipeline::PipelineDrain<Traits> Drain() override { return {}; }
+  PipelineDrain Drain() override { return {}; }
 
   std::unique_ptr<openpipeline::SourceOp<Traits>> ImplicitSource() override {
     return nullptr;
@@ -95,14 +102,13 @@ class RowCountSink final : public openpipeline::SinkOp<Traits> {
  public:
   RowCountSink() : SinkOp("RowCountSink", "Count rows across all batches") {}
 
-  openpipeline::PipelineSink<Traits> Sink() override {
-    return [this](const openpipeline::TaskContext<Traits>& /*ctx*/,
-                  openpipeline::ThreadId /*thread_id*/,
-                  std::optional<Traits::Batch> input) -> openpipeline::OpResult<Traits> {
+  PipelineSink Sink() override {
+    return [this](const TaskContext& /*ctx*/, openpipeline::ThreadId /*thread_id*/,
+                  std::optional<Batch> input) -> OpResult {
       if (input.has_value() && *input) {
         total_rows_.fetch_add(static_cast<std::size_t>((*input)->num_rows()));
       }
-      return Traits::Ok(openpipeline::OpOutput<Traits>::PipeSinkNeedsMore());
+      return OpResult(OpOutput::PipeSinkNeedsMore());
     };
   }
 

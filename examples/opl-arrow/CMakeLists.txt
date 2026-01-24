@@ -10,7 +10,7 @@ find_package(Arrow CONFIG REQUIRED)
 
 add_executable(opl-arrow-demo
   src/arrow_traits.h
-  src/demo_ops.h
+  src/arrow_op.h
   src/main.cpp
 )
 
