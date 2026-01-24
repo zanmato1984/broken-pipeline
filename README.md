@@ -86,10 +86,8 @@ Other notable signals:
 `openpipeline` is fully generic via a user-defined `Traits` type (checked by C++20 concepts).
 
 Your `Traits` must define:
-- `using TaskId = ...;` (unsigned integral)
-- `using ThreadId = ...;` (unsigned integral)
 - `using Batch = ...;` (movable)
-- `using QueryContext = ...;` (any type, can be `std::monostate`)
+- `using Context = ...;` (any type, can be `std::monostate`)
 - `template<class T> using Result = ...;` (your result type)
 - `static Result<void> Ok();`
 - `template<class T> static Result<T> Ok(T value);`
@@ -98,6 +96,9 @@ Your `Traits` must define:
 - `template<class T> static const T& Value(const Result<T>&);`
 - `template<class T> static T Take(Result<T>&&);`
 - `template<class U, class T> static Result<U> ErrorFrom(const Result<T>&);`
+
+openpipeline defines `openpipeline::TaskId` and `openpipeline::ThreadId` as `std::size_t`,
+so you do not provide id types in your `Traits`.
 
 Then include:
 
@@ -126,10 +127,8 @@ template<>
 struct Result<void> { std::variant<std::monostate, Error> v; };
 
 struct Traits {
-  using TaskId = std::size_t;
-  using ThreadId = std::size_t;
   using Batch = MyBatch;
-  using QueryContext = MyQueryContext;
+  using Context = MyQueryContext;
 
   template<class T>
   using Result = ::Result<T>;
@@ -208,3 +207,7 @@ This repo is header-only; the CMake target is an INTERFACE library:
 cmake -S . -B build
 cmake --build build
 ```
+
+## Examples
+
+- `examples/opl-arrow`: Apache Arrow based adoption example (requires Arrow C++ CMake package).

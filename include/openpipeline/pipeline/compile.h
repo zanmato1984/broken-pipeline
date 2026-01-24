@@ -65,7 +65,7 @@ task::TaskGroups<Traits> CompileTaskGroups(const LogicalPipeline<Traits>& logica
     task::Task<Traits> task(
         pipeline_task->Name(), pipeline_task->Desc(),
         [pipeline_task](const task::TaskContext<Traits>& ctx,
-                        typename Traits::TaskId task_id) {
+                        openpipeline::TaskId task_id) {
           return (*pipeline_task)(ctx, task_id);
         });
 

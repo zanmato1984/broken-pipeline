@@ -39,8 +39,8 @@ namespace openpipeline::pipeline::detail {
 template <OpenPipelineTraits Traits>
 class PipelineTask {
  public:
-  using TaskId = typename Traits::TaskId;
-  using ThreadId = typename Traits::ThreadId;
+  using TaskId = openpipeline::TaskId;
+  using ThreadId = openpipeline::ThreadId;
 
   PipelineTask(std::shared_ptr<const PhysicalPipeline<Traits>> pipeline, std::size_t dop)
       : name_("Task of " + pipeline->Name()),

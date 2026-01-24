@@ -11,7 +11,7 @@ namespace openpipeline::task {
  * A scheduler is expected to create one `TaskContext` and pass it to all task instances
  * in a `TaskGroup`. openpipeline itself does not construct these.
  *
- * - `query_ctx` is an optional user-defined pointer to query-level state (can be null).
+ * - `context` is an optional user-defined pointer to query-level state (can be null).
  * - The factories provide scheduler-specific primitives for blocking and resumption.
  *
  * When a task returns `TaskStatus::Blocked(awaiter)`, the scheduler is responsible for:
@@ -20,7 +20,7 @@ namespace openpipeline::task {
  */
 template <OpenPipelineTraits Traits>
 struct TaskContext {
-  const typename Traits::QueryContext* query_ctx = nullptr;
+  const typename Traits::Context* context = nullptr;
   ResumerFactory<Traits> resumer_factory;
   SingleAwaiterFactory<Traits> single_awaiter_factory;
   AnyAwaiterFactory<Traits> any_awaiter_factory;

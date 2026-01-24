@@ -8,6 +8,23 @@
 namespace openpipeline {
 
 /**
+ * @brief Task instance id within a `TaskGroup`.
+ *
+ * openpipeline intentionally keeps ids simple and uniform: task instances are indexed
+ * 0..N-1 within their group.
+ */
+using TaskId = std::size_t;
+
+/**
+ * @brief Logical execution lane id.
+ *
+ * Many operator implementations keep per-lane state indexed by `ThreadId`. In the
+ * reference runtime (`pipeline::detail::PipelineTask`), a task instance typically uses
+ * `TaskId` as its `ThreadId`.
+ */
+using ThreadId = std::size_t;
+
+/**
  * @brief Alias helper for `Traits::Result<T>`.
  *
  * openpipeline never assumes a particular error type or transport. Instead, all APIs
@@ -29,9 +46,8 @@ using Status = Result<Traits, void>;
  * @brief Concept defining the required "Traits" surface for openpipeline.
  *
  * You provide a `Traits` type to parametrize openpipeline over:
- * - Identifiers (`TaskId`, `ThreadId`)
  * - The batch type (`Batch`)
- * - An optional query-level context type (`QueryContext`)
+ * - An optional query-level context type (`Context`)
  * - Your error/result transport (`Result<T>`)
  *
  * The required static functions are intentionally minimal and are used only to:
@@ -53,16 +69,12 @@ using Status = Result<Traits, void>;
 template <class Traits>
 concept OpenPipelineTraits =
     requires {
-      typename Traits::TaskId;
-      typename Traits::ThreadId;
       typename Traits::Batch;
-      typename Traits::QueryContext;
+      typename Traits::Context;
       typename Result<Traits, void>;
     } &&
-    std::unsigned_integral<typename Traits::TaskId> &&
-    std::unsigned_integral<typename Traits::ThreadId> &&
     std::movable<typename Traits::Batch> &&
-    std::is_object_v<typename Traits::QueryContext> &&
+    std::is_object_v<typename Traits::Context> &&
     requires {
       { Traits::Ok() } -> std::same_as<Status<Traits>>;
       { Traits::Ok(std::declval<int>()) } -> std::same_as<Result<Traits, int>>;

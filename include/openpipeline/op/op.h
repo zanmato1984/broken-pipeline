@@ -34,7 +34,7 @@ using OpResult = Result<Traits, OpOutput<Traits>>;
  */
 template <OpenPipelineTraits Traits>
 using PipelineSource =
-    std::function<OpResult<Traits>(const task::TaskContext<Traits>&, typename Traits::ThreadId)>;
+    std::function<OpResult<Traits>(const task::TaskContext<Traits>&, openpipeline::ThreadId)>;
 
 /**
  * @brief Pipe/Sink callback signature.
@@ -47,7 +47,7 @@ using PipelineSource =
  */
 template <OpenPipelineTraits Traits>
 using PipelinePipe = std::function<OpResult<Traits>(const task::TaskContext<Traits>&,
-                                                    typename Traits::ThreadId,
+                                                    openpipeline::ThreadId,
                                                     std::optional<typename Traits::Batch>)>;
 
 /**
@@ -60,7 +60,7 @@ using PipelinePipe = std::function<OpResult<Traits>(const task::TaskContext<Trai
  */
 template <OpenPipelineTraits Traits>
 using PipelineDrain =
-    std::function<OpResult<Traits>(const task::TaskContext<Traits>&, typename Traits::ThreadId)>;
+    std::function<OpResult<Traits>(const task::TaskContext<Traits>&, openpipeline::ThreadId)>;
 
 template <OpenPipelineTraits Traits>
 using PipelineSink = PipelinePipe<Traits>;

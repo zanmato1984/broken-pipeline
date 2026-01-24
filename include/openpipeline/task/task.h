@@ -24,8 +24,13 @@ struct TaskHint {
   Type type = Type::CPU;
 };
 
-template <OpenPipelineTraits Traits>
-using TaskId = typename Traits::TaskId;
+/**
+ * @brief Task instance id within a group.
+ *
+ * openpipeline uses a uniform `std::size_t` task id. It is typically interpreted as a
+ * lane index for operators.
+ */
+using TaskId = openpipeline::TaskId;
 
 template <OpenPipelineTraits Traits>
 using TaskResult = Result<Traits, TaskStatus>;
@@ -43,7 +48,7 @@ class Task {
    * - The function must be re-entrant: it should do bounded work per call and use
    *   internal state (often indexed by `task_id`) to resume across calls.
    */
-  using Fn = std::function<TaskResult<Traits>(const TaskContext<Traits>&, TaskId<Traits>)>;
+  using Fn = std::function<TaskResult<Traits>(const TaskContext<Traits>&, TaskId)>;
 
   Task(std::string name, std::string desc, Fn fn, TaskHint hint = {})
       : name_(std::move(name)),
@@ -51,7 +56,7 @@ class Task {
         fn_(std::move(fn)),
         hint_(std::move(hint)) {}
 
-  TaskResult<Traits> operator()(const TaskContext<Traits>& ctx, TaskId<Traits> task_id) const {
+  TaskResult<Traits> operator()(const TaskContext<Traits>& ctx, TaskId task_id) const {
     return fn_(ctx, task_id);
   }
 
