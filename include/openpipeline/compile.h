@@ -8,10 +8,10 @@
 #include <vector>
 
 #include <openpipeline/concepts.h>
-#include <openpipeline/pipeline/detail/compile_pipeline.h>
-#include <openpipeline/pipeline/detail/pipeline_task.h>
-#include <openpipeline/pipeline/pipeline.h>
-#include <openpipeline/task/task_group.h>
+#include <openpipeline/detail/compile_pipeline.h>
+#include <openpipeline/detail/pipeline_task.h>
+#include <openpipeline/pipeline.h>
+#include <openpipeline/task.h>
 
 namespace openpipeline {
 
@@ -20,7 +20,7 @@ namespace openpipeline {
  *
  * This is an optional helper that provides a *generic pipeline runtime*:
  * - It internally splits the pipeline into one or more *physical* stages using
- *   `PipeOp::ImplicitSource()` (implemented in internal `pipeline/detail/` headers).
+ *   `PipeOp::ImplicitSource()` (implemented in internal `detail/` headers).
  * - Each physical stage is wrapped into a `PipelineTask`, which is a
  *   state machine driving `Source/Pipe/Drain/Sink` step-by-step and mapping operator
  *   signals (`OpOutput`) into task signals (`TaskStatus`).

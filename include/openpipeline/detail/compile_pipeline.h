@@ -8,8 +8,8 @@
 #include <vector>
 
 #include <openpipeline/concepts.h>
-#include <openpipeline/pipeline/detail/physical_pipeline.h>
-#include <openpipeline/pipeline/pipeline.h>
+#include <openpipeline/detail/physical_pipeline.h>
+#include <openpipeline/pipeline.h>
 
 namespace openpipeline {
 

@@ -1,49 +1,51 @@
 #pragma once
 
-#include <memory>
 #include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include <openpipeline/concepts.h>
-#include <openpipeline/op/op.h>
+#include <openpipeline/op.h>
 
 namespace openpipeline {
 
 /**
- * @brief Internal representation of a physical pipeline stage.
+ * @brief A pipeline graph: (one or more channels) -> (shared sink).
  *
- * A physical pipeline is a subset of a logical pipeline after splitting on
- * `PipeOp::ImplicitSource()` boundaries. It is intentionally in `detail`
- * because openpipeline’s public surface is focused on the protocol/interfaces.
+ * A pipeline contains:
+ * - `Channel`: a `SourceOp` plus a linear chain of `PipeOp`s
+ * - A single shared `SinkOp`
+ *
+ * Notes:
+ * - The pipeline stores raw pointers to operators. Operator lifetime is owned by you and
+ *   must outlive any compilation/execution that uses the pipeline.
+ * - A pipeline may be split into multiple *physical* stages if any `PipeOp` returns a
+ *   non-null `ImplicitSource()`. That split is performed by
+ *   `CompileTaskGroups` (via internal detail headers).
  */
 template <OpenPipelineTraits Traits>
-class PhysicalPipeline {
+class Pipeline {
  public:
   struct Channel {
     SourceOp<Traits>* source_op;
     std::vector<PipeOp<Traits>*> pipe_ops;
-    SinkOp<Traits>* sink_op;
   };
 
-  PhysicalPipeline(std::string name, std::vector<Channel> channels,
-                   std::vector<std::unique_ptr<SourceOp<Traits>>> implicit_sources)
+  Pipeline(std::string name, std::vector<Channel> channels, SinkOp<Traits>* sink_op)
       : name_(std::move(name)),
-        desc_(Explain(channels)),
+        desc_(Explain(channels, sink_op)),
         channels_(std::move(channels)),
-        implicit_sources_(std::move(implicit_sources)) {}
+        sink_op_(sink_op) {}
 
   const std::string& Name() const noexcept { return name_; }
   const std::string& Desc() const noexcept { return desc_; }
 
   const std::vector<Channel>& Channels() const noexcept { return channels_; }
-  const std::vector<std::unique_ptr<SourceOp<Traits>>>& ImplicitSources() const noexcept {
-    return implicit_sources_;
-  }
+  SinkOp<Traits>* Sink() const noexcept { return sink_op_; }
 
  private:
-  static std::string Explain(const std::vector<Channel>& channels) {
+  static std::string Explain(const std::vector<Channel>& channels, SinkOp<Traits>* sink_op) {
     std::stringstream ss;
     for (std::size_t i = 0; i < channels.size(); ++i) {
       if (i > 0) {
@@ -53,7 +55,7 @@ class PhysicalPipeline {
       for (std::size_t j = 0; j < channels[i].pipe_ops.size(); ++j) {
         ss << channels[i].pipe_ops[j]->Name() << " -> ";
       }
-      ss << channels[i].sink_op->Name();
+      ss << sink_op->Name();
     }
     return ss.str();
   }
@@ -61,10 +63,7 @@ class PhysicalPipeline {
   std::string name_;
   std::string desc_;
   std::vector<Channel> channels_;
-  std::vector<std::unique_ptr<SourceOp<Traits>>> implicit_sources_;
+  SinkOp<Traits>* sink_op_;
 };
-
-template <OpenPipelineTraits Traits>
-using PhysicalPipelines = std::vector<PhysicalPipeline<Traits>>;
 
 }  // namespace openpipeline

@@ -31,7 +31,7 @@
  * - Pipeline graph: `Pipeline`
  *
  * Optional helper (intentionally *not* included here):
- * - `#include <openpipeline/pipeline/compile.h>` provides
+ * - `#include <openpipeline/compile.h>` provides
  *   `openpipeline::CompileTaskGroups(...)`, which compiles a `Pipeline`
  *   into an ordered list of `TaskGroup`s by internally splitting it into *physical*
  *   stages (based on pipe implicit sources) and wrapping each stage in a generic
@@ -40,11 +40,7 @@
 
 #include <openpipeline/concepts.h>
 
-#include <openpipeline/task/awaiter.h>
-#include <openpipeline/task/resumer.h>
-#include <openpipeline/task/task_context.h>
-#include <openpipeline/task/task_group.h>
-#include <openpipeline/task/task.h>
+#include <openpipeline/task.h>
 
-#include <openpipeline/op/op.h>
-#include <openpipeline/pipeline/pipeline.h>
+#include <openpipeline/op.h>
+#include <openpipeline/pipeline.h>

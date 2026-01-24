@@ -32,18 +32,18 @@ What this project intentionally does **not** provide:
 openpipeline deliberately separates concerns:
 
 All public types live directly in `namespace openpipeline` (no sub-namespaces); headers are
-organized by directory:
+organized as a small set of top-level files:
 
-1) **Operator protocol** (`include/openpipeline/op/*`)
+1) **Operator protocol** (`include/openpipeline/op.h`)
 - “How do I transform/consume/produce batches?”
 - Exposes a small set of flow-control signals (`OpOutput`).
 
-2) **Pipeline driver** (`include/openpipeline/pipeline/*` + internal `include/openpipeline/pipeline/detail/*`)
+2) **Pipeline driver** (`include/openpipeline/pipeline.h` + internal `include/openpipeline/detail/*`)
 - “How do I wire Source/Pipe/Sink together and resume them correctly?”
 - Encodes “drain after upstream finished”, “resume an operator that has more internal
   output”, “propagate blocked/yield” as a state machine.
 
-3) **Task protocol** (`include/openpipeline/task/*`)
+3) **Task protocol** (`include/openpipeline/task.h`)
 - “How do I package execution into schedulable units?”
 - Exposes `TaskStatus` (`Continue/Blocked/Yield/Finished/Cancelled`) for scheduler control.
 
@@ -60,7 +60,7 @@ This architecture is what lets openpipeline be both:
 
 ### TaskStatus (Task → Scheduler)
 
-Defined in `include/openpipeline/task/task.h`:
+Defined in `include/openpipeline/task.h`:
 
 - `Continue`: task is still running; scheduler may invoke again.
 - `Blocked(awaiter)`: task cannot proceed until awaited condition is resumed.
@@ -70,7 +70,7 @@ Defined in `include/openpipeline/task/task.h`:
 
 ### OpOutput (Operator → Pipeline driver)
 
-Defined in `include/openpipeline/op/op.h`:
+Defined in `include/openpipeline/op.h`:
 
 The most important distinction:
 - `PIPE_SINK_NEEDS_MORE`: operator needs more upstream input.
@@ -161,7 +161,7 @@ struct Traits {
 
 ## Operator Skeleton
 
-All operator interfaces live in `namespace openpipeline` (headers under `include/openpipeline/op/*`):
+All operator interfaces live in `namespace openpipeline` (defined in `include/openpipeline/op.h`):
 - `SourceOp<Traits>` → `Source()`, `Frontend()`, `Backend()`
 - `PipeOp<Traits>` → `Pipe()`, `Drain()`, `ImplicitSource()`
 - `SinkOp<Traits>` → `Sink()`, `Frontend()`, `Backend()`, `ImplicitSource()`
@@ -178,7 +178,7 @@ Key conventions:
 Include:
 
 ```cpp
-#include <openpipeline/pipeline/compile.h>
+#include <openpipeline/compile.h>
 ```
 
 Then:

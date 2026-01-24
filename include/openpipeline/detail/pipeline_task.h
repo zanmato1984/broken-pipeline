@@ -10,9 +10,9 @@
 #include <vector>
 
 #include <openpipeline/concepts.h>
-#include <openpipeline/op/op.h>
-#include <openpipeline/pipeline/detail/physical_pipeline.h>
-#include <openpipeline/task/task.h>
+#include <openpipeline/op.h>
+#include <openpipeline/detail/physical_pipeline.h>
+#include <openpipeline/task.h>
 
 namespace openpipeline {
 

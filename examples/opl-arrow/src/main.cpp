@@ -6,7 +6,7 @@
 #include <arrow/status.h>
 
 #include <openpipeline/openpipeline.h>
-#include <openpipeline/pipeline/compile.h>
+#include <openpipeline/compile.h>
 
 #include "arrow_traits.h"
 #include "arrow_op.h"

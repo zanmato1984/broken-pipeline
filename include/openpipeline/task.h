@@ -1,15 +1,92 @@
 #pragma once
 
 #include <cassert>
+#include <cstddef>
 #include <functional>
+#include <memory>
+#include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <openpipeline/concepts.h>
-#include <openpipeline/task/awaiter.h>
-#include <openpipeline/task/task_context.h>
 
 namespace openpipeline {
+
+/**
+ * @brief A scheduler-owned "waker" that transitions a previously blocked task back to runnable.
+ *
+ * openpipeline operators never block threads directly. Instead, when an operator cannot
+ * make progress (e.g., waiting on IO or downstream backpressure), it returns
+ * `OpOutput::Blocked(resumer)`.
+ *
+ * A scheduler turns one or more `Resumer` objects into an `Awaiter` (single/any/all)
+ * and returns `TaskStatus::Blocked(awaiter)` from the task.
+ *
+ * Later, some external event triggers `Resumer::Resume()` (often from a callback).
+ * The scheduler observes that and re-schedules the blocked task.
+ */
+class Resumer {
+ public:
+  virtual ~Resumer() = default;
+  virtual void Resume() = 0;
+  virtual bool IsResumed() const = 0;
+};
+
+using ResumerPtr = std::shared_ptr<Resumer>;
+using Resumers = std::vector<ResumerPtr>;
+
+/**
+ * @brief A scheduler-owned wait handle for one or more resumers.
+ *
+ * `Awaiter` is intentionally opaque to openpipeline core. The scheduler decides how
+ * to block (or suspend) until a resumer (or group of resumers) is resumed.
+ *
+ * For example, a synchronous scheduler may implement an awaiter using condition
+ * variables, while an async scheduler may implement it using futures/coroutines.
+ *
+ * openpipeline only stores `AwaiterPtr` inside `TaskStatus::Blocked(...)`.
+ */
+class Awaiter {
+ public:
+  virtual ~Awaiter() = default;
+};
+
+using AwaiterPtr = std::shared_ptr<Awaiter>;
+
+template <OpenPipelineTraits Traits>
+using ResumerFactory = std::function<Result<Traits, ResumerPtr>()>;
+
+template <OpenPipelineTraits Traits>
+using SingleAwaiterFactory = std::function<Result<Traits, AwaiterPtr>(ResumerPtr)>;
+
+template <OpenPipelineTraits Traits>
+using AnyAwaiterFactory = std::function<Result<Traits, AwaiterPtr>(Resumers)>;
+
+template <OpenPipelineTraits Traits>
+using AllAwaiterFactory = std::function<Result<Traits, AwaiterPtr>(Resumers)>;
+
+/**
+ * @brief Per-task immutable context + scheduler factory hooks.
+ *
+ * A scheduler is expected to create one `TaskContext` and pass it to all task instances
+ * in a `TaskGroup`. openpipeline itself does not construct these.
+ *
+ * - `context` is an optional user-defined pointer to query-level state (can be null).
+ * - The factories provide scheduler-specific primitives for blocking and resumption.
+ *
+ * When a task returns `TaskStatus::Blocked(awaiter)`, the scheduler is responsible for:
+ * - waiting/suspending using the awaiter
+ * - rescheduling the task when resumed
+ */
+template <OpenPipelineTraits Traits>
+struct TaskContext {
+  const typename Traits::Context* context = nullptr;
+  ResumerFactory<Traits> resumer_factory;
+  SingleAwaiterFactory<Traits> single_awaiter_factory;
+  AnyAwaiterFactory<Traits> any_awaiter_factory;
+  AllAwaiterFactory<Traits> all_awaiter_factory;
+};
 
 /**
  * @brief The control protocol between a Task and a Scheduler.
@@ -178,5 +255,60 @@ class Continuation {
   Fn fn_;
   TaskHint hint_;
 };
+
+template <OpenPipelineTraits Traits>
+class TaskGroup {
+ public:
+  using Status = openpipeline::Status<Traits>;
+  using NotifyFinishFunc = std::function<Status(const TaskContext<Traits>&)>;
+
+  /**
+   * @brief A conceptual group of N parallel instances of the same task.
+   *
+   * - `num_tasks` defines the group parallelism (often equals pipeline DOP).
+   * - If provided, `cont` runs exactly once after all task instances finish successfully.
+   * - `notify` is an optional hook to stop "possibly infinite" tasks from waiting
+   *   (e.g., tell a sink to stop expecting more input).
+   *
+   * openpipeline does not provide a scheduler, so the exact ordering/thread of
+   * `notify` and `cont` is scheduler-defined.
+   */
+  TaskGroup(std::string name, std::string desc, Task<Traits> task, std::size_t num_tasks,
+            std::optional<Continuation<Traits>> cont = std::nullopt,
+            NotifyFinishFunc notify = {})
+      : name_(std::move(name)),
+        desc_(std::move(desc)),
+        task_(std::move(task)),
+        num_tasks_(num_tasks),
+        cont_(std::move(cont)),
+        notify_(std::move(notify)) {}
+
+  const std::string& Name() const noexcept { return name_; }
+  const std::string& Desc() const noexcept { return desc_; }
+
+  const Task<Traits>& GetTask() const noexcept { return task_; }
+  std::size_t NumTasks() const noexcept { return num_tasks_; }
+  const std::optional<Continuation<Traits>>& GetContinuation() const noexcept {
+    return cont_;
+  }
+
+  Status NotifyFinish(const TaskContext<Traits>& ctx) const {
+    if (!notify_) {
+      return Traits::Status::OK();
+    }
+    return notify_(ctx);
+  }
+
+ private:
+  std::string name_;
+  std::string desc_;
+  Task<Traits> task_;
+  std::size_t num_tasks_;
+  std::optional<Continuation<Traits>> cont_;
+  NotifyFinishFunc notify_;
+};
+
+template <OpenPipelineTraits Traits>
+using TaskGroups = std::vector<TaskGroup<Traits>>;
 
 }  // namespace openpipeline

@@ -10,9 +10,7 @@
 #include <vector>
 
 #include <openpipeline/concepts.h>
-#include <openpipeline/task/resumer.h>
-#include <openpipeline/task/task_context.h>
-#include <openpipeline/task/task_group.h>
+#include <openpipeline/task.h>
 
 namespace openpipeline {
 
