@@ -15,17 +15,17 @@
 #include <openpipeline/task/task.h>
 #include <openpipeline/task/task_status.h>
 
-namespace openpipeline::pipeline::detail {
+namespace openpipeline {
 
 /**
  * @brief Internal pipeline runtime: drive a PhysicalPipeline as a Task.
  *
- * `PipelineTask` is the generic "engine" behind `pipeline::CompileTaskGroups`.
+ * `PipelineTask` is the generic "engine" behind `CompileTaskGroups`.
  *
  * Key properties:
  * - **Small-step**: one invocation performs bounded work and returns `TaskStatus` to let a
  *   scheduler decide when/where to run the next step.
- * - **Explicit flow control**: operators return `op::OpOutput` values that encode
+ * - **Explicit flow control**: operators return `OpOutput` values that encode
  *   "needs more input", "has more output", "blocked", "yield", etc.
  * - **Multiplexing across channels**: a physical pipeline may contain multiple channels
  *   (multiple sources feeding the same sink). A single task instance tries channels in
@@ -61,18 +61,17 @@ class PipelineTask {
   const std::string& Name() const noexcept { return name_; }
   const std::string& Desc() const noexcept { return desc_; }
 
-  Result<Traits, task::TaskStatus> operator()(const task::TaskContext<Traits>& task_ctx,
-                                              TaskId task_id) {
+  Result<Traits, TaskStatus> operator()(const TaskContext<Traits>& task_ctx, TaskId task_id) {
     const ThreadId thread_id = static_cast<ThreadId>(task_id);
     if (cancelled_.load()) {
-      return Traits::Ok(task::TaskStatus::Cancelled());
+      return Traits::Ok(TaskStatus::Cancelled());
     }
 
     bool all_finished = true;
     bool all_unfinished_blocked = true;
-    task::Resumers blocked_resumers;
+    Resumers blocked_resumers;
 
-    op::OpResult<Traits> last_op_result = Traits::Ok(op::OpOutput<Traits>::PipeSinkNeedsMore());
+    OpResult<Traits> last_op_result = Traits::Ok(OpOutput<Traits>::PipeSinkNeedsMore());
 
     auto& tl = thread_locals_[thread_id];
     for (std::size_t channel_id = 0; channel_id < channels_.size(); ++channel_id) {
@@ -93,7 +92,7 @@ class PipelineTask {
       last_op_result = channels_[channel_id](task_ctx, thread_id);
       if (!Traits::IsOk(last_op_result)) {
         cancelled_.store(true);
-        return Traits::template ErrorFrom<task::TaskStatus>(last_op_result);
+        return Traits::template ErrorFrom<TaskStatus>(last_op_result);
       }
 
       auto& out = Traits::Value(last_op_result);
@@ -117,33 +116,33 @@ class PipelineTask {
     }
 
     if (all_finished) {
-      return Traits::Ok(task::TaskStatus::Finished());
+      return Traits::Ok(TaskStatus::Finished());
     }
 
     if (all_unfinished_blocked && !blocked_resumers.empty()) {
       auto awaiter_r = task_ctx.any_awaiter_factory(std::move(blocked_resumers));
       if (!Traits::IsOk(awaiter_r)) {
         cancelled_.store(true);
-        return Traits::template ErrorFrom<task::TaskStatus>(awaiter_r);
+        return Traits::template ErrorFrom<TaskStatus>(awaiter_r);
       }
       auto awaiter = Traits::Take(std::move(awaiter_r));
-      return Traits::Ok(task::TaskStatus::Blocked(std::move(awaiter)));
+      return Traits::Ok(TaskStatus::Blocked(std::move(awaiter)));
     }
 
     if (!Traits::IsOk(last_op_result)) {
       cancelled_.store(true);
-      return Traits::template ErrorFrom<task::TaskStatus>(last_op_result);
+      return Traits::template ErrorFrom<TaskStatus>(last_op_result);
     }
 
     const auto& out = Traits::Value(last_op_result);
     if (out.IsPipeYield()) {
-      return Traits::Ok(task::TaskStatus::Yield());
+      return Traits::Ok(TaskStatus::Yield());
     }
     if (out.IsCancelled()) {
       cancelled_.store(true);
-      return Traits::Ok(task::TaskStatus::Cancelled());
+      return Traits::Ok(TaskStatus::Cancelled());
     }
-    return Traits::Ok(task::TaskStatus::Continue());
+    return Traits::Ok(TaskStatus::Continue());
   }
 
  private:
@@ -174,10 +173,9 @@ class PipelineTask {
       }
     }
 
-    op::OpResult<Traits> operator()(const task::TaskContext<Traits>& task_ctx,
-                                   ThreadId thread_id) {
+    OpResult<Traits> operator()(const TaskContext<Traits>& task_ctx, ThreadId thread_id) {
       if (cancelled_.load()) {
-        return Traits::Ok(op::OpOutput<Traits>::Cancelled());
+        return Traits::Ok(OpOutput<Traits>::Cancelled());
       }
 
       auto& tl = thread_locals_[thread_id];
@@ -216,7 +214,7 @@ class PipelineTask {
       }
 
       if (tl.draining >= tl.drains.size()) {
-        return Traits::Ok(op::OpOutput<Traits>::Finished());
+        return Traits::Ok(OpOutput<Traits>::Finished());
       }
 
       for (; tl.draining < tl.drains.size(); ++tl.draining) {
@@ -235,13 +233,13 @@ class PipelineTask {
         if (tl.yield) {
           assert(drain_out.IsPipeYieldBack());
           tl.yield = false;
-          return Traits::Ok(op::OpOutput<Traits>::PipeYieldBack());
+          return Traits::Ok(OpOutput<Traits>::PipeYieldBack());
         }
 
         if (drain_out.IsPipeYield()) {
           assert(!tl.yield);
           tl.yield = true;
-          return Traits::Ok(op::OpOutput<Traits>::PipeYield());
+          return Traits::Ok(OpOutput<Traits>::PipeYield());
         }
 
         if (drain_out.IsBlocked()) {
@@ -257,13 +255,13 @@ class PipelineTask {
         }
       }
 
-      return Traits::Ok(op::OpOutput<Traits>::Finished());
+      return Traits::Ok(OpOutput<Traits>::Finished());
     }
 
    private:
-    op::OpResult<Traits> Pipe(const task::TaskContext<Traits>& task_ctx, ThreadId thread_id,
-                              std::size_t pipe_id,
-                              std::optional<typename Traits::Batch> input) {
+    OpResult<Traits> Pipe(const TaskContext<Traits>& task_ctx, ThreadId thread_id,
+                          std::size_t pipe_id,
+                          std::optional<typename Traits::Batch> input) {
       auto& tl = thread_locals_[thread_id];
 
       for (std::size_t i = pipe_id; i < pipes_.size(); ++i) {
@@ -279,14 +277,14 @@ class PipelineTask {
           assert(out.IsPipeYieldBack());
           tl.pipe_stack.push_back(i);
           tl.yield = false;
-          return Traits::Ok(op::OpOutput<Traits>::PipeYieldBack());
+          return Traits::Ok(OpOutput<Traits>::PipeYieldBack());
         }
 
         if (out.IsPipeYield()) {
           assert(!tl.yield);
           tl.pipe_stack.push_back(i);
           tl.yield = true;
-          return Traits::Ok(op::OpOutput<Traits>::PipeYield());
+          return Traits::Ok(OpOutput<Traits>::PipeYield());
         }
 
         if (out.IsBlocked()) {
@@ -305,14 +303,14 @@ class PipelineTask {
           continue;
         }
 
-        return Traits::Ok(op::OpOutput<Traits>::PipeSinkNeedsMore());
+        return Traits::Ok(OpOutput<Traits>::PipeSinkNeedsMore());
       }
 
       return Sink(task_ctx, thread_id, std::move(input));
     }
 
-    op::OpResult<Traits> Sink(const task::TaskContext<Traits>& task_ctx, ThreadId thread_id,
-                              std::optional<typename Traits::Batch> input) {
+    OpResult<Traits> Sink(const TaskContext<Traits>& task_ctx, ThreadId thread_id,
+                          std::optional<typename Traits::Batch> input) {
       auto sink_r = sink_(task_ctx, thread_id, std::move(input));
       if (!Traits::IsOk(sink_r)) {
         cancelled_.store(true);
@@ -329,9 +327,9 @@ class PipelineTask {
     std::size_t channel_id_;
     std::size_t dop_;
 
-    op::PipelineSource<Traits> source_;
-    std::vector<std::pair<op::PipelinePipe<Traits>, op::PipelineDrain<Traits>>> pipes_;
-    op::PipelineSink<Traits> sink_;
+    PipelineSource<Traits> source_;
+    std::vector<std::pair<PipelinePipe<Traits>, PipelineDrain<Traits>>> pipes_;
+    PipelineSink<Traits> sink_;
 
     struct ThreadLocal {
       bool sinking = false;
@@ -351,7 +349,7 @@ class PipelineTask {
         : finished(num_channels, false), resumers(num_channels) {}
 
     std::vector<bool> finished;
-    std::vector<task::ResumerPtr> resumers;
+    std::vector<ResumerPtr> resumers;
   };
 
   std::string name_;
@@ -366,4 +364,4 @@ class PipelineTask {
   std::atomic_bool cancelled_;
 };
 
-}  // namespace openpipeline::pipeline::detail
+}  // namespace openpipeline

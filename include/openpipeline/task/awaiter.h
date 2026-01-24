@@ -6,7 +6,7 @@
 #include <openpipeline/concepts.h>
 #include <openpipeline/task/resumer.h>
 
-namespace openpipeline::task {
+namespace openpipeline {
 
 /**
  * @brief A scheduler-owned wait handle for one or more resumers.
@@ -38,4 +38,4 @@ using AnyAwaiterFactory = std::function<Result<Traits, AwaiterPtr>(Resumers)>;
 template <OpenPipelineTraits Traits>
 using AllAwaiterFactory = std::function<Result<Traits, AwaiterPtr>(Resumers)>;
 
-}  // namespace openpipeline::task
+}  // namespace openpipeline

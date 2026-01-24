@@ -9,26 +9,26 @@
 #include <openpipeline/concepts.h>
 #include <openpipeline/op/op.h>
 
-namespace openpipeline::pipeline::detail {
+namespace openpipeline {
 
 /**
  * @brief Internal representation of a physical pipeline stage.
  *
  * A physical pipeline is a subset of a logical pipeline after splitting on
- * `PipeOp::ImplicitSource()` boundaries. It is intentionally in `pipeline::detail`
+ * `PipeOp::ImplicitSource()` boundaries. It is intentionally in `detail`
  * because openpipeline’s public surface is focused on the protocol/interfaces.
  */
 template <OpenPipelineTraits Traits>
 class PhysicalPipeline {
  public:
   struct Channel {
-    op::SourceOp<Traits>* source_op;
-    std::vector<op::PipeOp<Traits>*> pipe_ops;
-    op::SinkOp<Traits>* sink_op;
+    SourceOp<Traits>* source_op;
+    std::vector<PipeOp<Traits>*> pipe_ops;
+    SinkOp<Traits>* sink_op;
   };
 
   PhysicalPipeline(std::string name, std::vector<Channel> channels,
-                   std::vector<std::unique_ptr<op::SourceOp<Traits>>> implicit_sources)
+                   std::vector<std::unique_ptr<SourceOp<Traits>>> implicit_sources)
       : name_(std::move(name)),
         desc_(Explain(channels)),
         channels_(std::move(channels)),
@@ -38,7 +38,7 @@ class PhysicalPipeline {
   const std::string& Desc() const noexcept { return desc_; }
 
   const std::vector<Channel>& Channels() const noexcept { return channels_; }
-  const std::vector<std::unique_ptr<op::SourceOp<Traits>>>& ImplicitSources() const noexcept {
+  const std::vector<std::unique_ptr<SourceOp<Traits>>>& ImplicitSources() const noexcept {
     return implicit_sources_;
   }
 
@@ -61,10 +61,10 @@ class PhysicalPipeline {
   std::string name_;
   std::string desc_;
   std::vector<Channel> channels_;
-  std::vector<std::unique_ptr<op::SourceOp<Traits>>> implicit_sources_;
+  std::vector<std::unique_ptr<SourceOp<Traits>>> implicit_sources_;
 };
 
 template <OpenPipelineTraits Traits>
 using PhysicalPipelines = std::vector<PhysicalPipeline<Traits>>;
 
-}  // namespace openpipeline::pipeline::detail
+}  // namespace openpipeline

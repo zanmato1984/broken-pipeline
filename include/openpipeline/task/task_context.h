@@ -3,7 +3,7 @@
 #include <openpipeline/concepts.h>
 #include <openpipeline/task/awaiter.h>
 
-namespace openpipeline::task {
+namespace openpipeline {
 
 /**
  * @brief Per-task immutable context + scheduler factory hooks.
@@ -27,4 +27,4 @@ struct TaskContext {
   AllAwaiterFactory<Traits> all_awaiter_factory;
 };
 
-}  // namespace openpipeline::task
+}  // namespace openpipeline

@@ -8,7 +8,7 @@
 #include <openpipeline/task/task_context.h>
 #include <openpipeline/task/task_status.h>
 
-namespace openpipeline::task {
+namespace openpipeline {
 
 /**
  * @brief Scheduling hint for a task instance.
@@ -107,4 +107,4 @@ class Continuation {
   TaskHint hint_;
 };
 
-}  // namespace openpipeline::task
+}  // namespace openpipeline

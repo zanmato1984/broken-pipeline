@@ -8,7 +8,7 @@
 #include <openpipeline/concepts.h>
 #include <openpipeline/op/op.h>
 
-namespace openpipeline::pipeline {
+namespace openpipeline {
 
 /**
  * @brief A pipeline graph: (one or more channels) -> (shared sink).
@@ -22,17 +22,17 @@ namespace openpipeline::pipeline {
  *   must outlive any compilation/execution that uses the pipeline.
  * - A pipeline may be split into multiple *physical* stages if any `PipeOp` returns a
  *   non-null `ImplicitSource()`. That split is performed by
- *   `pipeline::CompileTaskGroups` (via internal detail headers).
+ *   `CompileTaskGroups` (via internal detail headers).
  */
 template <OpenPipelineTraits Traits>
 class Pipeline {
  public:
   struct Channel {
-    op::SourceOp<Traits>* source_op;
-    std::vector<op::PipeOp<Traits>*> pipe_ops;
+    SourceOp<Traits>* source_op;
+    std::vector<PipeOp<Traits>*> pipe_ops;
   };
 
-  Pipeline(std::string name, std::vector<Channel> channels, op::SinkOp<Traits>* sink_op)
+  Pipeline(std::string name, std::vector<Channel> channels, SinkOp<Traits>* sink_op)
       : name_(std::move(name)),
         desc_(Explain(channels, sink_op)),
         channels_(std::move(channels)),
@@ -42,11 +42,10 @@ class Pipeline {
   const std::string& Desc() const noexcept { return desc_; }
 
   const std::vector<Channel>& Channels() const noexcept { return channels_; }
-  op::SinkOp<Traits>* Sink() const noexcept { return sink_op_; }
+  SinkOp<Traits>* Sink() const noexcept { return sink_op_; }
 
  private:
-  static std::string Explain(const std::vector<Channel>& channels,
-                             op::SinkOp<Traits>* sink_op) {
+  static std::string Explain(const std::vector<Channel>& channels, SinkOp<Traits>* sink_op) {
     std::stringstream ss;
     for (std::size_t i = 0; i < channels.size(); ++i) {
       if (i > 0) {
@@ -64,7 +63,7 @@ class Pipeline {
   std::string name_;
   std::string desc_;
   std::vector<Channel> channels_;
-  op::SinkOp<Traits>* sink_op_;
+  SinkOp<Traits>* sink_op_;
 };
 
-}  // namespace openpipeline::pipeline
+}  // namespace openpipeline

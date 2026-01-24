@@ -13,15 +13,15 @@
 #include <openpipeline/pipeline/pipeline.h>
 #include <openpipeline/task/task_group.h>
 
-namespace openpipeline::pipeline {
+namespace openpipeline {
 
 /**
  * @brief Compile a `Pipeline` into an ordered list of `TaskGroup`s.
  *
  * This is an optional helper that provides a *generic pipeline runtime*:
- * - It internally splits the logical pipeline into one or more *physical* stages using
+ * - It internally splits the pipeline into one or more *physical* stages using
  *   `PipeOp::ImplicitSource()` (implemented in internal `pipeline/detail/` headers).
- * - Each physical stage is wrapped into a `pipeline::detail::PipelineTask`, which is a
+ * - Each physical stage is wrapped into a `PipelineTask`, which is a
  *   state machine driving `Source/Pipe/Drain/Sink` step-by-step and mapping operator
  *   signals (`OpOutput`) into task signals (`TaskStatus`).
  *
@@ -41,10 +41,10 @@ namespace openpipeline::pipeline {
  * @param dop Parallelism for the generated stage `TaskGroup`s.
  */
 template <OpenPipelineTraits Traits>
-task::TaskGroups<Traits> CompileTaskGroups(const Pipeline<Traits>& pipeline, std::size_t dop) {
-  auto physical_pipelines = detail::CompilePhysicalPipelines<Traits>(pipeline);
+TaskGroups<Traits> CompileTaskGroups(const Pipeline<Traits>& pipeline, std::size_t dop) {
+  auto physical_pipelines = CompilePhysicalPipelines<Traits>(pipeline);
 
-  task::TaskGroups<Traits> task_groups;
+  TaskGroups<Traits> task_groups;
   task_groups.reserve(physical_pipelines.size() + 1);
 
   for (auto& physical : physical_pipelines) {
@@ -56,15 +56,13 @@ task::TaskGroups<Traits> CompileTaskGroups(const Pipeline<Traits>& pipeline, std
                          std::make_move_iterator(fe.end()));
     }
 
-    auto pipeline_sp =
-        std::make_shared<detail::PhysicalPipeline<Traits>>(std::move(physical));
+    auto pipeline_sp = std::make_shared<PhysicalPipeline<Traits>>(std::move(physical));
     auto pipeline_task =
-        std::make_shared<detail::PipelineTask<Traits>>(std::move(pipeline_sp), dop);
+        std::make_shared<PipelineTask<Traits>>(std::move(pipeline_sp), dop);
 
-    task::Task<Traits> task(
+    Task<Traits> task(
         pipeline_task->Name(), pipeline_task->Desc(),
-        [pipeline_task](const task::TaskContext<Traits>& ctx,
-                        openpipeline::TaskId task_id) {
+        [pipeline_task](const TaskContext<Traits>& ctx, TaskId task_id) {
           return (*pipeline_task)(ctx, task_id);
         });
 
@@ -83,4 +81,4 @@ task::TaskGroups<Traits> CompileTaskGroups(const Pipeline<Traits>& pipeline, std
   return task_groups;
 }
 
-}  // namespace openpipeline::pipeline
+}  // namespace openpipeline

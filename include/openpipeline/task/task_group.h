@@ -10,7 +10,7 @@
 #include <openpipeline/concepts.h>
 #include <openpipeline/task/task.h>
 
-namespace openpipeline::task {
+namespace openpipeline {
 
 template <OpenPipelineTraits Traits>
 class TaskGroup {
@@ -67,4 +67,4 @@ class TaskGroup {
 template <OpenPipelineTraits Traits>
 using TaskGroups = std::vector<TaskGroup<Traits>>;
 
-}  // namespace openpipeline::task
+}  // namespace openpipeline

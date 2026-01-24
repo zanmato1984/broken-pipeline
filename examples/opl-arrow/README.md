@@ -7,7 +7,7 @@ This example demonstrates:
 - Implementing the required `Traits` adapter using Arrow's `arrow::Result<T>` and
   `arrow::Status`.
 - Using an Arrow-native batch type (`std::shared_ptr<arrow::RecordBatch>`).
-- Compiling a `Pipeline` into `TaskGroup`s via `openpipeline::pipeline::CompileTaskGroups`.
+- Compiling a `Pipeline` into `TaskGroup`s via `openpipeline::CompileTaskGroups`.
 
 ## Build
 

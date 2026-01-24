@@ -12,7 +12,7 @@
 #include <openpipeline/task/task_context.h>
 #include <openpipeline/task/task_group.h>
 
-namespace openpipeline::op {
+namespace openpipeline {
 
 /**
  * @brief Result type for operator callbacks.
@@ -34,7 +34,7 @@ using OpResult = Result<Traits, OpOutput<Traits>>;
  */
 template <OpenPipelineTraits Traits>
 using PipelineSource =
-    std::function<OpResult<Traits>(const task::TaskContext<Traits>&, openpipeline::ThreadId)>;
+    std::function<OpResult<Traits>(const TaskContext<Traits>&, ThreadId)>;
 
 /**
  * @brief Pipe/Sink callback signature.
@@ -46,8 +46,8 @@ using PipelineSource =
  *   after Yield).
  */
 template <OpenPipelineTraits Traits>
-using PipelinePipe = std::function<OpResult<Traits>(const task::TaskContext<Traits>&,
-                                                    openpipeline::ThreadId,
+using PipelinePipe = std::function<OpResult<Traits>(const TaskContext<Traits>&,
+                                                    ThreadId,
                                                     std::optional<typename Traits::Batch>)>;
 
 /**
@@ -60,7 +60,7 @@ using PipelinePipe = std::function<OpResult<Traits>(const task::TaskContext<Trai
  */
 template <OpenPipelineTraits Traits>
 using PipelineDrain =
-    std::function<OpResult<Traits>(const task::TaskContext<Traits>&, openpipeline::ThreadId)>;
+    std::function<OpResult<Traits>(const TaskContext<Traits>&, ThreadId)>;
 
 template <OpenPipelineTraits Traits>
 using PipelineSink = PipelinePipe<Traits>;
@@ -73,7 +73,7 @@ using PipelineSink = PipelinePipe<Traits>;
  * - `Backend()`: optional extra stage work after the pipeline stage is done.
  *
  * openpipeline does not impose a specific driver/scheduler for these hooks; helpers like
- * `pipeline::CompileTaskGroups` decide ordering.
+ * `CompileTaskGroups` decide ordering.
  */
 template <OpenPipelineTraits Traits>
 class SourceOp {
@@ -86,8 +86,8 @@ class SourceOp {
   const std::string& Desc() const noexcept { return desc_; }
 
   virtual PipelineSource<Traits> Source() = 0;
-  virtual task::TaskGroups<Traits> Frontend() = 0;
-  virtual std::optional<task::TaskGroup<Traits>> Backend() = 0;
+  virtual TaskGroups<Traits> Frontend() = 0;
+  virtual std::optional<TaskGroup<Traits>> Backend() = 0;
 
  private:
   std::string name_;
@@ -101,7 +101,7 @@ class SourceOp {
  * `Drain()` for tail output, and may optionally introduce a new stage via `ImplicitSource()`.
  *
  * `ImplicitSource()` is the hook used to split a logical pipeline into multiple physical
- * pipeline stages (see `pipeline::CompileTaskGroups`):
+ * pipeline stages (see `CompileTaskGroups`):
  * - returning `nullptr` means "no split here"
  * - returning a source means "downstream operators become a new physical stage rooted at
  *   this implicit source"
@@ -146,8 +146,8 @@ class SinkOp {
   const std::string& Desc() const noexcept { return desc_; }
 
   virtual PipelineSink<Traits> Sink() = 0;
-  virtual task::TaskGroups<Traits> Frontend() = 0;
-  virtual std::optional<task::TaskGroup<Traits>> Backend() = 0;
+  virtual TaskGroups<Traits> Frontend() = 0;
+  virtual std::optional<TaskGroup<Traits>> Backend() = 0;
   virtual std::unique_ptr<SourceOp<Traits>> ImplicitSource() = 0;
 
  private:
@@ -155,4 +155,4 @@ class SinkOp {
   std::string desc_;
 };
 
-}  // namespace openpipeline::op
+}  // namespace openpipeline

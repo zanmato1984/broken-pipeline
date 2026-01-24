@@ -15,8 +15,8 @@ namespace {
 
 using Traits = opl_arrow::Traits;
 
-arrow::Status RunTaskGroup(const openpipeline::task::TaskGroup<Traits>& group,
-                           const openpipeline::task::TaskContext<Traits>& task_ctx) {
+arrow::Status RunTaskGroup(const openpipeline::TaskGroup<Traits>& group,
+                           const openpipeline::TaskContext<Traits>& task_ctx) {
   std::vector<bool> done(group.NumTasks(), false);
   std::size_t done_count = 0;
 
@@ -75,8 +75,8 @@ arrow::Status RunTaskGroup(const openpipeline::task::TaskGroup<Traits>& group,
   return arrow::Status::OK();
 }
 
-arrow::Status RunTaskGroups(const openpipeline::task::TaskGroups<Traits>& groups,
-                            const openpipeline::task::TaskContext<Traits>& task_ctx) {
+arrow::Status RunTaskGroups(const openpipeline::TaskGroups<Traits>& groups,
+                            const openpipeline::TaskContext<Traits>& task_ctx) {
   for (const auto& group : groups) {
     auto st = RunTaskGroup(group, task_ctx);
     if (!st.ok()) {
@@ -105,33 +105,32 @@ int main() {
   opl_arrow::PassThroughPipe pipe;
   opl_arrow::RowCountSink sink;
 
-  openpipeline::pipeline::Pipeline<Traits> pipeline(
-      "P", {openpipeline::pipeline::Pipeline<Traits>::Channel{&source, {&pipe}}},
-      &sink);
+  openpipeline::Pipeline<Traits> pipeline(
+      "P", {openpipeline::Pipeline<Traits>::Channel{&source, {&pipe}}}, &sink);
 
   const std::size_t dop = 2;
-  auto groups = openpipeline::pipeline::CompileTaskGroups<Traits>(pipeline, dop);
+  auto groups = openpipeline::CompileTaskGroups<Traits>(pipeline, dop);
 
   opl_arrow::Context context;
-  openpipeline::task::TaskContext<Traits> task_ctx;
+  openpipeline::TaskContext<Traits> task_ctx;
   task_ctx.context = &context;
-  task_ctx.resumer_factory = []() -> Traits::Result<openpipeline::task::ResumerPtr> {
-    return arrow::Result<openpipeline::task::ResumerPtr>(
+  task_ctx.resumer_factory = []() -> Traits::Result<openpipeline::ResumerPtr> {
+    return arrow::Result<openpipeline::ResumerPtr>(
         arrow::Status::NotImplemented("resumer_factory not used in demo"));
   };
   task_ctx.single_awaiter_factory =
-      [](openpipeline::task::ResumerPtr) -> Traits::Result<openpipeline::task::AwaiterPtr> {
-    return arrow::Result<openpipeline::task::AwaiterPtr>(
+      [](openpipeline::ResumerPtr) -> Traits::Result<openpipeline::AwaiterPtr> {
+    return arrow::Result<openpipeline::AwaiterPtr>(
         arrow::Status::NotImplemented("single_awaiter_factory not used in demo"));
   };
   task_ctx.any_awaiter_factory =
-      [](openpipeline::task::Resumers) -> Traits::Result<openpipeline::task::AwaiterPtr> {
-    return arrow::Result<openpipeline::task::AwaiterPtr>(
+      [](openpipeline::Resumers) -> Traits::Result<openpipeline::AwaiterPtr> {
+    return arrow::Result<openpipeline::AwaiterPtr>(
         arrow::Status::NotImplemented("any_awaiter_factory not used in demo"));
   };
   task_ctx.all_awaiter_factory =
-      [](openpipeline::task::Resumers) -> Traits::Result<openpipeline::task::AwaiterPtr> {
-    return arrow::Result<openpipeline::task::AwaiterPtr>(
+      [](openpipeline::Resumers) -> Traits::Result<openpipeline::AwaiterPtr> {
+    return arrow::Result<openpipeline::AwaiterPtr>(
         arrow::Status::NotImplemented("all_awaiter_factory not used in demo"));
   };
 

@@ -26,13 +26,13 @@
  * - scheduler primitives (your `Resumer`/`Awaiter` implementations + factories)
  *
  * Public surface (via this umbrella header):
- * - `openpipeline::task::*`: tasks, task groups, resumer/awaiter, task status
- * - `openpipeline::op::*`: operator interfaces and `OpOutput`
- * - `openpipeline::pipeline::Pipeline`: the pipeline graph container
+ * - Task protocol: `Task`, `TaskGroup`, `TaskStatus`, `Resumer`/`Awaiter`, `TaskContext`
+ * - Operator protocol: `SourceOp` / `PipeOp` / `SinkOp` and `OpOutput`
+ * - Pipeline graph: `Pipeline`
  *
  * Optional helper (intentionally *not* included here):
  * - `#include <openpipeline/pipeline/compile.h>` provides
- *   `openpipeline::pipeline::CompileTaskGroups(...)`, which compiles a `Pipeline`
+ *   `openpipeline::CompileTaskGroups(...)`, which compiles a `Pipeline`
  *   into an ordered list of `TaskGroup`s by internally splitting it into *physical*
  *   stages (based on pipe implicit sources) and wrapping each stage in a generic
  *   `PipelineTask` state machine.

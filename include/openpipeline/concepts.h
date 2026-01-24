@@ -19,7 +19,7 @@ using TaskId = std::size_t;
  * @brief Logical execution lane id.
  *
  * Many operator implementations keep per-lane state indexed by `ThreadId`. In the
- * reference runtime (`pipeline::detail::PipelineTask`), a task instance typically uses
+ * reference runtime (`PipelineTask`), a task instance typically uses
  * `TaskId` as its `ThreadId`.
  */
 using ThreadId = std::size_t;

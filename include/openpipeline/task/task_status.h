@@ -6,7 +6,7 @@
 
 #include <openpipeline/task/awaiter.h>
 
-namespace openpipeline::task {
+namespace openpipeline {
 
 /**
  * @brief The control protocol between a Task and a Scheduler.
@@ -79,4 +79,4 @@ class TaskStatus {
   AwaiterPtr awaiter_;
 };
 
-}  // namespace openpipeline::task
+}  // namespace openpipeline

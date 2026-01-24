@@ -31,16 +31,19 @@ What this project intentionally does **not** provide:
 
 openpipeline deliberately separates concerns:
 
-1) **Operator protocol** (`openpipeline::op`)
+All public types live directly in `namespace openpipeline` (no sub-namespaces); headers are
+organized by directory:
+
+1) **Operator protocol** (`include/openpipeline/op/*`)
 - “How do I transform/consume/produce batches?”
 - Exposes a small set of flow-control signals (`OpOutput`).
 
-2) **Pipeline driver** (`openpipeline::pipeline` + internal `pipeline/detail`)
+2) **Pipeline driver** (`include/openpipeline/pipeline/*` + internal `include/openpipeline/pipeline/detail/*`)
 - “How do I wire Source/Pipe/Sink together and resume them correctly?”
 - Encodes “drain after upstream finished”, “resume an operator that has more internal
   output”, “propagate blocked/yield” as a state machine.
 
-3) **Task protocol** (`openpipeline::task`)
+3) **Task protocol** (`include/openpipeline/task/*`)
 - “How do I package execution into schedulable units?”
 - Exposes `TaskStatus` (`Continue/Blocked/Yield/Finished/Cancelled`) for scheduler control.
 
@@ -157,7 +160,7 @@ struct Traits {
 
 ## Operator Skeleton
 
-All operator interfaces live in `openpipeline::op`:
+All operator interfaces live in `namespace openpipeline` (headers under `include/openpipeline/op/*`):
 - `SourceOp<Traits>` → `Source()`, `Frontend()`, `Backend()`
 - `PipeOp<Traits>` → `Pipe()`, `Drain()`, `ImplicitSource()`
 - `SinkOp<Traits>` → `Sink()`, `Frontend()`, `Backend()`, `ImplicitSource()`
@@ -180,13 +183,13 @@ Include:
 Then:
 
 ```cpp
-openpipeline::pipeline::Pipeline<Traits> pipeline(
+openpipeline::Pipeline<Traits> pipeline(
   "P",
   { {source0, {pipe0, pipe1}}, {source1, {pipe0, pipe1}} },  // channels
   sink
 );
 
-auto groups = openpipeline::pipeline::CompileTaskGroups<Traits>(pipeline, /*dop=*/8);
+auto groups = openpipeline::CompileTaskGroups<Traits>(pipeline, /*dop=*/8);
 ```
 
 The returned `groups` are ordered. A typical driver/scheduler would execute them in order

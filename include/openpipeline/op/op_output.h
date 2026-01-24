@@ -9,13 +9,13 @@
 #include <openpipeline/concepts.h>
 #include <openpipeline/task/resumer.h>
 
-namespace openpipeline::op {
+namespace openpipeline {
 
 /**
  * @brief Output/control signal returned by operator callbacks to the pipeline runtime.
  *
  * `OpOutput` is the small protocol between operator implementations and a pipeline
- * driver (e.g., `pipeline::detail::PipelineTask`).
+ * driver (e.g., `PipelineTask`).
  *
  * It mixes two kinds of information:
  * - flow control ("need more input", "have more internal output")
@@ -82,7 +82,7 @@ class OpOutput {
   static OpOutput SourcePipeHasMore(typename Traits::Batch batch) {
     return OpOutput(Code::SOURCE_PIPE_HAS_MORE, std::move(batch));
   }
-  static OpOutput Blocked(task::ResumerPtr resumer) { return OpOutput(std::move(resumer)); }
+  static OpOutput Blocked(ResumerPtr resumer) { return OpOutput(std::move(resumer)); }
   static OpOutput PipeYield() { return OpOutput(Code::PIPE_YIELD); }
   static OpOutput PipeYieldBack() { return OpOutput(Code::PIPE_YIELD_BACK); }
   static OpOutput Finished(std::optional<typename Traits::Batch> batch = std::nullopt) {
@@ -109,14 +109,14 @@ class OpOutput {
     return std::get<std::optional<typename Traits::Batch>>(payload_);
   }
 
-  task::ResumerPtr& GetResumer() {
+  ResumerPtr& GetResumer() {
     assert(IsBlocked());
-    return std::get<task::ResumerPtr>(payload_);
+    return std::get<ResumerPtr>(payload_);
   }
 
-  const task::ResumerPtr& GetResumer() const {
+  const ResumerPtr& GetResumer() const {
     assert(IsBlocked());
-    return std::get<task::ResumerPtr>(payload_);
+    return std::get<ResumerPtr>(payload_);
   }
 
   std::string ToString() const {
@@ -145,11 +145,11 @@ class OpOutput {
   explicit OpOutput(Code code, std::optional<typename Traits::Batch> batch = std::nullopt)
       : code_(code), payload_(std::move(batch)) {}
 
-  explicit OpOutput(task::ResumerPtr resumer)
+  explicit OpOutput(ResumerPtr resumer)
       : code_(Code::BLOCKED), payload_(std::move(resumer)) {}
 
   Code code_;
-  std::variant<task::ResumerPtr, std::optional<typename Traits::Batch>> payload_;
+  std::variant<ResumerPtr, std::optional<typename Traits::Batch>> payload_;
 };
 
-}  // namespace openpipeline::op
+}  // namespace openpipeline
