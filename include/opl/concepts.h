@@ -5,12 +5,12 @@
 #include <type_traits>
 #include <utility>
 
-namespace openpipeline {
+namespace opl {
 
 /**
  * @brief Task instance id within a `TaskGroup`.
  *
- * openpipeline intentionally keeps ids simple and uniform: task instances are indexed
+ * opl intentionally keeps ids simple and uniform: task instances are indexed
  * 0..N-1 within their group.
  */
 using TaskId = std::size_t;
@@ -27,7 +27,7 @@ using ThreadId = std::size_t;
 /**
  * @brief Alias helper for `Traits::Result<T>`.
  *
- * openpipeline never assumes a particular error type or transport. Instead, all APIs
+ * opl never assumes a particular error type or transport. Instead, all APIs
  * return `Traits::Result<T>` and rely on an Arrow-like result surface:
  * - `result.ok()`
  * - `result.status()`
@@ -37,7 +37,7 @@ template <class Traits, class T>
 using Result = typename Traits::template Result<T>;
 
 /**
- * @brief Status type (success-or-error) used by openpipeline.
+ * @brief Status type (success-or-error) used by opl.
  *
  * This is `Traits::Status` (Arrow-style, separate from `Result<T>`).
  */
@@ -45,14 +45,14 @@ template <class Traits>
 using Status = typename Traits::Status;
 
 /**
- * @brief Concept defining the required "Traits" surface for openpipeline.
+ * @brief Concept defining the required "Traits" surface for opl.
  *
- * You provide a `Traits` type to parametrize openpipeline over:
+ * You provide a `Traits` type to parametrize opl over:
  * - The batch type (`Batch`)
  * - An optional query-level context type (`Context`)
  * - Your error/result transport (`Status` + `Result<T>`)
  *
- * openpipeline expects an Arrow-like API (zero-overhead when using Arrow directly):
+ * opl expects an Arrow-like API (zero-overhead when using Arrow directly):
  *
  * - `Traits::Status`:
  *   - `static Status OK()`
@@ -66,7 +66,7 @@ using Status = typename Traits::Status;
  *   - constructible from `T` (success)
  *   - constructible from `Status` (error)
  *
- * This is still "Option B": openpipeline does not define its own Status/Result type.
+ * This is still "Option B": opl does not define its own Status/Result type.
  *
  * Typical mapping to Apache Arrow:
  * - `Status` = `arrow::Status`
@@ -103,4 +103,4 @@ concept OpenPipelineTraits =
       { std::move(result).ValueOrDie() } -> std::convertible_to<int>;
     };
 
-}  // namespace openpipeline
+}  // namespace opl

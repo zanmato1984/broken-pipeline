@@ -5,10 +5,10 @@
 #include <utility>
 #include <vector>
 
-#include <openpipeline/concepts.h>
-#include <openpipeline/op.h>
+#include <opl/concepts.h>
+#include <opl/op.h>
 
-namespace openpipeline {
+namespace opl {
 
 /**
  * @brief A pipeline graph: (one or more channels) -> (shared sink).
@@ -66,4 +66,4 @@ class Pipeline {
   SinkOp<Traits>* sink_op_;
 };
 
-}  // namespace openpipeline
+}  // namespace opl

@@ -7,11 +7,11 @@
 #include <utility>
 #include <vector>
 
-#include <openpipeline/concepts.h>
-#include <openpipeline/detail/sub_pipeline.h>
-#include <openpipeline/pipeline.h>
+#include <opl/concepts.h>
+#include <opl/detail/sub_pipeline.h>
+#include <opl/pipeline.h>
 
-namespace openpipeline::detail {
+namespace opl::detail {
 
 /**
  * @brief Internal compiler that splits a `Pipeline` into `SubPipeline` stages.
@@ -21,7 +21,7 @@ namespace openpipeline::detail {
  * - When a pipe provides an implicit source, the downstream pipe chain becomes a new
  *   channel rooted at that implicit source in a later sub-pipeline stage.
  *
- * This is intentionally internal because openpipeline’s public surface is protocol-first.
+ * This is intentionally internal because opl’s public surface is protocol-first.
  * Users typically consume it via `CompileTaskGroups`.
  */
 template <OpenPipelineTraits Traits>
@@ -130,4 +130,4 @@ SubPipelines<Traits> CompileSubPipelines(const Pipeline<Traits>& pipeline) {
   return PipelineCompiler<Traits>(pipeline).Compile();
 }
 
-}  // namespace openpipeline::detail
+}  // namespace opl::detail

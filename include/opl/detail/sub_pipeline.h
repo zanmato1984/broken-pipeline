@@ -6,17 +6,17 @@
 #include <utility>
 #include <vector>
 
-#include <openpipeline/concepts.h>
-#include <openpipeline/op.h>
+#include <opl/concepts.h>
+#include <opl/op.h>
 
-namespace openpipeline::detail {
+namespace opl::detail {
 
 /**
  * @brief Internal representation of a sub-pipeline stage.
  *
  * A sub-pipeline is a subset of a pipeline after splitting on
  * `PipeOp::ImplicitSource()` boundaries. It is intentionally in `detail`
- * because openpipeline’s public surface is focused on the protocol/interfaces.
+ * because opl’s public surface is focused on the protocol/interfaces.
  */
 template <OpenPipelineTraits Traits>
 class SubPipeline {
@@ -67,4 +67,4 @@ class SubPipeline {
 template <OpenPipelineTraits Traits>
 using SubPipelines = std::vector<SubPipeline<Traits>>;
 
-}  // namespace openpipeline::detail
+}  // namespace opl::detail

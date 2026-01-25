@@ -1,8 +1,8 @@
-# openpipeline
+# opl
 
 Header-only protocol/interfaces extracted from Ara’s execution model.
 
-openpipeline is a **C++20**, **traits-based**, **data-structure-agnostic** set of building
+opl is a **C++20**, **traits-based**, **data-structure-agnostic** set of building
 blocks for implementing a batch-at-a-time execution engine:
 
 - Operators expose small-step, re-entrant callbacks that a pipeline driver can resume.
@@ -15,7 +15,7 @@ What this project provides:
 - Generic `Resumer` / `Awaiter` interfaces and factories (scheduler-owned)
 - Generic operator interfaces (`SourceOp` / `PipeOp` / `SinkOp`) and `OpOutput`
 - `Pipeline`
-- Optional helper: `CompileTaskGroups` (internally splits into physical stages via implicit sources)
+- Optional helper: `CompileTaskGroups` (internally splits into sub-pipeline stages via implicit sources)
 
 What this project intentionally does **not** provide:
 - No scheduler implementations (sync/async), no thread pools, no futures library dependency
@@ -29,30 +29,30 @@ What this project intentionally does **not** provide:
 
 ## The Layered Model (Operator → Pipeline → Task → Scheduler)
 
-openpipeline deliberately separates concerns:
+opl deliberately separates concerns:
 
-All public types live directly in `namespace openpipeline` (no sub-namespaces); headers are
+All public types live directly in `namespace opl` (no sub-namespaces); headers are
 organized as a small set of top-level files:
 
-1) **Operator protocol** (`include/openpipeline/op.h`)
+1) **Operator protocol** (`include/opl/op.h`)
 - “How do I transform/consume/produce batches?”
 - Exposes a small set of flow-control signals (`OpOutput`).
 
-2) **Pipeline driver** (`include/openpipeline/pipeline.h` + internal `include/openpipeline/detail/*`)
+2) **Pipeline driver** (`include/opl/pipeline.h` + internal `include/opl/detail/*`)
 - “How do I wire Source/Pipe/Sink together and resume them correctly?”
 - Encodes “drain after upstream finished”, “resume an operator that has more internal
   output”, “propagate blocked/yield” as a state machine.
 
-3) **Task protocol** (`include/openpipeline/task.h`)
+3) **Task protocol** (`include/opl/task.h`)
 - “How do I package execution into schedulable units?”
 - Exposes `TaskStatus` (`Continue/Blocked/Yield/Finished/Cancelled`) for scheduler control.
 
 4) **Scheduler (yours)**
 - “Where/when do tasks run? How do we wait? How do we handle Yield?”
-- openpipeline provides the semantic hooks (`Resumer`/`Awaiter`) but does not implement
+- opl provides the semantic hooks (`Resumer`/`Awaiter`) but does not implement
   any scheduling policy or concurrency runtime.
 
-This architecture is what lets openpipeline be both:
+This architecture is what lets opl be both:
 - highly generic (no Arrow / no Folly / no concrete data types)
 - scheduler-agnostic (sync or async, cooperative or preemptive)
 
@@ -60,7 +60,7 @@ This architecture is what lets openpipeline be both:
 
 ### TaskStatus (Task → Scheduler)
 
-Defined in `include/openpipeline/task.h`:
+Defined in `include/opl/task.h`:
 
 - `Continue`: task is still running; scheduler may invoke again.
 - `Blocked(awaiter)`: task cannot proceed until awaited condition is resumed.
@@ -70,7 +70,7 @@ Defined in `include/openpipeline/task.h`:
 
 ### OpOutput (Operator → Pipeline driver)
 
-Defined in `include/openpipeline/op.h`:
+Defined in `include/opl/op.h`:
 
 The most important distinction:
 - `PIPE_SINK_NEEDS_MORE`: operator needs more upstream input.
@@ -86,7 +86,7 @@ Other notable signals:
 
 ## Usage
 
-`openpipeline` is fully generic via a user-defined `Traits` type (checked by C++20 concepts).
+`opl` is fully generic via a user-defined `Traits` type (checked by C++20 concepts).
 
 Your `Traits` must define:
 - `using Batch = ...;` (movable)
@@ -99,19 +99,19 @@ Required surface:
 - `result.ok()`, `result.status()`, and `result.ValueOrDie()` (lvalue/const/rvalue)
 - `Result<T>(T)` for success and `Result<T>(Status)` for error
 
-openpipeline defines `openpipeline::TaskId` and `openpipeline::ThreadId` as `std::size_t`,
+opl defines `opl::TaskId` and `opl::ThreadId` as `std::size_t`,
 so you do not provide id types in your `Traits`.
 
 Then include:
 
 ```cpp
-#include <openpipeline/openpipeline.h>
+#include <opl/opl.h>
 ```
 
 To compile a `Pipeline` into runnable `TaskGroup`s (optional helper):
 
 ```cpp
-#include <openpipeline/pipeline/compile.h>
+#include <opl/compile.h>
 ```
 
 ## Minimal Traits Example (no dependencies)
@@ -161,7 +161,7 @@ struct Traits {
 
 ## Operator Skeleton
 
-All operator interfaces live in `namespace openpipeline` (defined in `include/openpipeline/op.h`):
+All operator interfaces live in `namespace opl` (defined in `include/opl/op.h`):
 - `SourceOp<Traits>` → `Source()`, `Frontend()`, `Backend()`
 - `PipeOp<Traits>` → `Pipe()`, `Drain()`, `ImplicitSource()`
 - `SinkOp<Traits>` → `Sink()`, `Frontend()`, `Backend()`, `ImplicitSource()`
@@ -178,23 +178,23 @@ Key conventions:
 Include:
 
 ```cpp
-#include <openpipeline/compile.h>
+#include <opl/compile.h>
 ```
 
 Then:
 
 ```cpp
-openpipeline::Pipeline<Traits> pipeline(
+opl::Pipeline<Traits> pipeline(
   "P",
   { {source0, {pipe0, pipe1}}, {source1, {pipe0, pipe1}} },  // channels
   sink
 );
 
-auto groups = openpipeline::CompileTaskGroups<Traits>(pipeline, /*dop=*/8);
+auto groups = opl::CompileTaskGroups<Traits>(pipeline, /*dop=*/8);
 ```
 
 The returned `groups` are ordered. A typical driver/scheduler would execute them in order
-and stop on the first error. openpipeline does not provide this scheduler.
+and stop on the first error. opl does not provide this scheduler.
 
 ## Notes on Lifetime and Threading
 

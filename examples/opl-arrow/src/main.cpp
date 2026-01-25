@@ -1,18 +1,19 @@
 #include <cstddef>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <vector>
 
 #include <arrow/status.h>
 
-#include <openpipeline/openpipeline.h>
-#include <openpipeline/compile.h>
+#include <opl/opl.h>
+#include <opl/compile.h>
 
 #include "arrow_traits.h"
 #include "arrow_op.h"
 
 namespace {
-using openpipeline::CompileTaskGroups;
+using opl::CompileTaskGroups;
 
 opl_arrow::Status RunTaskGroup(const opl_arrow::TaskGroup& group,
                               const opl_arrow::TaskContext& task_ctx) {
@@ -116,23 +117,25 @@ int main() {
   opl_arrow::Context context;
   opl_arrow::TaskContext task_ctx;
   task_ctx.context = &context;
-  task_ctx.resumer_factory = []() -> opl_arrow::Result<opl_arrow::ResumerPtr> {
-    return opl_arrow::Result<opl_arrow::ResumerPtr>(
+  task_ctx.resumer_factory = []() -> opl_arrow::Result<std::shared_ptr<opl::Resumer>> {
+    return opl_arrow::Result<std::shared_ptr<opl::Resumer>>(
         arrow::Status::NotImplemented("resumer_factory not used in demo"));
   };
   task_ctx.single_awaiter_factory =
-      [](opl_arrow::ResumerPtr) -> opl_arrow::Result<opl_arrow::AwaiterPtr> {
-    return opl_arrow::Result<opl_arrow::AwaiterPtr>(
+      [](std::shared_ptr<opl::Resumer>) -> opl_arrow::Result<std::shared_ptr<opl::Awaiter>> {
+    return opl_arrow::Result<std::shared_ptr<opl::Awaiter>>(
         arrow::Status::NotImplemented("single_awaiter_factory not used in demo"));
   };
   task_ctx.any_awaiter_factory =
-      [](opl_arrow::Resumers) -> opl_arrow::Result<opl_arrow::AwaiterPtr> {
-    return opl_arrow::Result<opl_arrow::AwaiterPtr>(
+      [](std::vector<std::shared_ptr<opl::Resumer>>)
+          -> opl_arrow::Result<std::shared_ptr<opl::Awaiter>> {
+    return opl_arrow::Result<std::shared_ptr<opl::Awaiter>>(
         arrow::Status::NotImplemented("any_awaiter_factory not used in demo"));
   };
   task_ctx.all_awaiter_factory =
-      [](opl_arrow::Resumers) -> opl_arrow::Result<opl_arrow::AwaiterPtr> {
-    return opl_arrow::Result<opl_arrow::AwaiterPtr>(
+      [](std::vector<std::shared_ptr<opl::Resumer>>)
+          -> opl_arrow::Result<std::shared_ptr<opl::Awaiter>> {
+    return opl_arrow::Result<std::shared_ptr<opl::Awaiter>>(
         arrow::Status::NotImplemented("all_awaiter_factory not used in demo"));
   };
 

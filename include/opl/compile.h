@@ -7,13 +7,13 @@
 #include <utility>
 #include <vector>
 
-#include <openpipeline/concepts.h>
-#include <openpipeline/detail/compile_pipeline.h>
-#include <openpipeline/detail/pipeline_exec.h>
-#include <openpipeline/pipeline.h>
-#include <openpipeline/task.h>
+#include <opl/concepts.h>
+#include <opl/detail/compile_pipeline.h>
+#include <opl/detail/pipeline_exec.h>
+#include <opl/pipeline.h>
+#include <opl/task.h>
 
-namespace openpipeline {
+namespace opl {
 
 /**
  * @brief Compile a `Pipeline` into an ordered list of `TaskGroup`s.
@@ -82,4 +82,4 @@ TaskGroups<Traits> CompileTaskGroups(const Pipeline<Traits>& pipeline, std::size
   return task_groups;
 }
 
-}  // namespace openpipeline
+}  // namespace opl

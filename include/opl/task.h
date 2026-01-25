@@ -9,14 +9,14 @@
 #include <utility>
 #include <vector>
 
-#include <openpipeline/concepts.h>
+#include <opl/concepts.h>
 
-namespace openpipeline {
+namespace opl {
 
 /**
  * @brief A scheduler-owned "waker" that transitions a previously blocked task back to runnable.
  *
- * openpipeline operators never block threads directly. Instead, when an operator cannot
+ * opl operators never block threads directly. Instead, when an operator cannot
  * make progress (e.g., waiting on IO or downstream backpressure), it returns
  * `OpOutput::Blocked(resumer)`.
  *
@@ -36,13 +36,13 @@ class Resumer {
 /**
  * @brief A scheduler-owned wait handle for one or more resumers.
  *
- * `Awaiter` is intentionally opaque to openpipeline core. The scheduler decides how
+ * `Awaiter` is intentionally opaque to opl core. The scheduler decides how
  * to block (or suspend) until a resumer (or group of resumers) is resumed.
  *
  * For example, a synchronous scheduler may implement an awaiter using condition
  * variables, while an async scheduler may implement it using futures/coroutines.
  *
- * openpipeline only stores `std::shared_ptr<Awaiter>` inside `TaskStatus::Blocked(...)`.
+ * opl only stores `std::shared_ptr<Awaiter>` inside `TaskStatus::Blocked(...)`.
  */
 class Awaiter {
  public:
@@ -68,7 +68,7 @@ using AllAwaiterFactory =
  * @brief Per-task immutable context + scheduler factory hooks.
  *
  * A scheduler is expected to create one `TaskContext` and pass it to all task instances
- * in a `TaskGroup`. openpipeline itself does not construct these.
+ * in a `TaskGroup`. opl itself does not construct these.
  *
  * - `context` is an optional user-defined pointer to query-level state (can be null).
  * - The factories provide scheduler-specific primitives for blocking and resumption.
@@ -89,7 +89,7 @@ struct TaskContext {
 /**
  * @brief The control protocol between a Task and a Scheduler.
  *
- * openpipeline tasks are **small-step and repeatable**: a scheduler repeatedly invokes
+ * opl tasks are **small-step and repeatable**: a scheduler repeatedly invokes
  * a task until it returns `Finished`/`Cancelled` or an error.
  *
  * - `Continue`: still running; scheduler may invoke again immediately or later.
@@ -162,7 +162,7 @@ class TaskStatus {
 /**
  * @brief Scheduling hint for a task instance.
  *
- * openpipeline core does not ship a scheduler, but some schedulers may use this hint to
+ * opl core does not ship a scheduler, but some schedulers may use this hint to
  * choose between CPU vs IO pools or adjust priorities.
  */
 struct TaskHint {
@@ -176,7 +176,7 @@ struct TaskHint {
 /**
  * @brief Task instance id within a group.
  *
- * openpipeline uses a uniform `std::size_t` task id. It is typically interpreted as a
+ * opl uses a uniform `std::size_t` task id. It is typically interpreted as a
  * lane index for operators.
  */
 
@@ -258,7 +258,7 @@ class Continuation {
 template <OpenPipelineTraits Traits>
 class TaskGroup {
  public:
-  using Status = openpipeline::Status<Traits>;
+  using Status = opl::Status<Traits>;
   using NotifyFinishFunc = std::function<Status(const TaskContext<Traits>&)>;
 
   /**
@@ -269,7 +269,7 @@ class TaskGroup {
    * - `notify` is an optional hook to stop "possibly infinite" tasks from waiting
    *   (e.g., tell a sink to stop expecting more input).
    *
-   * openpipeline does not provide a scheduler, so the exact ordering/thread of
+   * opl does not provide a scheduler, so the exact ordering/thread of
    * `notify` and `cont` is scheduler-defined.
    */
   TaskGroup(std::string name, std::string desc, Task<Traits> task, std::size_t num_tasks,
@@ -310,4 +310,4 @@ class TaskGroup {
 template <OpenPipelineTraits Traits>
 using TaskGroups = std::vector<TaskGroup<Traits>>;
 
-}  // namespace openpipeline
+}  // namespace opl

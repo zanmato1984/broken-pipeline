@@ -3,10 +3,10 @@
 /**
  * @file arrow_traits.h
  *
- * @brief Example `openpipeline` Traits implementation backed by Apache Arrow.
+ * @brief Example `opl` Traits implementation backed by Apache Arrow.
  *
- * openpipeline does not define its own Status/Result type. Instead, all openpipeline APIs
- * are parameterized by `Traits::Status` and `Traits::Result<T>`.
+ * opl does not define its own Status/Result type. Instead, all opl APIs are parameterized
+ * by `Traits::Status` and `Traits::Result<T>`.
  *
  * In this example:
  * - `Status` maps to `arrow::Status`
@@ -20,7 +20,7 @@
 #include <arrow/result.h>
 #include <arrow/status.h>
 
-#include <openpipeline/openpipeline.h>
+#include <opl/opl.h>
 
 namespace opl_arrow {
 
@@ -44,32 +44,28 @@ using Status = Traits::Status;
 template <class T>
 using Result = Traits::template Result<T>;
 
-using TaskContext = openpipeline::TaskContext<Traits>;
-using TaskGroup = openpipeline::TaskGroup<Traits>;
-using TaskGroups = openpipeline::TaskGroups<Traits>;
+using TaskContext = opl::TaskContext<Traits>;
+using TaskGroup = opl::TaskGroup<Traits>;
+using TaskGroups = opl::TaskGroups<Traits>;
 
-using Task = openpipeline::Task<Traits>;
-using TaskId = openpipeline::TaskId;
-using ThreadId = openpipeline::ThreadId;
-using TaskStatus = openpipeline::TaskStatus;
-using TaskHint = openpipeline::TaskHint;
+using Task = opl::Task<Traits>;
+using TaskId = opl::TaskId;
+using ThreadId = opl::ThreadId;
+using TaskStatus = opl::TaskStatus;
+using TaskHint = opl::TaskHint;
 
-using ResumerPtr = openpipeline::ResumerPtr;
-using Resumers = openpipeline::Resumers;
-using AwaiterPtr = openpipeline::AwaiterPtr;
+using OpOutput = opl::OpOutput<Traits>;
+using OpResult = opl::OpResult<Traits>;
+using PipelineSource = opl::PipelineSource<Traits>;
+using PipelineDrain = opl::PipelineDrain<Traits>;
+using PipelinePipe = opl::PipelinePipe<Traits>;
+using PipelineSink = opl::PipelineSink<Traits>;
 
-using OpOutput = openpipeline::OpOutput<Traits>;
-using OpResult = openpipeline::OpResult<Traits>;
-using PipelineSource = openpipeline::PipelineSource<Traits>;
-using PipelineDrain = openpipeline::PipelineDrain<Traits>;
-using PipelinePipe = openpipeline::PipelinePipe<Traits>;
-using PipelineSink = openpipeline::PipelineSink<Traits>;
+using SourceOp = opl::SourceOp<Traits>;
+using PipeOp = opl::PipeOp<Traits>;
+using SinkOp = opl::SinkOp<Traits>;
 
-using SourceOp = openpipeline::SourceOp<Traits>;
-using PipeOp = openpipeline::PipeOp<Traits>;
-using SinkOp = openpipeline::SinkOp<Traits>;
-
-using Pipeline = openpipeline::Pipeline<Traits>;
+using Pipeline = opl::Pipeline<Traits>;
 using PipelineChannel = Pipeline::Channel;
 
 }  // namespace opl_arrow

@@ -1,11 +1,11 @@
 #pragma once
 
 /**
- * @file openpipeline.h
+ * @file opl.h
  *
- * @brief Public umbrella header for the core openpipeline protocol.
+ * @brief Public umbrella header for the core opl protocol.
  *
- * openpipeline is a **header-only, purely generic (traits-based)** set of interfaces and
+ * opl is a **header-only, purely generic (traits-based)** set of interfaces and
  * small protocol data structures for building a query/execution engine in the style of
  * Ara:
  *
@@ -14,7 +14,7 @@
  * - Execution is expressed in terms of `Task` / `TaskGroup` and a small `TaskStatus`
  *   protocol (Continue/Blocked/Yield/Finished/Cancelled).
  *
- * What openpipeline **does not** provide:
+ * What opl **does not** provide:
  * - No concrete operators.
  * - No scheduler/executor implementation.
  * - No async/future library dependency.
@@ -31,16 +31,16 @@
  * - Pipeline graph: `Pipeline`
  *
  * Optional helper (intentionally *not* included here):
- * - `#include <openpipeline/compile.h>` provides
- *   `openpipeline::CompileTaskGroups(...)`, which compiles a `Pipeline`
+ * - `#include <opl/compile.h>` provides
+ *   `opl::CompileTaskGroups(...)`, which compiles a `Pipeline`
  *   into an ordered list of `TaskGroup`s by internally splitting it into sub-pipeline
  *   stages (based on pipe implicit sources) and wrapping each stage in a generic
  *   `detail::PipelineExec` state machine.
  */
 
-#include <openpipeline/concepts.h>
+#include <opl/concepts.h>
 
-#include <openpipeline/task.h>
+#include <opl/task.h>
 
-#include <openpipeline/op.h>
-#include <openpipeline/pipeline.h>
+#include <opl/op.h>
+#include <opl/pipeline.h>

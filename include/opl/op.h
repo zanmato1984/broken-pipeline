@@ -9,9 +9,9 @@
 #include <variant>
 #include <vector>
 
-#include <openpipeline/concepts.h>
+#include <opl/concepts.h>
 
-namespace openpipeline {
+namespace opl {
 
 class Resumer;
 
@@ -222,7 +222,7 @@ using PipelineSink = PipelinePipe<Traits>;
  * - `Frontend()`: stage work before the source is run (e.g., start scan, open files).
  * - `Backend()`: optional extra stage work after the pipeline stage is done.
  *
- * openpipeline does not impose a specific driver/scheduler for these hooks; helpers like
+ * opl does not impose a specific driver/scheduler for these hooks; helpers like
  * `CompileTaskGroups` decide ordering.
  */
 template <OpenPipelineTraits Traits>
@@ -305,4 +305,4 @@ class SinkOp {
   std::string desc_;
 };
 
-}  // namespace openpipeline
+}  // namespace opl

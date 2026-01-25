@@ -9,12 +9,12 @@
 #include <utility>
 #include <vector>
 
-#include <openpipeline/concepts.h>
-#include <openpipeline/op.h>
-#include <openpipeline/detail/sub_pipeline.h>
-#include <openpipeline/task.h>
+#include <opl/concepts.h>
+#include <opl/op.h>
+#include <opl/detail/sub_pipeline.h>
+#include <opl/task.h>
 
-namespace openpipeline::detail {
+namespace opl::detail {
 
 /**
  * @brief Internal pipeline runtime: drive a SubPipeline as a Task.
@@ -38,8 +38,8 @@ namespace openpipeline::detail {
 template <OpenPipelineTraits Traits>
 class PipelineExec {
  public:
-  using TaskId = openpipeline::TaskId;
-  using ThreadId = openpipeline::ThreadId;
+  using TaskId = opl::TaskId;
+  using ThreadId = opl::ThreadId;
 
   PipelineExec(std::shared_ptr<const SubPipeline<Traits>> pipeline, std::size_t dop)
       : name_("Task of " + pipeline->Name()),
@@ -363,4 +363,4 @@ class PipelineExec {
   std::atomic_bool cancelled_;
 };
 
-}  // namespace openpipeline::detail
+}  // namespace opl::detail
