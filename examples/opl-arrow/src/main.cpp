@@ -7,13 +7,52 @@
 #include <arrow/status.h>
 
 #include <opl/opl.h>
-#include <opl/compile.h>
+#include <opl/detail/compile_pipeline.h>
+#include <opl/pipeline_exec.h>
 
 #include "arrow_traits.h"
 #include "arrow_op.h"
 
 namespace {
-using opl::CompileTaskGroups;
+
+std::vector<opl_arrow::TaskGroup> CompileTaskGroups(const opl_arrow::Pipeline& pipeline,
+                                                    std::size_t dop) {
+  auto sub_pipelines = opl::detail::CompileSubPipelines<opl_arrow::Traits>(pipeline);
+
+  std::vector<opl_arrow::TaskGroup> task_groups;
+  task_groups.reserve(sub_pipelines.size() + 1);
+
+  for (auto& sub : sub_pipelines) {
+    for (auto& ch : sub.Channels()) {
+      auto fe = ch.source_op->Frontend();
+      for (auto& tg : fe) {
+        task_groups.push_back(std::move(tg));
+      }
+    }
+
+    auto pipeline_sp = std::make_shared<opl::SubPipeline<opl_arrow::Traits>>(std::move(sub));
+    auto pipeline_exec =
+        std::make_shared<opl::PipelineExec<opl_arrow::Traits>>(std::move(pipeline_sp), dop);
+
+    opl_arrow::Task task(
+        pipeline_exec->Name(), pipeline_exec->Desc(),
+        [pipeline_exec](const opl_arrow::TaskContext& ctx, opl_arrow::TaskId task_id) {
+          return (*pipeline_exec)(ctx, task_id);
+        });
+
+    task_groups.emplace_back(pipeline_exec->Name(), pipeline_exec->Desc(), std::move(task),
+                             dop);
+  }
+
+  {
+    auto fe = pipeline.Sink()->Frontend();
+    for (auto& tg : fe) {
+      task_groups.push_back(std::move(tg));
+    }
+  }
+
+  return task_groups;
+}
 
 opl_arrow::Status RunTaskGroup(const opl_arrow::TaskGroup& group,
                               const opl_arrow::TaskContext& task_ctx) {

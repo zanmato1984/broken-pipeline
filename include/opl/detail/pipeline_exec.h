@@ -11,7 +11,7 @@
 
 #include <opl/concepts.h>
 #include <opl/op.h>
-#include <opl/detail/sub_pipeline.h>
+#include <opl/pipeline.h>
 #include <opl/task.h>
 
 namespace opl::detail {
@@ -19,7 +19,7 @@ namespace opl::detail {
 /**
  * @brief Internal pipeline runtime: drive a SubPipeline as a Task.
  *
- * `PipelineExec` is the generic "engine" behind `CompileTaskGroups`.
+ * `PipelineExec` is a generic small-step engine for driving a `SubPipeline`.
  *
  * Key properties:
  * - **Small-step**: one invocation performs bounded work and returns `TaskStatus` to let a

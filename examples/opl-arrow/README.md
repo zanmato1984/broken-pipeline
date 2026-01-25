@@ -6,7 +6,7 @@ codebase.
 This example demonstrates:
 - Declaring a `Traits` type that aliases Arrow's `arrow::Status` and `arrow::Result<T>`.
 - Using an Arrow-native batch type (`std::shared_ptr<arrow::RecordBatch>`).
-- Compiling a `Pipeline` into `TaskGroup`s via `opl::CompileTaskGroups`.
+- Splitting a `Pipeline` into stages and building `TaskGroup`s using `opl/detail/*`.
 
 ## Build
 

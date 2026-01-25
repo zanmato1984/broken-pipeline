@@ -25,7 +25,7 @@ class TaskGroup;
  * @brief Output/control signal returned by operator callbacks to the pipeline runtime.
  *
  * `OpOutput` is the small protocol between operator implementations and a pipeline
- * driver (e.g., `detail::PipelineExec`).
+ * driver (e.g., `PipelineExec`).
  *
  * It mixes two kinds of information:
  * - flow control ("need more input", "have more internal output")
@@ -222,8 +222,8 @@ using PipelineSink = PipelinePipe<Traits>;
  * - `Frontend()`: stage work before the source is run (e.g., start scan, open files).
  * - `Backend()`: optional extra stage work after the pipeline stage is done.
  *
- * opl does not impose a specific driver/scheduler for these hooks; helpers like
- * `CompileTaskGroups` decide ordering.
+ * opl does not impose a specific driver/scheduler for these hooks; the host
+ * orchestration decides ordering.
  */
 template <OpenPipelineTraits Traits>
 class SourceOp {
@@ -251,7 +251,7 @@ class SourceOp {
  * `Drain()` for tail output, and may optionally introduce a new stage via `ImplicitSource()`.
  *
  * `ImplicitSource()` is the hook used to split a pipeline into multiple sub-pipeline
- * stages (see `CompileTaskGroups`):
+ * stages (via host orchestration):
  * - returning `nullptr` means "no split here"
  * - returning a source means "downstream operators become a new sub-pipeline stage rooted at
  *   this implicit source"

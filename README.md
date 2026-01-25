@@ -15,7 +15,6 @@ What this project provides:
 - Generic `Resumer` / `Awaiter` interfaces and factories (scheduler-owned)
 - Generic operator interfaces (`SourceOp` / `PipeOp` / `SinkOp`) and `OpOutput`
 - `Pipeline`
-- Optional helper: `CompileTaskGroups` (internally splits into sub-pipeline stages via implicit sources)
 
 What this project intentionally does **not** provide:
 - No scheduler implementations (sync/async), no thread pools, no futures library dependency
@@ -108,12 +107,6 @@ Then include:
 #include <opl/opl.h>
 ```
 
-To compile a `Pipeline` into runnable `TaskGroup`s (optional helper):
-
-```cpp
-#include <opl/compile.h>
-```
-
 ## Minimal Traits Example (no dependencies)
 
 Below is a small Arrow-shaped `Status`/`Result<T>` built on `std::variant` just to satisfy
@@ -173,29 +166,13 @@ Key conventions:
   - `Batch` means “new upstream input”
   - `nullopt` means “resume internal output / continue after blocked/yield”
 
-## Compiling a Pipeline into Task Groups
+## Driving a Pipeline
 
-Include:
+opl does not ship a public "compiler" that turns a `Pipeline` into runnable `TaskGroup`s.
+The host is expected to build its own orchestration using the operator/task protocols.
 
-```cpp
-#include <opl/compile.h>
-```
-
-Then:
-
-```cpp
-opl::Pipeline<Traits> pipeline(
-  "P",
-  { {source0, {pipe0, pipe1}}, {source1, {pipe0, pipe1}} },  // channels
-  sink
-);
-
-auto groups = opl::CompileTaskGroups<Traits>(pipeline, /*dop=*/8);
-```
-
-The returned `groups` (`std::vector<opl::TaskGroup<Traits>>`) are ordered. A typical
-driver/scheduler would execute them in order and stop on the first error. opl does not
-provide this scheduler.
+Reference implementations live under `include/opl/detail/*` (stage splitting), and
+the stage runtime is exposed as `opl::PipelineExec` via `include/opl/pipeline_exec.h`.
 
 ## Notes on Lifetime and Threading
 

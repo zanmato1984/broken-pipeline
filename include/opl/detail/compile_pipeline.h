@@ -8,7 +8,6 @@
 #include <vector>
 
 #include <opl/concepts.h>
-#include <opl/detail/sub_pipeline.h>
 #include <opl/pipeline.h>
 
 namespace opl::detail {
@@ -22,14 +21,13 @@ namespace opl::detail {
  *   channel rooted at that implicit source in a later sub-pipeline stage.
  *
  * This is intentionally internal because opl’s public surface is protocol-first.
- * Users typically consume it via `CompileTaskGroups`.
  */
 template <OpenPipelineTraits Traits>
 class PipelineCompiler {
  public:
   explicit PipelineCompiler(const Pipeline<Traits>& pipeline) : pipeline_(pipeline) {}
 
-  SubPipelines<Traits> Compile() && {
+  std::vector<SubPipeline<Traits>> Compile() && {
     ExtractTopology();
     SortTopology();
     return BuildSubPipelines();
@@ -88,8 +86,8 @@ class PipelineCompiler {
     }
   }
 
-  SubPipelines<Traits> BuildSubPipelines() {
-    SubPipelines<Traits> sub_pipelines;
+  std::vector<SubPipeline<Traits>> BuildSubPipelines() {
+    std::vector<SubPipeline<Traits>> sub_pipelines;
 
     for (auto& [id, stage_info] : sub_pipelines_) {
       auto sources_keepalive = std::move(stage_info.first);
@@ -126,7 +124,7 @@ class PipelineCompiler {
 };
 
 template <OpenPipelineTraits Traits>
-SubPipelines<Traits> CompileSubPipelines(const Pipeline<Traits>& pipeline) {
+std::vector<SubPipeline<Traits>> CompileSubPipelines(const Pipeline<Traits>& pipeline) {
   return PipelineCompiler<Traits>(pipeline).Compile();
 }
 
