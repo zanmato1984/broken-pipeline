@@ -173,7 +173,7 @@ Key conventions:
   - `Batch` means “new upstream input”
   - `nullopt` means “resume internal output / continue after blocked/yield”
 
-## Compiling a Pipeline into TaskGroups
+## Compiling a Pipeline into Task Groups
 
 Include:
 
@@ -193,8 +193,9 @@ opl::Pipeline<Traits> pipeline(
 auto groups = opl::CompileTaskGroups<Traits>(pipeline, /*dop=*/8);
 ```
 
-The returned `groups` are ordered. A typical driver/scheduler would execute them in order
-and stop on the first error. opl does not provide this scheduler.
+The returned `groups` (`std::vector<opl::TaskGroup<Traits>>`) are ordered. A typical
+driver/scheduler would execute them in order and stop on the first error. opl does not
+provide this scheduler.
 
 ## Notes on Lifetime and Threading
 

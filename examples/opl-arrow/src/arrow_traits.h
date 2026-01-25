@@ -46,7 +46,6 @@ using Result = Traits::template Result<T>;
 
 using TaskContext = opl::TaskContext<Traits>;
 using TaskGroup = opl::TaskGroup<Traits>;
-using TaskGroups = opl::TaskGroups<Traits>;
 
 using Task = opl::Task<Traits>;
 using TaskId = opl::TaskId;

@@ -307,7 +307,4 @@ class TaskGroup {
   NotifyFinishFunc notify_;
 };
 
-template <OpenPipelineTraits Traits>
-using TaskGroups = std::vector<TaskGroup<Traits>>;
-
 }  // namespace opl

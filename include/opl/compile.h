@@ -42,10 +42,11 @@ namespace opl {
  * @param dop Parallelism for the generated stage `TaskGroup`s.
  */
 template <OpenPipelineTraits Traits>
-TaskGroups<Traits> CompileTaskGroups(const Pipeline<Traits>& pipeline, std::size_t dop) {
+std::vector<TaskGroup<Traits>> CompileTaskGroups(const Pipeline<Traits>& pipeline,
+                                                 std::size_t dop) {
   auto sub_pipelines = detail::CompileSubPipelines<Traits>(pipeline);
 
-  TaskGroups<Traits> task_groups;
+  std::vector<TaskGroup<Traits>> task_groups;
   task_groups.reserve(sub_pipelines.size() + 1);
 
   for (auto& sub : sub_pipelines) {

@@ -61,7 +61,7 @@ class BatchesSource final : public SourceOp {
     };
   }
 
-  TaskGroups Frontend() override {
+  std::vector<TaskGroup> Frontend() override {
     frontend_started_.store(false);
     frontend_finished_.store(false);
 
@@ -206,7 +206,7 @@ class RowCountSink final : public SinkOp {
     };
   }
 
-  TaskGroups Frontend() override {
+  std::vector<TaskGroup> Frontend() override {
     frontend_started_.store(false);
     frontend_finished_.store(false);
 

@@ -75,7 +75,7 @@ opl_arrow::Status RunTaskGroup(const opl_arrow::TaskGroup& group,
   return opl_arrow::Status::OK();
 }
 
-opl_arrow::Status RunTaskGroups(const opl_arrow::TaskGroups& groups,
+opl_arrow::Status RunTaskGroups(const std::vector<opl_arrow::TaskGroup>& groups,
                                const opl_arrow::TaskContext& task_ctx) {
   for (const auto& group : groups) {
     auto st = RunTaskGroup(group, task_ctx);
