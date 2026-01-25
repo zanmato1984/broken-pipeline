@@ -68,7 +68,7 @@ class PipelineExec {
 
     bool all_finished = true;
     bool all_unfinished_blocked = true;
-    Resumers blocked_resumers;
+    std::vector<std::shared_ptr<Resumer>> blocked_resumers;
 
     OpResult<Traits> last_op_result(OpOutput<Traits>::PipeSinkNeedsMore());
 
@@ -348,7 +348,7 @@ class PipelineExec {
         : finished(num_channels, false), resumers(num_channels) {}
 
     std::vector<bool> finished;
-    std::vector<ResumerPtr> resumers;
+    std::vector<std::shared_ptr<Resumer>> resumers;
   };
 
   std::string name_;

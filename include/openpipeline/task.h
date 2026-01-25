@@ -33,9 +33,6 @@ class Resumer {
   virtual bool IsResumed() const = 0;
 };
 
-using ResumerPtr = std::shared_ptr<Resumer>;
-using Resumers = std::vector<ResumerPtr>;
-
 /**
  * @brief A scheduler-owned wait handle for one or more resumers.
  *
@@ -45,26 +42,27 @@ using Resumers = std::vector<ResumerPtr>;
  * For example, a synchronous scheduler may implement an awaiter using condition
  * variables, while an async scheduler may implement it using futures/coroutines.
  *
- * openpipeline only stores `AwaiterPtr` inside `TaskStatus::Blocked(...)`.
+ * openpipeline only stores `std::shared_ptr<Awaiter>` inside `TaskStatus::Blocked(...)`.
  */
 class Awaiter {
  public:
   virtual ~Awaiter() = default;
 };
 
-using AwaiterPtr = std::shared_ptr<Awaiter>;
+template <OpenPipelineTraits Traits>
+using ResumerFactory = std::function<Result<Traits, std::shared_ptr<Resumer>>()>;
 
 template <OpenPipelineTraits Traits>
-using ResumerFactory = std::function<Result<Traits, ResumerPtr>()>;
+using SingleAwaiterFactory =
+    std::function<Result<Traits, std::shared_ptr<Awaiter>>(std::shared_ptr<Resumer>)>;
 
 template <OpenPipelineTraits Traits>
-using SingleAwaiterFactory = std::function<Result<Traits, AwaiterPtr>(ResumerPtr)>;
+using AnyAwaiterFactory =
+    std::function<Result<Traits, std::shared_ptr<Awaiter>>(std::vector<std::shared_ptr<Resumer>>)>;
 
 template <OpenPipelineTraits Traits>
-using AnyAwaiterFactory = std::function<Result<Traits, AwaiterPtr>(Resumers)>;
-
-template <OpenPipelineTraits Traits>
-using AllAwaiterFactory = std::function<Result<Traits, AwaiterPtr>(Resumers)>;
+using AllAwaiterFactory =
+    std::function<Result<Traits, std::shared_ptr<Awaiter>>(std::vector<std::shared_ptr<Resumer>>)>;
 
 /**
  * @brief Per-task immutable context + scheduler factory hooks.
@@ -112,7 +110,9 @@ class TaskStatus {
   };
 
   static TaskStatus Continue() { return TaskStatus(Code::CONTINUE); }
-  static TaskStatus Blocked(AwaiterPtr awaiter) { return TaskStatus(std::move(awaiter)); }
+  static TaskStatus Blocked(std::shared_ptr<Awaiter> awaiter) {
+    return TaskStatus(std::move(awaiter));
+  }
   static TaskStatus Yield() { return TaskStatus(Code::YIELD); }
   static TaskStatus Finished() { return TaskStatus(Code::FINISHED); }
   static TaskStatus Cancelled() { return TaskStatus(Code::CANCELLED); }
@@ -123,12 +123,12 @@ class TaskStatus {
   bool IsFinished() const noexcept { return code_ == Code::FINISHED; }
   bool IsCancelled() const noexcept { return code_ == Code::CANCELLED; }
 
-  AwaiterPtr& GetAwaiter() {
+  std::shared_ptr<Awaiter>& GetAwaiter() {
     assert(IsBlocked());
     return awaiter_;
   }
 
-  const AwaiterPtr& GetAwaiter() const {
+  const std::shared_ptr<Awaiter>& GetAwaiter() const {
     assert(IsBlocked());
     return awaiter_;
   }
@@ -152,11 +152,11 @@ class TaskStatus {
  private:
   explicit TaskStatus(Code code) : code_(code) {}
 
-  explicit TaskStatus(AwaiterPtr awaiter)
+  explicit TaskStatus(std::shared_ptr<Awaiter> awaiter)
       : code_(Code::BLOCKED), awaiter_(std::move(awaiter)) {}
 
   Code code_;
-  AwaiterPtr awaiter_;
+  std::shared_ptr<Awaiter> awaiter_;
 };
 
 /**
