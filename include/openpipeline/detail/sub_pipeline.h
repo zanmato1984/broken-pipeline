@@ -12,14 +12,14 @@
 namespace openpipeline::detail {
 
 /**
- * @brief Internal representation of a physical pipeline stage.
+ * @brief Internal representation of a sub-pipeline stage.
  *
- * A physical pipeline is a subset of a logical pipeline after splitting on
+ * A sub-pipeline is a subset of a logical pipeline after splitting on
  * `PipeOp::ImplicitSource()` boundaries. It is intentionally in `detail`
  * because openpipeline’s public surface is focused on the protocol/interfaces.
  */
 template <OpenPipelineTraits Traits>
-class PhysicalPipeline {
+class SubPipeline {
  public:
   struct Channel {
     SourceOp<Traits>* source_op;
@@ -27,8 +27,8 @@ class PhysicalPipeline {
     SinkOp<Traits>* sink_op;
   };
 
-  PhysicalPipeline(std::string name, std::vector<Channel> channels,
-                   std::vector<std::unique_ptr<SourceOp<Traits>>> implicit_sources)
+  SubPipeline(std::string name, std::vector<Channel> channels,
+              std::vector<std::unique_ptr<SourceOp<Traits>>> implicit_sources)
       : name_(std::move(name)),
         desc_(Explain(channels)),
         channels_(std::move(channels)),
@@ -65,6 +65,6 @@ class PhysicalPipeline {
 };
 
 template <OpenPipelineTraits Traits>
-using PhysicalPipelines = std::vector<PhysicalPipeline<Traits>>;
+using SubPipelines = std::vector<SubPipeline<Traits>>;
 
 }  // namespace openpipeline::detail

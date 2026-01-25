@@ -8,18 +8,18 @@
 #include <vector>
 
 #include <openpipeline/concepts.h>
-#include <openpipeline/detail/physical_pipeline.h>
+#include <openpipeline/detail/sub_pipeline.h>
 #include <openpipeline/pipeline.h>
 
 namespace openpipeline::detail {
 
 /**
- * @brief Internal compiler that splits a `Pipeline` into `PhysicalPipeline` stages.
+ * @brief Internal compiler that splits a `Pipeline` into `SubPipeline` stages.
  *
  * Splitting rule (current):
  * - Only pipe implicit sources (`PipeOp::ImplicitSource()`) create stage boundaries.
  * - When a pipe provides an implicit source, the downstream pipe chain becomes a new
- *   channel rooted at that implicit source in a later physical stage.
+ *   channel rooted at that implicit source in a later sub-pipeline stage.
  *
  * This is intentionally internal because openpipeline’s public surface is protocol-first.
  * Users typically consume it via `CompileTaskGroups`.
@@ -29,10 +29,10 @@ class PipelineCompiler {
  public:
   explicit PipelineCompiler(const Pipeline<Traits>& pipeline) : pipeline_(pipeline) {}
 
-  PhysicalPipelines<Traits> Compile() && {
+  SubPipelines<Traits> Compile() && {
     ExtractTopology();
     SortTopology();
-    return BuildPhysicalPipelines();
+    return BuildSubPipelines();
   }
 
  private:
@@ -79,38 +79,36 @@ class PipelineCompiler {
 
   void SortTopology() {
     for (auto* source : sources_keep_order_) {
-      auto& physical_info = topology_[source];
+      auto& stage_info = topology_[source];
       if (implicit_sources_keepalive_.count(source) > 0) {
-        physical_pipelines_[physical_info.first].first.push_back(
+        sub_pipelines_[stage_info.first].first.push_back(
             std::move(implicit_sources_keepalive_[source]));
       }
-      physical_pipelines_[physical_info.first].second.push_back(
-          std::move(physical_info.second));
+      sub_pipelines_[stage_info.first].second.push_back(std::move(stage_info.second));
     }
   }
 
-  PhysicalPipelines<Traits> BuildPhysicalPipelines() {
-    PhysicalPipelines<Traits> physical_pipelines;
+  SubPipelines<Traits> BuildSubPipelines() {
+    SubPipelines<Traits> sub_pipelines;
 
-    for (auto& [id, physical_info] : physical_pipelines_) {
-      auto sources_keepalive = std::move(physical_info.first);
-      auto logical_channels = std::move(physical_info.second);
+    for (auto& [id, stage_info] : sub_pipelines_) {
+      auto sources_keepalive = std::move(stage_info.first);
+      auto logical_channels = std::move(stage_info.second);
 
-      std::vector<typename PhysicalPipeline<Traits>::Channel> physical_channels(
+      std::vector<typename SubPipeline<Traits>::Channel> stage_channels(
           logical_channels.size());
       std::transform(
-          logical_channels.begin(), logical_channels.end(), physical_channels.begin(),
-          [&](auto& channel) -> typename PhysicalPipeline<Traits>::Channel {
+          logical_channels.begin(), logical_channels.end(), stage_channels.begin(),
+          [&](auto& channel) -> typename SubPipeline<Traits>::Channel {
             return {channel.source_op, std::move(channel.pipe_ops), pipeline_.Sink()};
           });
 
-      auto name = "PhysicalPipeline" + std::to_string(id) + "(" + pipeline_.Name() +
-                  ")";
-      physical_pipelines.emplace_back(std::move(name), std::move(physical_channels),
-                                      std::move(sources_keepalive));
+      auto name = "SubPipeline" + std::to_string(id) + "(" + pipeline_.Name() + ")";
+      sub_pipelines.emplace_back(std::move(name), std::move(stage_channels),
+                                 std::move(sources_keepalive));
     }
 
-    return physical_pipelines;
+    return sub_pipelines;
   }
 
   const Pipeline<Traits>& pipeline_;
@@ -124,11 +122,11 @@ class PipelineCompiler {
   std::map<std::size_t,
            std::pair<std::vector<std::unique_ptr<SourceOp<Traits>>>,
                      std::vector<typename Pipeline<Traits>::Channel>>>
-      physical_pipelines_;
+      sub_pipelines_;
 };
 
 template <OpenPipelineTraits Traits>
-PhysicalPipelines<Traits> CompilePhysicalPipelines(const Pipeline<Traits>& pipeline) {
+SubPipelines<Traits> CompileSubPipelines(const Pipeline<Traits>& pipeline) {
   return PipelineCompiler<Traits>(pipeline).Compile();
 }
 

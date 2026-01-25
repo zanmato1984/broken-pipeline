@@ -9,7 +9,7 @@
 
 #include <openpipeline/concepts.h>
 #include <openpipeline/detail/compile_pipeline.h>
-#include <openpipeline/detail/pipeline_task.h>
+#include <openpipeline/detail/pipeline_exec.h>
 #include <openpipeline/pipeline.h>
 #include <openpipeline/task.h>
 
@@ -19,18 +19,18 @@ namespace openpipeline {
  * @brief Compile a `Pipeline` into an ordered list of `TaskGroup`s.
  *
  * This is an optional helper that provides a *generic pipeline runtime*:
- * - It internally splits the pipeline into one or more *physical* stages using
+ * - It internally splits the pipeline into one or more sub-pipeline stages using
  *   `PipeOp::ImplicitSource()` (implemented in internal `detail/` headers).
- * - Each physical stage is wrapped into a `detail::PipelineExec`, which is a
+ * - Each sub-pipeline stage is wrapped into a `detail::PipelineExec`, which is a
  *   state machine driving `Source/Pipe/Drain/Sink` step-by-step and mapping operator
  *   signals (`OpOutput`) into task signals (`TaskStatus`).
  *
  * Output ordering:
- * - For each physical stage:
+ * - For each sub-pipeline stage:
  *   1) append all `SourceOp::Frontend()` task groups for that stage's sources
  *   2) append one `TaskGroup` that runs the stage `detail::PipelineExec` with parallelism =
  *      `dop`
- * - After all physical stages, append `SinkOp::Frontend()` task groups once.
+ * - After all sub-pipeline stages, append `SinkOp::Frontend()` task groups once.
  *
  * What this helper does *not* do:
  * - It does not execute anything; you must provide a scheduler to run the returned task
@@ -43,22 +43,21 @@ namespace openpipeline {
  */
 template <OpenPipelineTraits Traits>
 TaskGroups<Traits> CompileTaskGroups(const Pipeline<Traits>& pipeline, std::size_t dop) {
-  auto physical_pipelines = detail::CompilePhysicalPipelines<Traits>(pipeline);
+  auto sub_pipelines = detail::CompileSubPipelines<Traits>(pipeline);
 
   TaskGroups<Traits> task_groups;
-  task_groups.reserve(physical_pipelines.size() + 1);
+  task_groups.reserve(sub_pipelines.size() + 1);
 
-  for (auto& physical : physical_pipelines) {
+  for (auto& sub : sub_pipelines) {
     // Run source frontends for this stage before executing the stage pipeline task.
-    for (auto& ch : physical.Channels()) {
+    for (auto& ch : sub.Channels()) {
       auto fe = ch.source_op->Frontend();
       task_groups.insert(task_groups.end(),
                          std::make_move_iterator(fe.begin()),
                          std::make_move_iterator(fe.end()));
     }
 
-    auto pipeline_sp =
-        std::make_shared<detail::PhysicalPipeline<Traits>>(std::move(physical));
+    auto pipeline_sp = std::make_shared<detail::SubPipeline<Traits>>(std::move(sub));
     auto pipeline_exec =
         std::make_shared<detail::PipelineExec<Traits>>(std::move(pipeline_sp), dop);
 
@@ -72,7 +71,7 @@ TaskGroups<Traits> CompileTaskGroups(const Pipeline<Traits>& pipeline, std::size
                              dop);
   }
 
-  // Run sink frontend(s) once after all physical pipeline stages complete.
+  // Run sink frontend(s) once after all sub-pipeline stages complete.
   {
     auto fe = pipeline.Sink()->Frontend();
     task_groups.insert(task_groups.end(),

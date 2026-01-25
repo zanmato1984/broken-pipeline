@@ -11,13 +11,13 @@
 
 #include <openpipeline/concepts.h>
 #include <openpipeline/op.h>
-#include <openpipeline/detail/physical_pipeline.h>
+#include <openpipeline/detail/sub_pipeline.h>
 #include <openpipeline/task.h>
 
 namespace openpipeline::detail {
 
 /**
- * @brief Internal pipeline runtime: drive a PhysicalPipeline as a Task.
+ * @brief Internal pipeline runtime: drive a SubPipeline as a Task.
  *
  * `PipelineExec` is the generic "engine" behind `CompileTaskGroups`.
  *
@@ -26,7 +26,7 @@ namespace openpipeline::detail {
  *   scheduler decide when/where to run the next step.
  * - **Explicit flow control**: operators return `OpOutput` values that encode
  *   "needs more input", "has more output", "blocked", "yield", etc.
- * - **Multiplexing across channels**: a physical pipeline may contain multiple channels
+ * - **Multiplexing across channels**: a sub-pipeline may contain multiple channels
  *   (multiple sources feeding the same sink). A single task instance tries channels in
  *   order and, when one channel blocks, it can continue to make progress on others.
  *
@@ -41,7 +41,7 @@ class PipelineExec {
   using TaskId = openpipeline::TaskId;
   using ThreadId = openpipeline::ThreadId;
 
-  PipelineExec(std::shared_ptr<const PhysicalPipeline<Traits>> pipeline, std::size_t dop)
+  PipelineExec(std::shared_ptr<const SubPipeline<Traits>> pipeline, std::size_t dop)
       : name_("Task of " + pipeline->Name()),
         desc_(pipeline->Desc()),
         pipeline_(std::move(pipeline)),
@@ -147,7 +147,7 @@ class PipelineExec {
  private:
   class Channel {
    public:
-    Channel(const PhysicalPipeline<Traits>& pipeline, std::size_t channel_id, std::size_t dop,
+    Channel(const SubPipeline<Traits>& pipeline, std::size_t channel_id, std::size_t dop,
             std::atomic_bool& cancelled)
         : channel_id_(channel_id),
           dop_(dop),
@@ -354,7 +354,7 @@ class PipelineExec {
   std::string name_;
   std::string desc_;
 
-  std::shared_ptr<const PhysicalPipeline<Traits>> pipeline_;
+  std::shared_ptr<const SubPipeline<Traits>> pipeline_;
   std::size_t dop_;
 
   std::vector<Channel> channels_;
