@@ -11,7 +11,7 @@
 #include <openpipeline/detail/physical_pipeline.h>
 #include <openpipeline/pipeline.h>
 
-namespace openpipeline {
+namespace openpipeline::detail {
 
 /**
  * @brief Internal compiler that splits a `Pipeline` into `PhysicalPipeline` stages.
@@ -132,4 +132,4 @@ PhysicalPipelines<Traits> CompilePhysicalPipelines(const Pipeline<Traits>& pipel
   return PipelineCompiler<Traits>(pipeline).Compile();
 }
 
-}  // namespace openpipeline
+}  // namespace openpipeline::detail

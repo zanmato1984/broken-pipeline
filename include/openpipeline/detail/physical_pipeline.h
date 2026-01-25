@@ -9,7 +9,7 @@
 #include <openpipeline/concepts.h>
 #include <openpipeline/op.h>
 
-namespace openpipeline {
+namespace openpipeline::detail {
 
 /**
  * @brief Internal representation of a physical pipeline stage.
@@ -67,4 +67,4 @@ class PhysicalPipeline {
 template <OpenPipelineTraits Traits>
 using PhysicalPipelines = std::vector<PhysicalPipeline<Traits>>;
 
-}  // namespace openpipeline
+}  // namespace openpipeline::detail

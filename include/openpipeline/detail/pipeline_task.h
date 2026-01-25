@@ -14,12 +14,12 @@
 #include <openpipeline/detail/physical_pipeline.h>
 #include <openpipeline/task.h>
 
-namespace openpipeline {
+namespace openpipeline::detail {
 
 /**
  * @brief Internal pipeline runtime: drive a PhysicalPipeline as a Task.
  *
- * `PipelineTask` is the generic "engine" behind `CompileTaskGroups`.
+ * `PipelineExec` is the generic "engine" behind `CompileTaskGroups`.
  *
  * Key properties:
  * - **Small-step**: one invocation performs bounded work and returns `TaskStatus` to let a
@@ -36,12 +36,12 @@ namespace openpipeline {
  * - The scheduler must not execute the same task instance concurrently.
  */
 template <OpenPipelineTraits Traits>
-class PipelineTask {
+class PipelineExec {
  public:
   using TaskId = openpipeline::TaskId;
   using ThreadId = openpipeline::ThreadId;
 
-  PipelineTask(std::shared_ptr<const PhysicalPipeline<Traits>> pipeline, std::size_t dop)
+  PipelineExec(std::shared_ptr<const PhysicalPipeline<Traits>> pipeline, std::size_t dop)
       : name_("Task of " + pipeline->Name()),
         desc_(pipeline->Desc()),
         pipeline_(std::move(pipeline)),
@@ -363,4 +363,4 @@ class PipelineTask {
   std::atomic_bool cancelled_;
 };
 
-}  // namespace openpipeline
+}  // namespace openpipeline::detail

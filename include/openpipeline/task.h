@@ -179,7 +179,6 @@ struct TaskHint {
  * openpipeline uses a uniform `std::size_t` task id. It is typically interpreted as a
  * lane index for operators.
  */
-using TaskId = openpipeline::TaskId;
 
 template <OpenPipelineTraits Traits>
 using TaskResult = Result<Traits, TaskStatus>;

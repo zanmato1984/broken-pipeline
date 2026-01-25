@@ -35,7 +35,7 @@
  *   `openpipeline::CompileTaskGroups(...)`, which compiles a `Pipeline`
  *   into an ordered list of `TaskGroup`s by internally splitting it into *physical*
  *   stages (based on pipe implicit sources) and wrapping each stage in a generic
- *   `PipelineTask` state machine.
+ *   `detail::PipelineExec` state machine.
  */
 
 #include <openpipeline/concepts.h>

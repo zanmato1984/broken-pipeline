@@ -21,14 +21,15 @@ namespace openpipeline {
  * This is an optional helper that provides a *generic pipeline runtime*:
  * - It internally splits the pipeline into one or more *physical* stages using
  *   `PipeOp::ImplicitSource()` (implemented in internal `detail/` headers).
- * - Each physical stage is wrapped into a `PipelineTask`, which is a
+ * - Each physical stage is wrapped into a `detail::PipelineExec`, which is a
  *   state machine driving `Source/Pipe/Drain/Sink` step-by-step and mapping operator
  *   signals (`OpOutput`) into task signals (`TaskStatus`).
  *
  * Output ordering:
  * - For each physical stage:
  *   1) append all `SourceOp::Frontend()` task groups for that stage's sources
- *   2) append one `TaskGroup` that runs the stage `PipelineTask` with parallelism = `dop`
+ *   2) append one `TaskGroup` that runs the stage `detail::PipelineExec` with parallelism =
+ *      `dop`
  * - After all physical stages, append `SinkOp::Frontend()` task groups once.
  *
  * What this helper does *not* do:
@@ -42,7 +43,7 @@ namespace openpipeline {
  */
 template <OpenPipelineTraits Traits>
 TaskGroups<Traits> CompileTaskGroups(const Pipeline<Traits>& pipeline, std::size_t dop) {
-  auto physical_pipelines = CompilePhysicalPipelines<Traits>(pipeline);
+  auto physical_pipelines = detail::CompilePhysicalPipelines<Traits>(pipeline);
 
   TaskGroups<Traits> task_groups;
   task_groups.reserve(physical_pipelines.size() + 1);
@@ -56,17 +57,18 @@ TaskGroups<Traits> CompileTaskGroups(const Pipeline<Traits>& pipeline, std::size
                          std::make_move_iterator(fe.end()));
     }
 
-    auto pipeline_sp = std::make_shared<PhysicalPipeline<Traits>>(std::move(physical));
-    auto pipeline_task =
-        std::make_shared<PipelineTask<Traits>>(std::move(pipeline_sp), dop);
+    auto pipeline_sp =
+        std::make_shared<detail::PhysicalPipeline<Traits>>(std::move(physical));
+    auto pipeline_exec =
+        std::make_shared<detail::PipelineExec<Traits>>(std::move(pipeline_sp), dop);
 
     Task<Traits> task(
-        pipeline_task->Name(), pipeline_task->Desc(),
-        [pipeline_task](const TaskContext<Traits>& ctx, TaskId task_id) {
-          return (*pipeline_task)(ctx, task_id);
+        pipeline_exec->Name(), pipeline_exec->Desc(),
+        [pipeline_exec](const TaskContext<Traits>& ctx, TaskId task_id) {
+          return (*pipeline_exec)(ctx, task_id);
         });
 
-    task_groups.emplace_back(pipeline_task->Name(), pipeline_task->Desc(), std::move(task),
+    task_groups.emplace_back(pipeline_exec->Name(), pipeline_exec->Desc(), std::move(task),
                              dop);
   }
 
