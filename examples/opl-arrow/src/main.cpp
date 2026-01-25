@@ -12,22 +12,15 @@
 #include "arrow_op.h"
 
 namespace {
+using openpipeline::CompileTaskGroups;
 
-using Traits = opl_arrow::Traits;
-template <class T>
-using Result = Traits::template Result<T>;
-using Status = Traits::Status;
-
-using TaskContext = openpipeline::TaskContext<Traits>;
-using TaskGroup = openpipeline::TaskGroup<Traits>;
-using TaskGroups = openpipeline::TaskGroups<Traits>;
-
-Status RunTaskGroup(const TaskGroup& group, const TaskContext& task_ctx) {
+opl_arrow::Status RunTaskGroup(const opl_arrow::TaskGroup& group,
+                              const opl_arrow::TaskContext& task_ctx) {
   std::vector<bool> done(group.NumTasks(), false);
   std::size_t done_count = 0;
 
   while (done_count < done.size()) {
-    for (openpipeline::TaskId task_id = 0; task_id < done.size(); ++task_id) {
+    for (opl_arrow::TaskId task_id = 0; task_id < done.size(); ++task_id) {
       if (done[task_id]) {
         continue;
       }
@@ -78,22 +71,25 @@ Status RunTaskGroup(const TaskGroup& group, const TaskContext& task_ctx) {
     }
   }
 
-  return Status::OK();
+  return opl_arrow::Status::OK();
 }
 
-Status RunTaskGroups(const TaskGroups& groups, const TaskContext& task_ctx) {
+opl_arrow::Status RunTaskGroups(const opl_arrow::TaskGroups& groups,
+                               const opl_arrow::TaskContext& task_ctx) {
   for (const auto& group : groups) {
     auto st = RunTaskGroup(group, task_ctx);
     if (!st.ok()) {
       return st;
     }
   }
-  return Status::OK();
+  return opl_arrow::Status::OK();
 }
 
 }  // namespace
 
 int main() {
+  constexpr std::size_t dop = 2;
+
   auto schema = arrow::schema({arrow::field("x", arrow::int32())});
 
   std::vector<std::shared_ptr<arrow::RecordBatch>> batches;
@@ -108,34 +104,35 @@ int main() {
 
   opl_arrow::BatchesSource source(std::move(batches));
   opl_arrow::PassThroughPipe pipe;
+  opl_arrow::DelayLastBatchPipe drain_pipe(dop);
   opl_arrow::RowCountSink sink;
 
-  openpipeline::Pipeline<Traits> pipeline(
-      "P", {openpipeline::Pipeline<Traits>::Channel{&source, {&pipe}}}, &sink);
+  opl_arrow::Pipeline pipeline("P",
+                               {opl_arrow::PipelineChannel{&source, {&pipe, &drain_pipe}}},
+                               &sink);
 
-  const std::size_t dop = 2;
-  auto groups = openpipeline::CompileTaskGroups<Traits>(pipeline, dop);
+  auto groups = CompileTaskGroups(pipeline, dop);
 
   opl_arrow::Context context;
-  TaskContext task_ctx;
+  opl_arrow::TaskContext task_ctx;
   task_ctx.context = &context;
-  task_ctx.resumer_factory = []() -> Result<openpipeline::ResumerPtr> {
-    return arrow::Result<openpipeline::ResumerPtr>(
+  task_ctx.resumer_factory = []() -> opl_arrow::Result<opl_arrow::ResumerPtr> {
+    return opl_arrow::Result<opl_arrow::ResumerPtr>(
         arrow::Status::NotImplemented("resumer_factory not used in demo"));
   };
   task_ctx.single_awaiter_factory =
-      [](openpipeline::ResumerPtr) -> Result<openpipeline::AwaiterPtr> {
-    return arrow::Result<openpipeline::AwaiterPtr>(
+      [](opl_arrow::ResumerPtr) -> opl_arrow::Result<opl_arrow::AwaiterPtr> {
+    return opl_arrow::Result<opl_arrow::AwaiterPtr>(
         arrow::Status::NotImplemented("single_awaiter_factory not used in demo"));
   };
   task_ctx.any_awaiter_factory =
-      [](openpipeline::Resumers) -> Result<openpipeline::AwaiterPtr> {
-    return arrow::Result<openpipeline::AwaiterPtr>(
+      [](opl_arrow::Resumers) -> opl_arrow::Result<opl_arrow::AwaiterPtr> {
+    return opl_arrow::Result<opl_arrow::AwaiterPtr>(
         arrow::Status::NotImplemented("any_awaiter_factory not used in demo"));
   };
   task_ctx.all_awaiter_factory =
-      [](openpipeline::Resumers) -> Result<openpipeline::AwaiterPtr> {
-    return arrow::Result<openpipeline::AwaiterPtr>(
+      [](opl_arrow::Resumers) -> opl_arrow::Result<opl_arrow::AwaiterPtr> {
+    return opl_arrow::Result<opl_arrow::AwaiterPtr>(
         arrow::Status::NotImplemented("all_awaiter_factory not used in demo"));
   };
 
@@ -145,6 +142,26 @@ int main() {
     return 1;
   }
 
-  std::cout << "total_rows=" << sink.TotalRows() << "\n";
+  if (auto be = source.Backend(); be.has_value()) {
+    auto be_st = RunTaskGroup(*be, task_ctx);
+    if (!be_st.ok()) {
+      std::cerr << "Source backend failed: " << be_st.ToString() << "\n";
+      return 1;
+    }
+  }
+  if (auto be = sink.Backend(); be.has_value()) {
+    auto be_st = RunTaskGroup(*be, task_ctx);
+    if (!be_st.ok()) {
+      std::cerr << "Sink backend failed: " << be_st.ToString() << "\n";
+      return 1;
+    }
+  }
+
+  std::cout << "total_rows=" << sink.TotalRows() << " source_frontend="
+            << (source.FrontendFinished() ? "yes" : "no") << " source_backend="
+            << (source.BackendFinished() ? "yes" : "no") << " sink_frontend="
+            << (sink.FrontendFinished() ? "yes" : "no") << " sink_backend="
+            << (sink.BackendFinished() ? "yes" : "no") << " drained_batches="
+            << drain_pipe.DrainedBatches() << "\n";
   return 0;
 }
