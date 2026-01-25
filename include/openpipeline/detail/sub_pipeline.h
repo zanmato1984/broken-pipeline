@@ -14,7 +14,7 @@ namespace openpipeline::detail {
 /**
  * @brief Internal representation of a sub-pipeline stage.
  *
- * A sub-pipeline is a subset of a logical pipeline after splitting on
+ * A sub-pipeline is a subset of a pipeline after splitting on
  * `PipeOp::ImplicitSource()` boundaries. It is intentionally in `detail`
  * because openpipeline’s public surface is focused on the protocol/interfaces.
  */

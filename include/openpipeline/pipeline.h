@@ -20,7 +20,7 @@ namespace openpipeline {
  * Notes:
  * - The pipeline stores raw pointers to operators. Operator lifetime is owned by you and
  *   must outlive any compilation/execution that uses the pipeline.
- * - A pipeline may be split into multiple *physical* stages if any `PipeOp` returns a
+ * - A pipeline may be split into multiple sub-pipeline stages if any `PipeOp` returns a
  *   non-null `ImplicitSource()`. That split is performed by
  *   `CompileTaskGroups` (via internal detail headers).
  */

@@ -33,7 +33,7 @@
  * Optional helper (intentionally *not* included here):
  * - `#include <openpipeline/compile.h>` provides
  *   `openpipeline::CompileTaskGroups(...)`, which compiles a `Pipeline`
- *   into an ordered list of `TaskGroup`s by internally splitting it into *physical*
+ *   into an ordered list of `TaskGroup`s by internally splitting it into sub-pipeline
  *   stages (based on pipe implicit sources) and wrapping each stage in a generic
  *   `detail::PipelineExec` state machine.
  */

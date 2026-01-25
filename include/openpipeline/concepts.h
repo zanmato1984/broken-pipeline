@@ -16,7 +16,7 @@ namespace openpipeline {
 using TaskId = std::size_t;
 
 /**
- * @brief Logical execution lane id.
+ * @brief Execution lane id.
  *
  * Many operator implementations keep per-lane state indexed by `ThreadId`. In the
  * reference runtime (`detail::PipelineExec`), a task instance typically uses

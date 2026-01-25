@@ -93,12 +93,12 @@ class PipelineCompiler {
 
     for (auto& [id, stage_info] : sub_pipelines_) {
       auto sources_keepalive = std::move(stage_info.first);
-      auto logical_channels = std::move(stage_info.second);
+      auto pipeline_channels = std::move(stage_info.second);
 
       std::vector<typename SubPipeline<Traits>::Channel> stage_channels(
-          logical_channels.size());
+          pipeline_channels.size());
       std::transform(
-          logical_channels.begin(), logical_channels.end(), stage_channels.begin(),
+          pipeline_channels.begin(), pipeline_channels.end(), stage_channels.begin(),
           [&](auto& channel) -> typename SubPipeline<Traits>::Channel {
             return {channel.source_op, std::move(channel.pipe_ops), pipeline_.Sink()};
           });

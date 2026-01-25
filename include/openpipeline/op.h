@@ -250,10 +250,10 @@ class SourceOp {
  * A pipe participates in the main streaming path via `Pipe()`, may optionally implement
  * `Drain()` for tail output, and may optionally introduce a new stage via `ImplicitSource()`.
  *
- * `ImplicitSource()` is the hook used to split a logical pipeline into multiple physical
- * pipeline stages (see `CompileTaskGroups`):
+ * `ImplicitSource()` is the hook used to split a pipeline into multiple sub-pipeline
+ * stages (see `CompileTaskGroups`):
  * - returning `nullptr` means "no split here"
- * - returning a source means "downstream operators become a new physical stage rooted at
+ * - returning a source means "downstream operators become a new sub-pipeline stage rooted at
  *   this implicit source"
  */
 template <OpenPipelineTraits Traits>
