@@ -29,11 +29,8 @@
  * - Task protocol: `Task`, `TaskGroup`, `TaskStatus`, `Resumer`/`Awaiter`, `TaskContext`
  * - Operator protocol: `SourceOp` / `PipeOp` / `SinkOp` and `OpOutput`
  * - Pipeline graph: `Pipeline`
- * - Pipeline runtime: `PipelineExec` (include `opl/pipeline_exec.h`)
- *
- * Optional helper (intentionally *not* included here):
- * - `#include <opl/pipeline_exec.h>` also provides `opl::detail::CompileSubPipelines(...)`,
- *   which splits a `Pipeline` into `SubPipeline` stages based on pipe implicit sources.
+ * - Pipeline compilation: `Pipeline::Compile(dop)` / `opl::CompileSubPipelines(...)`
+ * - Pipeline stage runtime: `PipelineExec` (defined in `opl/pipeline_exec.h`)
  */
 
 #include <opl/concepts.h>

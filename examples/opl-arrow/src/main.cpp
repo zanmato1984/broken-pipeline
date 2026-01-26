@@ -7,7 +7,6 @@
 #include <arrow/status.h>
 
 #include <opl/opl.h>
-#include <opl/pipeline_exec.h>
 
 #include "arrow_traits.h"
 #include "arrow_op.h"
@@ -16,37 +15,35 @@ namespace {
 
 std::vector<opl_arrow::TaskGroup> CompileTaskGroups(const opl_arrow::Pipeline& pipeline,
                                                     std::size_t dop) {
-  auto sub_pipelines = opl::detail::CompileSubPipelines<opl_arrow::Traits>(pipeline);
+  auto pipeline_execs = pipeline.Compile(dop);
 
   std::vector<opl_arrow::TaskGroup> task_groups;
-  task_groups.reserve(sub_pipelines.size() + 1);
+  task_groups.reserve(pipeline_execs.size() * 2 + 3);
 
-  for (auto& sub : sub_pipelines) {
-    for (auto& ch : sub.Channels()) {
-      auto fe = ch.source_op->Frontend();
-      for (auto& tg : fe) {
-        task_groups.push_back(std::move(tg));
-      }
+  for (auto& exec : pipeline_execs) {
+    for (auto& tg : exec.SourceFrontendTaskGroups()) {
+      task_groups.push_back(tg);
     }
 
-    auto pipeline_sp = std::make_shared<opl::SubPipeline<opl_arrow::Traits>>(std::move(sub));
-    auto pipeline_exec =
-        std::make_shared<opl::PipelineExec<opl_arrow::Traits>>(std::move(pipeline_sp), dop);
-
-    opl_arrow::Task task(
-        pipeline_exec->Name(), pipeline_exec->Desc(),
-        [pipeline_exec](const opl_arrow::TaskContext& ctx, opl_arrow::TaskId task_id) {
-          return (*pipeline_exec)(ctx, task_id);
-        });
-
-    task_groups.emplace_back(pipeline_exec->Name(), pipeline_exec->Desc(), std::move(task),
-                             dop);
+    task_groups.push_back(exec.ChainTaskGroup());
   }
 
-  {
-    auto fe = pipeline.Sink()->Frontend();
-    for (auto& tg : fe) {
-      task_groups.push_back(std::move(tg));
+  for (auto& exec : pipeline_execs) {
+    for (auto& tg : exec.SinkFrontendTaskGroups()) {
+      task_groups.push_back(tg);
+    }
+  }
+
+  for (auto& exec : pipeline_execs) {
+    for (auto& tg : exec.SourceBackendTaskGroups()) {
+      task_groups.push_back(tg);
+    }
+  }
+
+  for (auto& exec : pipeline_execs) {
+    if (exec.SinkBackendTaskGroup().has_value()) {
+      task_groups.push_back(*exec.SinkBackendTaskGroup());
+      break;
     }
   }
 
@@ -181,21 +178,6 @@ int main() {
   if (!st.ok()) {
     std::cerr << "Execution failed: " << st.ToString() << "\n";
     return 1;
-  }
-
-  if (auto be = source.Backend(); be.has_value()) {
-    auto be_st = RunTaskGroup(*be, task_ctx);
-    if (!be_st.ok()) {
-      std::cerr << "Source backend failed: " << be_st.ToString() << "\n";
-      return 1;
-    }
-  }
-  if (auto be = sink.Backend(); be.has_value()) {
-    auto be_st = RunTaskGroup(*be, task_ctx);
-    if (!be_st.ok()) {
-      std::cerr << "Sink backend failed: " << be_st.ToString() << "\n";
-      return 1;
-    }
   }
 
   std::cout << "total_rows=" << sink.TotalRows() << " source_frontend="

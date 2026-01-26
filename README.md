@@ -168,12 +168,13 @@ Key conventions:
 
 ## Driving a Pipeline
 
-opl does not ship a public "compiler" that turns a `Pipeline` into runnable `TaskGroup`s.
-The host is expected to build its own orchestration using the operator/task protocols.
+opl ships a small reference "compiler" that splits a `Pipeline` into executable stages, but
+the host is still responsible for orchestration and scheduling.
 
-Reference implementations live in `include/opl/pipeline_exec.h`:
-`opl::detail::CompileSubPipelines` for stage splitting and `opl::PipelineExec` for driving a
-stage.
+Reference implementations live in:
+- `include/opl/pipeline.h`: `Pipeline::Compile(dop)` (and `opl::CompileSubPipelines(...)`) for
+  stage splitting + task-group assembly
+- `include/opl/pipeline_exec.h`: `opl::PipelineExec` small-step runtime for a single stage
 
 ## Notes on Lifetime and Threading
 
