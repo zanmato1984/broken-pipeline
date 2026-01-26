@@ -31,9 +31,9 @@
  * - Pipeline graph: `Pipeline`
  * - Pipeline runtime: `PipelineExec` (include `opl/pipeline_exec.h`)
  *
- * Internal building blocks (intentionally *not* included here):
- * - `include/opl/detail/*` contains reference implementations for splitting a pipeline
- *   into sub-pipeline stages and driving a stage as a small-step task.
+ * Optional helper (intentionally *not* included here):
+ * - `#include <opl/pipeline_exec.h>` also provides `opl::detail::CompileSubPipelines(...)`,
+ *   which splits a `Pipeline` into `SubPipeline` stages based on pipe implicit sources.
  */
 
 #include <opl/concepts.h>

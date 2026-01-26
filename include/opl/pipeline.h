@@ -129,8 +129,9 @@ namespace opl {
 /**
  * @brief Internal stage representation exposed for host orchestration.
  *
- * A `SubPipeline` is produced by stage splitting (e.g. via `include/opl/detail/*`) and can
- * be driven using `opl::PipelineExec`.
+ * A `SubPipeline` is produced by stage splitting (e.g. via
+ * `opl::detail::CompileSubPipelines` from `opl/pipeline_exec.h`) and can be driven using
+ * `opl::PipelineExec`.
  */
 template <OpenPipelineTraits Traits>
 using SubPipeline = detail::SubPipeline<Traits>;

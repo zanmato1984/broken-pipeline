@@ -7,7 +7,6 @@
 #include <arrow/status.h>
 
 #include <opl/opl.h>
-#include <opl/detail/compile_pipeline.h>
 #include <opl/pipeline_exec.h>
 
 #include "arrow_traits.h"

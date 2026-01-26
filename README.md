@@ -37,7 +37,7 @@ organized as a small set of top-level files:
 - “How do I transform/consume/produce batches?”
 - Exposes a small set of flow-control signals (`OpOutput`).
 
-2) **Pipeline driver** (`include/opl/pipeline.h` + internal `include/opl/detail/*`)
+2) **Pipeline driver** (`include/opl/pipeline.h` + `include/opl/pipeline_exec.h`)
 - “How do I wire Source/Pipe/Sink together and resume them correctly?”
 - Encodes “drain after upstream finished”, “resume an operator that has more internal
   output”, “propagate blocked/yield” as a state machine.
@@ -171,8 +171,9 @@ Key conventions:
 opl does not ship a public "compiler" that turns a `Pipeline` into runnable `TaskGroup`s.
 The host is expected to build its own orchestration using the operator/task protocols.
 
-Reference implementations live under `include/opl/detail/*` (stage splitting), and
-the stage runtime is exposed as `opl::PipelineExec` via `include/opl/pipeline_exec.h`.
+Reference implementations live in `include/opl/pipeline_exec.h`:
+`opl::detail::CompileSubPipelines` for stage splitting and `opl::PipelineExec` for driving a
+stage.
 
 ## Notes on Lifetime and Threading
 
