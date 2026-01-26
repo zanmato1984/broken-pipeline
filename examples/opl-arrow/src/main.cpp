@@ -1,7 +1,6 @@
 #include <cstddef>
 #include <iostream>
 #include <memory>
-#include <optional>
 #include <vector>
 
 #include <arrow/status.h>

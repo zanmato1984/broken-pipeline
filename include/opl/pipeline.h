@@ -1,6 +1,6 @@
 #pragma once
 
-#include <sstream>
+#include <cstddef>
 #include <string>
 #include <utility>
 #include <vector>
@@ -49,22 +49,27 @@ class Pipeline {
   const std::string& Desc() const noexcept { return desc_; }
 
   const std::vector<Channel>& Channels() const noexcept { return channels_; }
-  SinkOp<Traits>* Sink() const noexcept { return sink_op_; }
+ SinkOp<Traits>* Sink() const noexcept { return sink_op_; }
 
  private:
   static std::string Explain(const std::vector<Channel>& channels, SinkOp<Traits>* sink_op) {
-    std::stringstream ss;
+    std::string out;
     for (std::size_t i = 0; i < channels.size(); ++i) {
       if (i > 0) {
-        ss << '\n';
+        out.push_back('\n');
       }
-      ss << "Channel" << i << ": " << channels[i].source_op->Name() << " -> ";
+      out += "Channel";
+      out += std::to_string(i);
+      out += ": ";
+      out += channels[i].source_op->Name();
+      out += " -> ";
       for (std::size_t j = 0; j < channels[i].pipe_ops.size(); ++j) {
-        ss << channels[i].pipe_ops[j]->Name() << " -> ";
+        out += channels[i].pipe_ops[j]->Name();
+        out += " -> ";
       }
-      ss << sink_op->Name();
+      out += sink_op->Name();
     }
-    return ss.str();
+    return out;
   }
 
   std::string name_;

@@ -37,7 +37,8 @@
 
 #include <opl/concepts.h>
 
+#include <opl/operator.h>
+#include <opl/pipeline.h>
 #include <opl/task.h>
 
-#include <opl/op.h>
-#include <opl/pipeline.h>
+#include <opl/pipeline_exec.h>

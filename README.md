@@ -33,7 +33,7 @@ opl deliberately separates concerns:
 All public types live directly in `namespace opl` (no sub-namespaces); headers are
 organized as a small set of top-level files:
 
-1) **Operator protocol** (`include/opl/op.h`)
+1) **Operator protocol** (`include/opl/operator.h`)
 - “How do I transform/consume/produce batches?”
 - Exposes a small set of flow-control signals (`OpOutput`).
 
@@ -69,7 +69,7 @@ Defined in `include/opl/task.h`:
 
 ### OpOutput (Operator → Pipeline driver)
 
-Defined in `include/opl/op.h`:
+Defined in `include/opl/operator.h`:
 
 The most important distinction:
 - `PIPE_SINK_NEEDS_MORE`: operator needs more upstream input.
@@ -154,7 +154,7 @@ struct Traits {
 
 ## Operator Skeleton
 
-All operator interfaces live in `namespace opl` (defined in `include/opl/op.h`):
+All operator interfaces live in `namespace opl` (defined in `include/opl/operator.h`):
 - `SourceOp<Traits>` → `Source()`, `Frontend()`, `Backend()`
 - `PipeOp<Traits>` → `Pipe()`, `Drain()`, `ImplicitSource()`
 - `SinkOp<Traits>` → `Sink()`, `Frontend()`, `Backend()`, `ImplicitSource()`
