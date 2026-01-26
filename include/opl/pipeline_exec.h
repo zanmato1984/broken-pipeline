@@ -1,11 +1,13 @@
 #pragma once
 
+#include <algorithm>
 #include <atomic>
 #include <cassert>
 #include <cstddef>
 #include <map>
 #include <memory>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -98,23 +100,18 @@ class PipelineExec {
 
  private:
   static std::string Explain(const std::vector<Channel>& channels) {
-    std::string out;
+    std::stringstream ss;
     for (std::size_t i = 0; i < channels.size(); ++i) {
       if (i > 0) {
-        out.push_back('\n');
+        ss << '\n';
       }
-      out += "Channel";
-      out += std::to_string(i);
-      out += ": ";
-      out += channels[i].source_op->Name();
-      out += " -> ";
+      ss << "Channel" << i << ": " << channels[i].source_op->Name() << " -> ";
       for (std::size_t j = 0; j < channels[i].pipe_ops.size(); ++j) {
-        out += channels[i].pipe_ops[j]->Name();
-        out += " -> ";
+        ss << channels[i].pipe_ops[j]->Name() << " -> ";
       }
-      out += channels[i].sink_op->Name();
+      ss << channels[i].sink_op->Name();
     }
-    return out;
+    return ss.str();
   }
 
   static TaskGroup<Traits> MakePipelineTaskGroup(const std::string& name,
@@ -663,11 +660,13 @@ class PipelineCompiler {
 
       std::vector<typename PipelineExec<Traits>::Channel> stage_channels(
           pipeline_channels.size());
-      for (std::size_t i = 0; i < pipeline_channels.size(); ++i) {
-        stage_channels[i] = {pipeline_channels[i].source_op,
-                             std::move(pipeline_channels[i].pipe_ops),
-                             pipeline_.Sink()};
-      }
+      std::transform(
+          pipeline_channels.begin(),
+          pipeline_channels.end(),
+          stage_channels.begin(),
+          [&](auto& channel) -> typename PipelineExec<Traits>::Channel {
+            return {channel.source_op, std::move(channel.pipe_ops), pipeline_.Sink()};
+          });
 
       auto name = "PipelineExec" + std::to_string(id) + "(" + pipeline_.Name() + ")";
       const bool include_sink_task_groups = (id == last_stage_id);

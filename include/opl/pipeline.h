@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cstddef>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -53,23 +53,18 @@ class Pipeline {
 
  private:
   static std::string Explain(const std::vector<Channel>& channels, SinkOp<Traits>* sink_op) {
-    std::string out;
+    std::stringstream ss;
     for (std::size_t i = 0; i < channels.size(); ++i) {
       if (i > 0) {
-        out.push_back('\n');
+        ss << '\n';
       }
-      out += "Channel";
-      out += std::to_string(i);
-      out += ": ";
-      out += channels[i].source_op->Name();
-      out += " -> ";
+      ss << "Channel" << i << ": " << channels[i].source_op->Name() << " -> ";
       for (std::size_t j = 0; j < channels[i].pipe_ops.size(); ++j) {
-        out += channels[i].pipe_ops[j]->Name();
-        out += " -> ";
+        ss << channels[i].pipe_ops[j]->Name() << " -> ";
       }
-      out += sink_op->Name();
+      ss << sink_op->Name();
     }
-    return out;
+    return ss.str();
   }
 
   std::string name_;

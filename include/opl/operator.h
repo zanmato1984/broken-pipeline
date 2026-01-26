@@ -6,6 +6,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include <opl/concepts.h>
@@ -112,22 +113,22 @@ class OpOutput {
 
   std::optional<typename Traits::Batch>& GetBatch() {
     assert(IsPipeEven() || IsSourcePipeHasMore() || IsFinished());
-    return batch_;
+    return std::get<std::optional<typename Traits::Batch>>(payload_);
   }
 
   const std::optional<typename Traits::Batch>& GetBatch() const {
     assert(IsPipeEven() || IsSourcePipeHasMore() || IsFinished());
-    return batch_;
+    return std::get<std::optional<typename Traits::Batch>>(payload_);
   }
 
   std::shared_ptr<Resumer>& GetResumer() {
     assert(IsBlocked());
-    return resumer_;
+    return std::get<std::shared_ptr<Resumer>>(payload_);
   }
 
   const std::shared_ptr<Resumer>& GetResumer() const {
     assert(IsBlocked());
-    return resumer_;
+    return std::get<std::shared_ptr<Resumer>>(payload_);
   }
 
   std::string ToString() const {
@@ -154,14 +155,13 @@ class OpOutput {
 
  private:
   explicit OpOutput(Code code, std::optional<typename Traits::Batch> batch = std::nullopt)
-      : code_(code), batch_(std::move(batch)) {}
+      : code_(code), payload_(std::move(batch)) {}
 
   explicit OpOutput(std::shared_ptr<Resumer> resumer)
-      : code_(Code::BLOCKED), resumer_(std::move(resumer)) {}
+      : code_(Code::BLOCKED), payload_(std::move(resumer)) {}
 
   Code code_;
-  std::shared_ptr<Resumer> resumer_;
-  std::optional<typename Traits::Batch> batch_;
+  std::variant<std::shared_ptr<Resumer>, std::optional<typename Traits::Batch>> payload_;
 };
 
 /**
