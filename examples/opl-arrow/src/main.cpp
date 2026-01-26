@@ -7,6 +7,7 @@
 #include <arrow/status.h>
 
 #include <opl/opl.h>
+#include <opl/pipeline_exec.h>
 
 #include "arrow_traits.h"
 #include "arrow_op.h"
@@ -15,34 +16,41 @@ namespace {
 
 std::vector<opl_arrow::TaskGroup> CompileTaskGroups(const opl_arrow::Pipeline& pipeline,
                                                     std::size_t dop) {
-  auto pipeline_execs = pipeline.Compile(dop);
+  auto pipeline_execs = opl::Compile(pipeline, dop);
 
   std::vector<opl_arrow::TaskGroup> task_groups;
   task_groups.reserve(pipeline_execs.size() * 2 + 3);
 
   for (auto& exec : pipeline_execs) {
-    for (auto& tg : exec.SourceFrontendTaskGroups()) {
-      task_groups.push_back(tg);
+    for (const auto& source : exec.Sources()) {
+      for (const auto& tg : source.frontend) {
+        task_groups.push_back(tg);
+      }
     }
 
-    task_groups.push_back(exec.ChainTaskGroup());
+    task_groups.push_back(exec.PipelineTaskGroup());
   }
 
   for (auto& exec : pipeline_execs) {
-    for (auto& tg : exec.SinkFrontendTaskGroups()) {
+    if (!exec.Sink().has_value()) {
+      continue;
+    }
+    for (const auto& tg : exec.Sink()->frontend) {
       task_groups.push_back(tg);
     }
   }
 
   for (auto& exec : pipeline_execs) {
-    for (auto& tg : exec.SourceBackendTaskGroups()) {
-      task_groups.push_back(tg);
+    for (const auto& source : exec.Sources()) {
+      if (source.backend.has_value()) {
+        task_groups.push_back(*source.backend);
+      }
     }
   }
 
   for (auto& exec : pipeline_execs) {
-    if (exec.SinkBackendTaskGroup().has_value()) {
-      task_groups.push_back(*exec.SinkBackendTaskGroup());
+    if (exec.Sink().has_value() && exec.Sink()->backend.has_value()) {
+      task_groups.push_back(*exec.Sink()->backend);
       break;
     }
   }

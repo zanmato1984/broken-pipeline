@@ -1,21 +1,30 @@
 #pragma once
 
+#include <algorithm>
 #include <atomic>
 #include <cassert>
 #include <cstddef>
+#include <map>
 #include <memory>
 #include <optional>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
 #include <opl/concepts.h>
 #include <opl/op.h>
+#include <opl/pipeline.h>
 #include <opl/task.h>
 
 namespace opl {
+
+namespace detail {
+template <OpenPipelineTraits Traits>
+class PipelineTask;
+}  // namespace detail
 
 /**
  * @brief Generic small-step pipeline runtime + stage metadata.
@@ -45,6 +54,18 @@ class PipelineExec {
     SinkOp<Traits>* sink_op;
   };
 
+  struct SourceTasks {
+    SourceOp<Traits>* op = nullptr;
+    std::vector<TaskGroup<Traits>> frontend;
+    std::optional<TaskGroup<Traits>> backend;
+  };
+
+  struct SinkTasks {
+    SinkOp<Traits>* op = nullptr;
+    std::vector<TaskGroup<Traits>> frontend;
+    std::optional<TaskGroup<Traits>> backend;
+  };
+
   PipelineExec(std::string name,
                std::vector<Channel> channels,
                std::vector<std::unique_ptr<SourceOp<Traits>>> implicit_sources,
@@ -54,11 +75,13 @@ class PipelineExec {
         desc_(Explain(channels)),
         channels_(std::move(channels)),
         dop_(dop),
-        runtime_(std::make_shared<Runtime>(channels_, dop_, std::move(implicit_sources))),
-        chain_task_group_(MakeChainTaskGroup(name_, desc_, runtime_, dop_)) {
-    CollectSourceTaskGroups();
+        pipeline_task_(std::make_shared<detail::PipelineTask<Traits>>(channels_,
+                                                                      dop_,
+                                                                      std::move(implicit_sources))),
+        pipeline_task_group_(MakePipelineTaskGroup(name_, desc_, pipeline_task_, dop_)) {
+    CollectSources();
     if (include_sink_task_groups) {
-      CollectSinkTaskGroups();
+      CollectSink();
     }
   }
 
@@ -67,27 +90,16 @@ class PipelineExec {
 
   const std::vector<Channel>& Channels() const noexcept { return channels_; }
 
-  const std::vector<TaskGroup<Traits>>& SourceFrontendTaskGroups() const noexcept {
-    return source_frontend_task_groups_;
-  }
-  const std::vector<TaskGroup<Traits>>& SourceBackendTaskGroups() const noexcept {
-    return source_backend_task_groups_;
-  }
-  const std::vector<TaskGroup<Traits>>& SinkFrontendTaskGroups() const noexcept {
-    return sink_frontend_task_groups_;
-  }
-  const std::optional<TaskGroup<Traits>>& SinkBackendTaskGroup() const noexcept {
-    return sink_backend_task_group_;
-  }
-  const TaskGroup<Traits>& ChainTaskGroup() const noexcept { return chain_task_group_; }
+  const std::vector<SourceTasks>& Sources() const noexcept { return sources_; }
+  const std::optional<SinkTasks>& Sink() const noexcept { return sink_; }
+
+  const TaskGroup<Traits>& PipelineTaskGroup() const noexcept { return pipeline_task_group_; }
 
   Result<Traits, TaskStatus> operator()(const TaskContext<Traits>& task_ctx, TaskId task_id) {
-    return (*runtime_)(task_ctx, task_id);
+    return (*pipeline_task_)(task_ctx, task_id);
   }
 
  private:
-  class Runtime;
-
   static std::string Explain(const std::vector<Channel>& channels) {
     std::stringstream ss;
     for (std::size_t i = 0; i < channels.size(); ++i) {
@@ -103,27 +115,29 @@ class PipelineExec {
     return ss.str();
   }
 
-  static TaskGroup<Traits> MakeChainTaskGroup(const std::string& name,
-                                              const std::string& desc,
-                                              const std::shared_ptr<Runtime>& runtime,
-                                              std::size_t dop) {
+  static TaskGroup<Traits> MakePipelineTaskGroup(const std::string& name,
+                                                 const std::string& desc,
+                                                 const std::shared_ptr<detail::PipelineTask<Traits>>&
+                                                     pipeline_task,
+                                                 std::size_t dop) {
     Task<Traits> task(
         name,
         desc,
-        [runtime](const TaskContext<Traits>& ctx, TaskId task_id) {
-          return (*runtime)(ctx, task_id);
+        [pipeline_task](const TaskContext<Traits>& ctx, TaskId task_id) {
+          return (*pipeline_task)(ctx, task_id);
         });
     return TaskGroup<Traits>(name, desc, std::move(task), dop);
   }
 
   static TaskGroup<Traits> KeepAliveTaskGroup(TaskGroup<Traits> group,
-                                              const std::shared_ptr<Runtime>& runtime) {
+                                              const std::shared_ptr<detail::PipelineTask<Traits>>&
+                                                  pipeline_task) {
     auto original_task = group.GetTask();
     Task<Traits> task(
         original_task.Name(),
         original_task.Desc(),
-        [runtime, original_task](const TaskContext<Traits>& ctx, TaskId task_id) {
-          (void)runtime;
+        [pipeline_task, original_task](const TaskContext<Traits>& ctx, TaskId task_id) {
+          (void)pipeline_task;
           return original_task(ctx, task_id);
         },
         original_task.Hint());
@@ -134,16 +148,16 @@ class PipelineExec {
       cont = Continuation<Traits>(
           original_cont.Name(),
           original_cont.Desc(),
-          [runtime, original_cont](const TaskContext<Traits>& ctx) {
-            (void)runtime;
+          [pipeline_task, original_cont](const TaskContext<Traits>& ctx) {
+            (void)pipeline_task;
             return original_cont(ctx);
           },
           original_cont.Hint());
     }
 
     typename TaskGroup<Traits>::NotifyFinishFunc notify =
-        [runtime, group](const TaskContext<Traits>& ctx) -> Status<Traits> {
-      (void)runtime;
+        [pipeline_task, group](const TaskContext<Traits>& ctx) -> Status<Traits> {
+      (void)pipeline_task;
       return group.NotifyFinish(ctx);
     };
 
@@ -155,7 +169,7 @@ class PipelineExec {
                              std::move(notify));
   }
 
-  void CollectSourceTaskGroups() {
+  void CollectSources() {
     std::unordered_set<SourceOp<Traits>*> seen_sources;
     for (const auto& ch : channels_) {
       auto* src = ch.source_op;
@@ -163,368 +177,522 @@ class PipelineExec {
         continue;
       }
 
-      auto fe = src->Frontend();
-      for (auto& tg : fe) {
-        source_frontend_task_groups_.push_back(KeepAliveTaskGroup(std::move(tg), runtime_));
+      SourceTasks tasks;
+      tasks.op = src;
+
+      tasks.frontend = src->Frontend();
+      for (auto& tg : tasks.frontend) {
+        tg = KeepAliveTaskGroup(std::move(tg), pipeline_task_);
       }
 
-      if (auto be = src->Backend(); be.has_value()) {
-        source_backend_task_groups_.push_back(KeepAliveTaskGroup(std::move(*be), runtime_));
+      tasks.backend = src->Backend();
+      if (tasks.backend.has_value()) {
+        *tasks.backend = KeepAliveTaskGroup(std::move(*tasks.backend), pipeline_task_);
       }
+
+      sources_.push_back(std::move(tasks));
     }
   }
 
-  void CollectSinkTaskGroups() {
+  void CollectSink() {
     if (channels_.empty()) {
       return;
     }
 
     auto* sink = channels_[0].sink_op;
 
-    auto fe = sink->Frontend();
-    for (auto& tg : fe) {
-      sink_frontend_task_groups_.push_back(KeepAliveTaskGroup(std::move(tg), runtime_));
+    SinkTasks tasks;
+    tasks.op = sink;
+
+    tasks.frontend = sink->Frontend();
+    for (auto& tg : tasks.frontend) {
+      tg = KeepAliveTaskGroup(std::move(tg), pipeline_task_);
     }
 
-    if (auto be = sink->Backend(); be.has_value()) {
-      sink_backend_task_group_ = KeepAliveTaskGroup(std::move(*be), runtime_);
+    tasks.backend = sink->Backend();
+    if (tasks.backend.has_value()) {
+      *tasks.backend = KeepAliveTaskGroup(std::move(*tasks.backend), pipeline_task_);
     }
+
+    sink_ = std::move(tasks);
   }
-
-  class Runtime {
-   public:
-    Runtime(const std::vector<Channel>& channels,
-            std::size_t dop,
-            std::vector<std::unique_ptr<SourceOp<Traits>>> implicit_sources_keepalive)
-        : implicit_sources_keepalive_(std::move(implicit_sources_keepalive)),
-          dop_(dop),
-          cancelled_(false) {
-      channels_.reserve(channels.size());
-      for (std::size_t i = 0; i < channels.size(); ++i) {
-        channels_.emplace_back(channels[i], i, dop_, cancelled_);
-      }
-      thread_locals_.reserve(dop_);
-      for (std::size_t i = 0; i < dop_; ++i) {
-        thread_locals_.emplace_back(channels_.size());
-      }
-    }
-
-    Result<Traits, TaskStatus> operator()(const TaskContext<Traits>& task_ctx,
-                                          TaskId task_id) {
-      const ThreadId thread_id = static_cast<ThreadId>(task_id);
-      if (cancelled_.load()) {
-        return Result<Traits, TaskStatus>(TaskStatus::Cancelled());
-      }
-
-      bool all_finished = true;
-      bool all_unfinished_blocked = true;
-      std::vector<std::shared_ptr<Resumer>> blocked_resumers;
-
-      OpResult<Traits> last_op_result(OpOutput<Traits>::PipeSinkNeedsMore());
-
-      auto& tl = thread_locals_[thread_id];
-      for (std::size_t channel_id = 0; channel_id < channels_.size(); ++channel_id) {
-        if (tl.finished[channel_id]) {
-          continue;
-        }
-
-        if (auto& resumer = tl.resumers[channel_id]; resumer) {
-          if (resumer->IsResumed()) {
-            resumer.reset();
-          } else {
-            blocked_resumers.push_back(resumer);
-            all_finished = false;
-            continue;
-          }
-        }
-
-        last_op_result = channels_[channel_id](task_ctx, thread_id);
-        if (!last_op_result.ok()) {
-          cancelled_.store(true);
-          return Result<Traits, TaskStatus>(last_op_result.status());
-        }
-
-        auto& out = last_op_result.ValueOrDie();
-        if (out.IsFinished()) {
-          assert(!out.GetBatch().has_value());
-          tl.finished[channel_id] = true;
-        } else {
-          all_finished = false;
-        }
-
-        if (out.IsBlocked()) {
-          tl.resumers[channel_id] = out.GetResumer();
-          blocked_resumers.push_back(tl.resumers[channel_id]);
-        } else {
-          all_unfinished_blocked = false;
-        }
-
-        if (!out.IsFinished() && !out.IsBlocked()) {
-          break;
-        }
-      }
-
-      if (all_finished) {
-        return Result<Traits, TaskStatus>(TaskStatus::Finished());
-      }
-
-      if (all_unfinished_blocked && !blocked_resumers.empty()) {
-        auto awaiter_r = task_ctx.any_awaiter_factory(std::move(blocked_resumers));
-        if (!awaiter_r.ok()) {
-          cancelled_.store(true);
-          return Result<Traits, TaskStatus>(awaiter_r.status());
-        }
-        auto awaiter = std::move(awaiter_r).ValueOrDie();
-        return Result<Traits, TaskStatus>(TaskStatus::Blocked(std::move(awaiter)));
-      }
-
-      if (!last_op_result.ok()) {
-        cancelled_.store(true);
-        return Result<Traits, TaskStatus>(last_op_result.status());
-      }
-
-      const auto& out = last_op_result.ValueOrDie();
-      if (out.IsPipeYield()) {
-        return Result<Traits, TaskStatus>(TaskStatus::Yield());
-      }
-      if (out.IsCancelled()) {
-        cancelled_.store(true);
-        return Result<Traits, TaskStatus>(TaskStatus::Cancelled());
-      }
-      return Result<Traits, TaskStatus>(TaskStatus::Continue());
-    }
-
-   private:
-    class ChannelRuntime {
-     public:
-      ChannelRuntime(const Channel& channel, std::size_t channel_id, std::size_t dop,
-                     std::atomic_bool& cancelled)
-          : channel_id_(channel_id),
-            dop_(dop),
-            source_(channel.source_op->Source()),
-            pipes_(channel.pipe_ops.size()),
-            sink_(channel.sink_op->Sink()),
-            thread_locals_(dop),
-            cancelled_(cancelled) {
-        for (std::size_t i = 0; i < channel.pipe_ops.size(); ++i) {
-          pipes_[i] = {channel.pipe_ops[i]->Pipe(), channel.pipe_ops[i]->Drain()};
-        }
-
-        std::vector<std::size_t> drains;
-        for (std::size_t i = 0; i < pipes_.size(); ++i) {
-          if (pipes_[i].second) {
-            drains.push_back(i);
-          }
-        }
-
-        for (std::size_t i = 0; i < dop; ++i) {
-          thread_locals_[i].drains = drains;
-        }
-      }
-
-      OpResult<Traits> operator()(const TaskContext<Traits>& task_ctx, ThreadId thread_id) {
-        if (cancelled_.load()) {
-          return OpResult<Traits>(OpOutput<Traits>::Cancelled());
-        }
-
-        auto& tl = thread_locals_[thread_id];
-
-        if (tl.sinking) {
-          tl.sinking = false;
-          return Sink(task_ctx, thread_id, std::nullopt);
-        }
-
-        if (!tl.pipe_stack.empty()) {
-          const auto pipe_id = tl.pipe_stack.back();
-          tl.pipe_stack.pop_back();
-          return Pipe(task_ctx, thread_id, pipe_id, std::nullopt);
-        }
-
-        if (!tl.source_done) {
-          auto src_r = source_(task_ctx, thread_id);
-          if (!src_r.ok()) {
-            cancelled_.store(true);
-            return src_r;
-          }
-          auto& src_out = src_r.ValueOrDie();
-          if (src_out.IsBlocked()) {
-            return src_r;
-          }
-          if (src_out.IsFinished()) {
-            tl.source_done = true;
-            if (src_out.GetBatch().has_value()) {
-              return Pipe(task_ctx, thread_id, 0, std::move(src_out.GetBatch()));
-            }
-          } else {
-            assert(src_out.IsSourcePipeHasMore());
-            assert(src_out.GetBatch().has_value());
-            return Pipe(task_ctx, thread_id, 0, std::move(src_out.GetBatch()));
-          }
-        }
-
-        if (tl.draining >= tl.drains.size()) {
-          return OpResult<Traits>(OpOutput<Traits>::Finished());
-        }
-
-        for (; tl.draining < tl.drains.size(); ++tl.draining) {
-          const auto drain_id = tl.drains[tl.draining];
-          auto& drain_fn = pipes_[drain_id].second;
-          assert(static_cast<bool>(drain_fn));
-
-          auto drain_r = drain_fn(task_ctx, thread_id);
-          if (!drain_r.ok()) {
-            cancelled_.store(true);
-            return drain_r;
-          }
-
-          auto& drain_out = drain_r.ValueOrDie();
-
-          if (tl.yield) {
-            assert(drain_out.IsPipeYieldBack());
-            tl.yield = false;
-            return OpResult<Traits>(OpOutput<Traits>::PipeYieldBack());
-          }
-
-          if (drain_out.IsPipeYield()) {
-            assert(!tl.yield);
-            tl.yield = true;
-            return OpResult<Traits>(OpOutput<Traits>::PipeYield());
-          }
-
-          if (drain_out.IsBlocked()) {
-            return drain_r;
-          }
-
-          assert(drain_out.IsSourcePipeHasMore() || drain_out.IsFinished());
-          if (drain_out.GetBatch().has_value()) {
-            if (drain_out.IsFinished()) {
-              ++tl.draining;
-            }
-            return Pipe(task_ctx,
-                        thread_id,
-                        drain_id + 1,
-                        std::move(drain_out.GetBatch()));
-          }
-        }
-
-        return OpResult<Traits>(OpOutput<Traits>::Finished());
-      }
-
-     private:
-      OpResult<Traits> Pipe(const TaskContext<Traits>& task_ctx, ThreadId thread_id,
-                            std::size_t pipe_id,
-                            std::optional<typename Traits::Batch> input) {
-        auto& tl = thread_locals_[thread_id];
-
-        for (std::size_t i = pipe_id; i < pipes_.size(); ++i) {
-          auto pipe_r = pipes_[i].first(task_ctx, thread_id, std::move(input));
-          if (!pipe_r.ok()) {
-            cancelled_.store(true);
-            return pipe_r;
-          }
-
-          auto& out = pipe_r.ValueOrDie();
-
-          if (tl.yield) {
-            assert(out.IsPipeYieldBack());
-            tl.pipe_stack.push_back(i);
-            tl.yield = false;
-            return OpResult<Traits>(OpOutput<Traits>::PipeYieldBack());
-          }
-
-          if (out.IsPipeYield()) {
-            assert(!tl.yield);
-            tl.pipe_stack.push_back(i);
-            tl.yield = true;
-            return OpResult<Traits>(OpOutput<Traits>::PipeYield());
-          }
-
-          if (out.IsBlocked()) {
-            tl.pipe_stack.push_back(i);
-            return pipe_r;
-          }
-
-          assert(out.IsPipeSinkNeedsMore() || out.IsPipeEven() || out.IsSourcePipeHasMore());
-
-          if (out.IsPipeEven() || out.IsSourcePipeHasMore()) {
-            if (out.IsSourcePipeHasMore()) {
-              tl.pipe_stack.push_back(i);
-            }
-            assert(out.GetBatch().has_value());
-            input = std::move(out.GetBatch());
-            continue;
-          }
-
-          return OpResult<Traits>(OpOutput<Traits>::PipeSinkNeedsMore());
-        }
-
-        return Sink(task_ctx, thread_id, std::move(input));
-      }
-
-      OpResult<Traits> Sink(const TaskContext<Traits>& task_ctx, ThreadId thread_id,
-                            std::optional<typename Traits::Batch> input) {
-        auto sink_r = sink_(task_ctx, thread_id, std::move(input));
-        if (!sink_r.ok()) {
-          cancelled_.store(true);
-          return sink_r;
-        }
-        auto& out = sink_r.ValueOrDie();
-        assert(out.IsPipeSinkNeedsMore() || out.IsBlocked());
-        if (out.IsBlocked()) {
-          thread_locals_[thread_id].sinking = true;
-        }
-        return sink_r;
-      }
-
-      std::size_t channel_id_;
-      std::size_t dop_;
-
-      PipelineSource<Traits> source_;
-      std::vector<std::pair<PipelinePipe<Traits>, PipelineDrain<Traits>>> pipes_;
-      PipelineSink<Traits> sink_;
-
-      struct ThreadLocal {
-        bool sinking = false;
-        std::vector<std::size_t> pipe_stack;
-        bool source_done = false;
-        std::vector<std::size_t> drains;
-        std::size_t draining = 0;
-        bool yield = false;
-      };
-      std::vector<ThreadLocal> thread_locals_;
-
-      std::atomic_bool& cancelled_;
-    };
-
-    struct ThreadLocal {
-      explicit ThreadLocal(std::size_t num_channels)
-          : finished(num_channels, false), resumers(num_channels) {}
-
-      std::vector<bool> finished;
-      std::vector<std::shared_ptr<Resumer>> resumers;
-    };
-
-    std::vector<std::unique_ptr<SourceOp<Traits>>> implicit_sources_keepalive_;
-    std::size_t dop_;
-
-    std::vector<ChannelRuntime> channels_;
-    std::vector<ThreadLocal> thread_locals_;
-
-    std::atomic_bool cancelled_;
-  };
 
   std::string name_;
   std::string desc_;
   std::vector<Channel> channels_;
 
-  std::vector<TaskGroup<Traits>> source_frontend_task_groups_;
-  std::vector<TaskGroup<Traits>> source_backend_task_groups_;
-  std::vector<TaskGroup<Traits>> sink_frontend_task_groups_;
-  std::optional<TaskGroup<Traits>> sink_backend_task_group_;
+  std::vector<SourceTasks> sources_;
+  std::optional<SinkTasks> sink_;
 
   std::size_t dop_;
-  std::shared_ptr<Runtime> runtime_;
-  TaskGroup<Traits> chain_task_group_;
+  std::shared_ptr<detail::PipelineTask<Traits>> pipeline_task_;
+  TaskGroup<Traits> pipeline_task_group_;
 };
+
+namespace detail {
+
+/**
+ * @brief Internal small-step pipeline task for a compiled `PipelineExec` stage.
+ *
+ * This is the direct analogue of Ara's `PipelineTask`: it multiplexes across N channels
+ * (sources feeding the same sink), handles drain/yield/blocked semantics, and maintains
+ * per-thread (per-lane) state.
+ *
+ * It lives in `detail` because the host is expected to schedule it via the
+ * `PipelineExec::PipelineTaskGroup()` wrapper.
+ */
+template <OpenPipelineTraits Traits>
+class PipelineTask {
+ public:
+  class Channel {
+   public:
+    Channel(const typename PipelineExec<Traits>::Channel& channel,
+            std::size_t channel_id,
+            std::size_t dop,
+            std::atomic_bool& cancelled)
+        : channel_id_(channel_id),
+          dop_(dop),
+          source_(channel.source_op->Source()),
+          pipes_(channel.pipe_ops.size()),
+          sink_(channel.sink_op->Sink()),
+          thread_locals_(dop),
+          cancelled_(cancelled) {
+      for (std::size_t i = 0; i < channel.pipe_ops.size(); ++i) {
+        pipes_[i] = {channel.pipe_ops[i]->Pipe(), channel.pipe_ops[i]->Drain()};
+      }
+
+      std::vector<std::size_t> drains;
+      for (std::size_t i = 0; i < pipes_.size(); ++i) {
+        if (pipes_[i].second) {
+          drains.push_back(i);
+        }
+      }
+
+      for (std::size_t i = 0; i < dop; ++i) {
+        thread_locals_[i].drains = drains;
+      }
+    }
+
+    OpResult<Traits> operator()(const TaskContext<Traits>& task_ctx, ThreadId thread_id) {
+      if (cancelled_.load()) {
+        return OpResult<Traits>(OpOutput<Traits>::Cancelled());
+      }
+
+      auto& tl = thread_locals_[thread_id];
+
+      if (tl.sinking) {
+        tl.sinking = false;
+        return Sink(task_ctx, thread_id, std::nullopt);
+      }
+
+      if (!tl.pipe_stack.empty()) {
+        const auto pipe_id = tl.pipe_stack.back();
+        tl.pipe_stack.pop_back();
+        return Pipe(task_ctx, thread_id, pipe_id, std::nullopt);
+      }
+
+      if (!tl.source_done) {
+        auto src_r = source_(task_ctx, thread_id);
+        if (!src_r.ok()) {
+          cancelled_.store(true);
+          return src_r;
+        }
+        auto& src_out = src_r.ValueOrDie();
+        if (src_out.IsBlocked()) {
+          return src_r;
+        }
+        if (src_out.IsFinished()) {
+          tl.source_done = true;
+          if (src_out.GetBatch().has_value()) {
+            return Pipe(task_ctx, thread_id, 0, std::move(src_out.GetBatch()));
+          }
+        } else {
+          assert(src_out.IsSourcePipeHasMore());
+          assert(src_out.GetBatch().has_value());
+          return Pipe(task_ctx, thread_id, 0, std::move(src_out.GetBatch()));
+        }
+      }
+
+      if (tl.draining >= tl.drains.size()) {
+        return OpResult<Traits>(OpOutput<Traits>::Finished());
+      }
+
+      for (; tl.draining < tl.drains.size(); ++tl.draining) {
+        const auto drain_id = tl.drains[tl.draining];
+        auto& drain_fn = pipes_[drain_id].second;
+        assert(static_cast<bool>(drain_fn));
+
+        auto drain_r = drain_fn(task_ctx, thread_id);
+        if (!drain_r.ok()) {
+          cancelled_.store(true);
+          return drain_r;
+        }
+
+        auto& drain_out = drain_r.ValueOrDie();
+
+        if (tl.yield) {
+          assert(drain_out.IsPipeYieldBack());
+          tl.yield = false;
+          return OpResult<Traits>(OpOutput<Traits>::PipeYieldBack());
+        }
+
+        if (drain_out.IsPipeYield()) {
+          assert(!tl.yield);
+          tl.yield = true;
+          return OpResult<Traits>(OpOutput<Traits>::PipeYield());
+        }
+
+        if (drain_out.IsBlocked()) {
+          return drain_r;
+        }
+
+        assert(drain_out.IsSourcePipeHasMore() || drain_out.IsFinished());
+        if (drain_out.GetBatch().has_value()) {
+          if (drain_out.IsFinished()) {
+            ++tl.draining;
+          }
+          return Pipe(task_ctx, thread_id, drain_id + 1, std::move(drain_out.GetBatch()));
+        }
+      }
+
+      return OpResult<Traits>(OpOutput<Traits>::Finished());
+    }
+
+   private:
+    OpResult<Traits> Pipe(const TaskContext<Traits>& task_ctx,
+                          ThreadId thread_id,
+                          std::size_t pipe_id,
+                          std::optional<typename Traits::Batch> input) {
+      auto& tl = thread_locals_[thread_id];
+
+      for (std::size_t i = pipe_id; i < pipes_.size(); ++i) {
+        auto pipe_r = pipes_[i].first(task_ctx, thread_id, std::move(input));
+        if (!pipe_r.ok()) {
+          cancelled_.store(true);
+          return pipe_r;
+        }
+
+        auto& out = pipe_r.ValueOrDie();
+
+        if (tl.yield) {
+          assert(out.IsPipeYieldBack());
+          tl.pipe_stack.push_back(i);
+          tl.yield = false;
+          return OpResult<Traits>(OpOutput<Traits>::PipeYieldBack());
+        }
+
+        if (out.IsPipeYield()) {
+          assert(!tl.yield);
+          tl.pipe_stack.push_back(i);
+          tl.yield = true;
+          return OpResult<Traits>(OpOutput<Traits>::PipeYield());
+        }
+
+        if (out.IsBlocked()) {
+          tl.pipe_stack.push_back(i);
+          return pipe_r;
+        }
+
+        assert(out.IsPipeSinkNeedsMore() || out.IsPipeEven() || out.IsSourcePipeHasMore());
+
+        if (out.IsPipeEven() || out.IsSourcePipeHasMore()) {
+          if (out.IsSourcePipeHasMore()) {
+            tl.pipe_stack.push_back(i);
+          }
+          assert(out.GetBatch().has_value());
+          input = std::move(out.GetBatch());
+          continue;
+        }
+
+        return OpResult<Traits>(OpOutput<Traits>::PipeSinkNeedsMore());
+      }
+
+      return Sink(task_ctx, thread_id, std::move(input));
+    }
+
+    OpResult<Traits> Sink(const TaskContext<Traits>& task_ctx,
+                          ThreadId thread_id,
+                          std::optional<typename Traits::Batch> input) {
+      auto sink_r = sink_(task_ctx, thread_id, std::move(input));
+      if (!sink_r.ok()) {
+        cancelled_.store(true);
+        return sink_r;
+      }
+      auto& out = sink_r.ValueOrDie();
+      assert(out.IsPipeSinkNeedsMore() || out.IsBlocked());
+      if (out.IsBlocked()) {
+        thread_locals_[thread_id].sinking = true;
+      }
+      return sink_r;
+    }
+
+    std::size_t channel_id_;
+    std::size_t dop_;
+
+    PipelineSource<Traits> source_;
+    std::vector<std::pair<PipelinePipe<Traits>, PipelineDrain<Traits>>> pipes_;
+    PipelineSink<Traits> sink_;
+
+    struct ThreadLocal {
+      bool sinking = false;
+      std::vector<std::size_t> pipe_stack;
+      bool source_done = false;
+      std::vector<std::size_t> drains;
+      std::size_t draining = 0;
+      bool yield = false;
+    };
+    std::vector<ThreadLocal> thread_locals_;
+
+    std::atomic_bool& cancelled_;
+  };
+
+  PipelineTask(const std::vector<typename PipelineExec<Traits>::Channel>& channels,
+               std::size_t dop,
+               std::vector<std::unique_ptr<SourceOp<Traits>>> implicit_sources_keepalive)
+      : implicit_sources_keepalive_(std::move(implicit_sources_keepalive)),
+        dop_(dop),
+        cancelled_(false) {
+    channels_.reserve(channels.size());
+    for (std::size_t i = 0; i < channels.size(); ++i) {
+      channels_.emplace_back(channels[i], i, dop_, cancelled_);
+    }
+    thread_locals_.reserve(dop_);
+    for (std::size_t i = 0; i < dop_; ++i) {
+      thread_locals_.emplace_back(channels_.size());
+    }
+  }
+
+  Result<Traits, TaskStatus> operator()(const TaskContext<Traits>& task_ctx, TaskId task_id) {
+    const ThreadId thread_id = static_cast<ThreadId>(task_id);
+    if (cancelled_.load()) {
+      return Result<Traits, TaskStatus>(TaskStatus::Cancelled());
+    }
+
+    bool all_finished = true;
+    bool all_unfinished_blocked = true;
+    std::vector<std::shared_ptr<Resumer>> blocked_resumers;
+
+    OpResult<Traits> last_op_result(OpOutput<Traits>::PipeSinkNeedsMore());
+
+    auto& tl = thread_locals_[thread_id];
+    for (std::size_t channel_id = 0; channel_id < channels_.size(); ++channel_id) {
+      if (tl.finished[channel_id]) {
+        continue;
+      }
+
+      if (auto& resumer = tl.resumers[channel_id]; resumer) {
+        if (resumer->IsResumed()) {
+          resumer.reset();
+        } else {
+          blocked_resumers.push_back(resumer);
+          all_finished = false;
+          continue;
+        }
+      }
+
+      last_op_result = channels_[channel_id](task_ctx, thread_id);
+      if (!last_op_result.ok()) {
+        cancelled_.store(true);
+        return Result<Traits, TaskStatus>(last_op_result.status());
+      }
+
+      auto& out = last_op_result.ValueOrDie();
+      if (out.IsFinished()) {
+        assert(!out.GetBatch().has_value());
+        tl.finished[channel_id] = true;
+      } else {
+        all_finished = false;
+      }
+
+      if (out.IsBlocked()) {
+        tl.resumers[channel_id] = out.GetResumer();
+        blocked_resumers.push_back(tl.resumers[channel_id]);
+      } else {
+        all_unfinished_blocked = false;
+      }
+
+      if (!out.IsFinished() && !out.IsBlocked()) {
+        break;
+      }
+    }
+
+    if (all_finished) {
+      return Result<Traits, TaskStatus>(TaskStatus::Finished());
+    }
+
+    if (all_unfinished_blocked && !blocked_resumers.empty()) {
+      auto awaiter_r = task_ctx.any_awaiter_factory(std::move(blocked_resumers));
+      if (!awaiter_r.ok()) {
+        cancelled_.store(true);
+        return Result<Traits, TaskStatus>(awaiter_r.status());
+      }
+      auto awaiter = std::move(awaiter_r).ValueOrDie();
+      return Result<Traits, TaskStatus>(TaskStatus::Blocked(std::move(awaiter)));
+    }
+
+    if (!last_op_result.ok()) {
+      cancelled_.store(true);
+      return Result<Traits, TaskStatus>(last_op_result.status());
+    }
+
+    const auto& out = last_op_result.ValueOrDie();
+    if (out.IsPipeYield()) {
+      return Result<Traits, TaskStatus>(TaskStatus::Yield());
+    }
+    if (out.IsCancelled()) {
+      cancelled_.store(true);
+      return Result<Traits, TaskStatus>(TaskStatus::Cancelled());
+    }
+    return Result<Traits, TaskStatus>(TaskStatus::Continue());
+  }
+
+ private:
+  struct ThreadLocal {
+    explicit ThreadLocal(std::size_t num_channels)
+        : finished(num_channels, false), resumers(num_channels) {}
+
+    std::vector<bool> finished;
+    std::vector<std::shared_ptr<Resumer>> resumers;
+  };
+
+  std::vector<std::unique_ptr<SourceOp<Traits>>> implicit_sources_keepalive_;
+  std::size_t dop_;
+
+  std::vector<Channel> channels_;
+  std::vector<ThreadLocal> thread_locals_;
+
+  std::atomic_bool cancelled_;
+};
+
+/**
+ * @brief Internal compiler that splits a `Pipeline` into `PipelineExec` stages.
+ *
+ * Splitting rule (current):
+ * - Only pipe implicit sources (`PipeOp::ImplicitSource()`) create stage boundaries.
+ * - When a pipe provides an implicit source, the downstream pipe chain becomes a new
+ *   channel rooted at that implicit source in a later stage.
+ */
+template <OpenPipelineTraits Traits>
+class PipelineCompiler {
+ public:
+  PipelineCompiler(const Pipeline<Traits>& pipeline, std::size_t dop)
+      : pipeline_(pipeline), dop_(dop) {}
+
+  std::vector<PipelineExec<Traits>> Compile() && {
+    ExtractTopology();
+    SortTopology();
+    return BuildPipelineExecs();
+  }
+
+ private:
+  void ExtractTopology() {
+    std::unordered_map<PipeOp<Traits>*, SourceOp<Traits>*> pipe_source_map;
+
+    for (auto& channel : pipeline_.Channels()) {
+      std::size_t id = 0;
+      topology_.emplace(channel.source_op,
+                        std::pair<std::size_t, typename Pipeline<Traits>::Channel>{id++,
+                                                                                   channel});
+      sources_keep_order_.push_back(channel.source_op);
+
+      for (std::size_t i = 0; i < channel.pipe_ops.size(); ++i) {
+        auto* pipe = channel.pipe_ops[i];
+
+        if (pipe_source_map.count(pipe) == 0) {
+          if (auto implicit_source_up = pipe->ImplicitSource(); implicit_source_up) {
+            auto* implicit_source = implicit_source_up.get();
+            pipe_source_map.emplace(pipe, implicit_source);
+
+            typename Pipeline<Traits>::Channel new_channel{
+                implicit_source,
+                std::vector<PipeOp<Traits>*>(channel.pipe_ops.begin() + i + 1,
+                                             channel.pipe_ops.end())};
+
+            topology_.emplace(
+                implicit_source,
+                std::pair<std::size_t, typename Pipeline<Traits>::Channel>{
+                    id++, std::move(new_channel)});
+            sources_keep_order_.push_back(implicit_source);
+            implicit_sources_keepalive_.emplace(implicit_source,
+                                                std::move(implicit_source_up));
+          }
+        } else {
+          auto* implicit_source = pipe_source_map[pipe];
+          if (topology_[implicit_source].first < id) {
+            topology_[implicit_source].first = id++;
+          }
+        }
+      }
+    }
+  }
+
+  void SortTopology() {
+    for (auto* source : sources_keep_order_) {
+      auto& stage_info = topology_[source];
+      if (implicit_sources_keepalive_.count(source) > 0) {
+        stages_[stage_info.first].first.push_back(
+            std::move(implicit_sources_keepalive_[source]));
+      }
+      stages_[stage_info.first].second.push_back(std::move(stage_info.second));
+    }
+  }
+
+  std::vector<PipelineExec<Traits>> BuildPipelineExecs() {
+    std::vector<PipelineExec<Traits>> pipeline_execs;
+
+    if (stages_.empty()) {
+      return pipeline_execs;
+    }
+
+    const std::size_t last_stage_id = stages_.rbegin()->first;
+    pipeline_execs.reserve(stages_.size());
+
+    for (auto& [id, stage_info] : stages_) {
+      auto sources_keepalive = std::move(stage_info.first);
+      auto pipeline_channels = std::move(stage_info.second);
+
+      std::vector<typename PipelineExec<Traits>::Channel> stage_channels(
+          pipeline_channels.size());
+      std::transform(
+          pipeline_channels.begin(),
+          pipeline_channels.end(),
+          stage_channels.begin(),
+          [&](auto& channel) -> typename PipelineExec<Traits>::Channel {
+            return {channel.source_op, std::move(channel.pipe_ops), pipeline_.Sink()};
+          });
+
+      auto name = "PipelineExec" + std::to_string(id) + "(" + pipeline_.Name() + ")";
+      const bool include_sink_task_groups = (id == last_stage_id);
+      pipeline_execs.emplace_back(std::move(name),
+                                  std::move(stage_channels),
+                                  std::move(sources_keepalive),
+                                  dop_,
+                                  include_sink_task_groups);
+    }
+
+    return pipeline_execs;
+  }
+
+  const Pipeline<Traits>& pipeline_;
+  std::size_t dop_;
+
+  std::unordered_map<SourceOp<Traits>*, std::pair<std::size_t, typename Pipeline<Traits>::Channel>>
+      topology_;
+  std::vector<SourceOp<Traits>*> sources_keep_order_;
+  std::unordered_map<SourceOp<Traits>*, std::unique_ptr<SourceOp<Traits>>>
+      implicit_sources_keepalive_;
+
+  std::map<std::size_t,
+           std::pair<std::vector<std::unique_ptr<SourceOp<Traits>>>,
+                     std::vector<typename Pipeline<Traits>::Channel>>>
+      stages_;
+};
+
+}  // namespace detail
+
+template <OpenPipelineTraits Traits>
+std::vector<PipelineExec<Traits>> Compile(const Pipeline<Traits>& pipeline, std::size_t dop) {
+  return detail::PipelineCompiler<Traits>(pipeline, dop).Compile();
+}
 
 }  // namespace opl
