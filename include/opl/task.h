@@ -258,8 +258,7 @@ class Continuation {
 template <OpenPipelineTraits Traits>
 class TaskGroup {
  public:
-  using Status = opl::Status<Traits>;
-  using NotifyFinishFunc = std::function<Status(const TaskContext<Traits>&)>;
+  using NotifyFinishFunc = std::function<Status<Traits>(const TaskContext<Traits>&)>;
 
   /**
    * @brief A conceptual group of N parallel instances of the same task.
@@ -291,7 +290,7 @@ class TaskGroup {
     return cont_;
   }
 
-  Status NotifyFinish(const TaskContext<Traits>& ctx) const {
+  Status<Traits> NotifyFinish(const TaskContext<Traits>& ctx) const {
     if (!notify_) {
       return Traits::Status::OK();
     }

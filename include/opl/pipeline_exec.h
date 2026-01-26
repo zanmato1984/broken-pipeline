@@ -39,9 +39,6 @@ namespace opl {
 template <OpenPipelineTraits Traits>
 class PipelineExec {
  public:
-  using TaskId = opl::TaskId;
-  using ThreadId = opl::ThreadId;
-
   struct Channel {
     SourceOp<Traits>* source_op;
     std::vector<PipeOp<Traits>*> pipe_ops;
