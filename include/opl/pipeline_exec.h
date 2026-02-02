@@ -391,6 +391,15 @@ class PipelineExecSegment {
 
   std::size_t Dop() const noexcept { return dop_; }
 
+  // Introspection helpers (primarily for unit tests / tooling).
+  const std::vector<typename Pipeline<Traits>::Channel>& Channels() const noexcept {
+    return channels_;
+  }
+
+  std::size_t NumImplicitSources() const noexcept {
+    return implicit_sources_keepalive_.size();
+  }
+
   std::vector<SourceExec<Traits>> SourceExecs() const {
     std::vector<SourceExec<Traits>> source_execs;
     source_execs.reserve(channels_.size());
