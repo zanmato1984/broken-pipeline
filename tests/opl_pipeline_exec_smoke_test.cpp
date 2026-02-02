@@ -175,8 +175,8 @@ TEST(OplPipelineExecSmokeTest, RunsSingleStagePipeline) {
 
   Pipeline<SmokeTraits> pipeline("P", {Pipeline<SmokeTraits>::Channel{&source, {&pipe}}}, &sink);
 
-  auto execs = Compile(pipeline, dop);
-  ASSERT_EQ(execs.size(), 1);
+  auto exec = Compile(pipeline, dop);
+  ASSERT_EQ(exec.Stages().size(), 1);
 
   TaskContext<SmokeTraits> task_ctx;
   task_ctx.context = nullptr;
@@ -188,7 +188,7 @@ TEST(OplPipelineExecSmokeTest, RunsSingleStagePipeline) {
     return arrow::Status::NotImplemented("awaiter_factory not used in smoke test");
   };
 
-  ASSERT_OK(RunTaskGroup(execs[0].PipelineTaskGroup(), task_ctx));
+  ASSERT_OK(RunTaskGroup(exec.Stages()[0].Pipe().TaskGroup(), task_ctx));
   ASSERT_EQ(sink.Total(), 12);
 }
 

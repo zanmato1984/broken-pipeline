@@ -15,43 +15,35 @@ namespace {
 
 std::vector<opl_arrow::TaskGroup> CompileTaskGroups(const opl_arrow::Pipeline& pipeline,
                                                     std::size_t dop) {
-  auto pipeline_execs = opl::Compile(pipeline, dop);
+  auto exec = opl::Compile(pipeline, dop);
 
   std::vector<opl_arrow::TaskGroup> task_groups;
-  task_groups.reserve(pipeline_execs.size() * 2 + 3);
+  task_groups.reserve(exec.Stages().size() * 2 + 3);
 
-  for (auto& exec : pipeline_execs) {
-    for (const auto& source : exec.Sources()) {
+  for (const auto& stage : exec.Stages()) {
+    for (const auto& source : stage.Sources()) {
       for (const auto& tg : source.frontend) {
         task_groups.push_back(tg);
       }
     }
 
-    task_groups.push_back(exec.PipelineTaskGroup());
+    task_groups.push_back(stage.Pipe().TaskGroup());
   }
 
-  for (auto& exec : pipeline_execs) {
-    if (!exec.Sink().has_value()) {
-      continue;
-    }
-    for (const auto& tg : exec.Sink()->frontend) {
-      task_groups.push_back(tg);
-    }
+  for (const auto& tg : exec.Sink().frontend) {
+    task_groups.push_back(tg);
   }
 
-  for (auto& exec : pipeline_execs) {
-    for (const auto& source : exec.Sources()) {
+  for (const auto& stage : exec.Stages()) {
+    for (const auto& source : stage.Sources()) {
       if (source.backend.has_value()) {
         task_groups.push_back(*source.backend);
       }
     }
   }
 
-  for (auto& exec : pipeline_execs) {
-    if (exec.Sink().has_value() && exec.Sink()->backend.has_value()) {
-      task_groups.push_back(*exec.Sink()->backend);
-      break;
-    }
+  if (exec.Sink().backend.has_value()) {
+    task_groups.push_back(*exec.Sink().backend);
   }
 
   return task_groups;

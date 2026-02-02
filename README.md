@@ -172,9 +172,9 @@ opl ships a small reference "compiler" that splits a `Pipeline` into executable 
 the host is still responsible for orchestration and scheduling.
 
 Reference implementations live in:
-- `include/opl/pipeline_exec.h`: `opl::Compile(pipeline, dop)` for stage splitting + task-group
-  assembly
-- `include/opl/pipeline_exec.h`: `opl::PipelineExec` small-step runtime for a single stage
+- `include/opl/pipeline_exec.h`: `opl::Compile(pipeline, dop)` compiles a `Pipeline` into a single
+  `opl::PipelineExec` (with an ordered list of `Stage`s)
+- `include/opl/pipeline_exec.h`: `Stage` / `PipeExec` small-step runtime for each stage
 
 ## Notes on Lifetime and Threading
 

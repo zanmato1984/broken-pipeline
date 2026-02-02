@@ -30,9 +30,9 @@
  * - Operator protocol: `SourceOp` / `PipeOp` / `SinkOp` and `OpOutput`
  * - Pipeline graph: `Pipeline`
  *
- * Optional helper (intentionally *not* included here):
+ * Helper:
  * - `#include <opl/pipeline_exec.h>` provides `opl::Compile(pipeline, dop)` and
- *   the stage runtime `opl::PipelineExec`.
+ *   the compiled plan `opl::PipelineExec` (with `Stage` / `PipeExec`).
  */
 
 #include <opl/concepts.h>
