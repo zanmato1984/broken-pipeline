@@ -11,11 +11,7 @@ target_include_directories(opl INTERFACE
 
 option(OPL_BUILD_TESTS "Build opl tests" OFF)
 
-set(OPL_ARROW_PROVIDER "bundled" CACHE STRING "Arrow provider (bundled|system)")
-set_property(CACHE OPL_ARROW_PROVIDER PROPERTY STRINGS bundled system)
-
 if(OPL_BUILD_TESTS)
-  include(cmake/find/arrow.cmake)
   include(cmake/testing/testing.cmake)
   add_subdirectory(tests)
 endif()

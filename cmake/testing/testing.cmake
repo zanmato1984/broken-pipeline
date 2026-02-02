@@ -1,3 +1,8 @@
+set(OPL_ARROW_PROVIDER "bundled" CACHE STRING "Arrow provider (bundled|system)")
+set_property(CACHE OPL_ARROW_PROVIDER PROPERTY STRINGS bundled system)
+
+include(cmake/find/arrow.cmake)
+
 message(STATUS "Building the opl googletest unit tests")
 enable_testing()
 include(cmake/find/gtest.cmake)

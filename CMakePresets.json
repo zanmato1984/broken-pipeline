@@ -20,7 +20,7 @@
       "displayName": "Tests (bundled Arrow)",
       "inherits": "base",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_BUILD_TYPE": "Debug",
         "OPL_BUILD_TESTS": "ON",
         "OPL_ARROW_PROVIDER": "bundled"
       }
