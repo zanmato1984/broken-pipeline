@@ -188,26 +188,21 @@ class Task {
    */
   using Fn = std::function<TaskResult<Traits>(const TaskContext<Traits>&, TaskId)>;
 
-  Task(std::string name, std::string desc, Fn fn, TaskHint hint = {})
-      : name_(std::move(name)),
-        desc_(std::move(desc)),
-        fn_(std::move(fn)),
-        hint_(std::move(hint)) {}
+  Task(std::string name, Fn fn, TaskHint hint = {})
+      : name_(std::move(name)), fn_(std::move(fn)), hint_(std::move(hint)) {}
 
   TaskResult<Traits> operator()(const TaskContext<Traits>& ctx, TaskId task_id) const {
     return fn_(ctx, task_id);
   }
 
   /**
-   * @brief Human-readable name/description. Purely informational.
+   * @brief Human-readable name. Purely informational.
    */
   const std::string& Name() const noexcept { return name_; }
-  const std::string& Desc() const noexcept { return desc_; }
   const TaskHint& Hint() const noexcept { return hint_; }
 
  private:
   std::string name_;
-  std::string desc_;
   Fn fn_;
   TaskHint hint_;
 };
@@ -226,21 +221,16 @@ class Continuation {
    */
   using Fn = std::function<TaskResult<Traits>(const TaskContext<Traits>&)>;
 
-  Continuation(std::string name, std::string desc, Fn fn, TaskHint hint = {})
-      : name_(std::move(name)),
-        desc_(std::move(desc)),
-        fn_(std::move(fn)),
-        hint_(std::move(hint)) {}
+  Continuation(std::string name, Fn fn, TaskHint hint = {})
+      : name_(std::move(name)), fn_(std::move(fn)), hint_(std::move(hint)) {}
 
   TaskResult<Traits> operator()(const TaskContext<Traits>& ctx) const { return fn_(ctx); }
 
   const std::string& Name() const noexcept { return name_; }
-  const std::string& Desc() const noexcept { return desc_; }
   const TaskHint& Hint() const noexcept { return hint_; }
 
  private:
   std::string name_;
-  std::string desc_;
   Fn fn_;
   TaskHint hint_;
 };
@@ -257,16 +247,14 @@ class TaskGroup {
    * opl does not provide a scheduler, so the exact ordering/thread of
    * `cont` is scheduler-defined.
    */
-  TaskGroup(std::string name, std::string desc, Task<Traits> task, std::size_t num_tasks,
+  TaskGroup(std::string name, Task<Traits> task, std::size_t num_tasks,
             std::optional<Continuation<Traits>> cont = std::nullopt)
       : name_(std::move(name)),
-        desc_(std::move(desc)),
         task_(std::move(task)),
         num_tasks_(num_tasks),
         cont_(std::move(cont)) {}
 
   const std::string& Name() const noexcept { return name_; }
-  const std::string& Desc() const noexcept { return desc_; }
 
   const Task<Traits>& GetTask() const noexcept { return task_; }
   std::size_t NumTasks() const noexcept { return num_tasks_; }
@@ -276,7 +264,6 @@ class TaskGroup {
 
  private:
   std::string name_;
-  std::string desc_;
   Task<Traits> task_;
   std::size_t num_tasks_;
   std::optional<Continuation<Traits>> cont_;

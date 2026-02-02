@@ -21,13 +21,14 @@ std::vector<opl_arrow::TaskGroup> CompileTaskGroups(const opl_arrow::Pipeline& p
   task_groups.reserve(exec.Segments().size() * 2 + 3);
 
   for (const auto& segment : exec.Segments()) {
-    for (const auto& source : segment.Sources()) {
+    const auto source_execs = segment.SourceExecs();
+    for (const auto& source : source_execs) {
       for (const auto& tg : source.frontend) {
         task_groups.push_back(tg);
       }
     }
 
-    task_groups.push_back(segment.Pipe().TaskGroup());
+    task_groups.push_back(segment.PipeExec().TaskGroup());
   }
 
   for (const auto& tg : exec.Sink().frontend) {
@@ -35,7 +36,8 @@ std::vector<opl_arrow::TaskGroup> CompileTaskGroups(const opl_arrow::Pipeline& p
   }
 
   for (const auto& segment : exec.Segments()) {
-    for (const auto& source : segment.Sources()) {
+    const auto source_execs = segment.SourceExecs();
+    for (const auto& source : source_execs) {
       if (source.backend.has_value()) {
         task_groups.push_back(*source.backend);
       }

@@ -42,9 +42,7 @@ inline Result<Batch> MakeInt32Batch(const std::shared_ptr<arrow::Schema>& schema
 class BatchesSource final : public SourceOp {
  public:
   explicit BatchesSource(std::vector<std::shared_ptr<arrow::RecordBatch>> batches)
-      : SourceOp("BatchesSource", "Emit a fixed list of RecordBatches"),
-        batches_(std::move(batches)),
-        next_(0) {}
+      : SourceOp("BatchesSource"), batches_(std::move(batches)), next_(0) {}
 
   PipelineSource Source() override {
     return [this](const TaskContext& /*ctx*/, ThreadId /*thread_id*/) -> OpResult {
@@ -66,7 +64,7 @@ class BatchesSource final : public SourceOp {
     frontend_finished_.store(false);
 
     Task task(
-        "BatchesSource.Frontend", "Simulate IO-heavy scan/open for input batches",
+        "BatchesSource.Frontend",
         [this](const TaskContext& /*ctx*/, TaskId /*task_id*/) -> Result<TaskStatus> {
           // Demonstrate TaskStatus::Yield() and TaskHint::IO for IO-heavy work.
           if (!frontend_started_.exchange(true)) {
@@ -77,10 +75,7 @@ class BatchesSource final : public SourceOp {
         },
         TaskHint{TaskHint::Type::IO});
 
-    TaskGroup group("BatchesSource.Frontend",
-                    "Prepare input before pipeline execution",
-                    std::move(task),
-                    /*num_tasks=*/1);
+    TaskGroup group("BatchesSource.Frontend", std::move(task), /*num_tasks=*/1);
     return {std::move(group)};
   }
 
@@ -89,7 +84,7 @@ class BatchesSource final : public SourceOp {
     backend_finished_.store(false);
 
     Task task(
-        "BatchesSource.Backend", "Simulate IO-heavy teardown for input batches",
+        "BatchesSource.Backend",
         [this](const TaskContext& /*ctx*/, TaskId /*task_id*/) -> Result<TaskStatus> {
           if (!backend_started_.exchange(true)) {
             return TaskStatus::Yield();
@@ -99,10 +94,7 @@ class BatchesSource final : public SourceOp {
         },
         TaskHint{TaskHint::Type::IO});
 
-    return TaskGroup("BatchesSource.Backend",
-                     "Cleanup after pipeline execution",
-                     std::move(task),
-                     /*num_tasks=*/1);
+    return TaskGroup("BatchesSource.Backend", std::move(task), /*num_tasks=*/1);
   }
 
   bool FrontendFinished() const { return frontend_finished_.load(); }
@@ -120,7 +112,7 @@ class BatchesSource final : public SourceOp {
 
 class PassThroughPipe final : public PipeOp {
  public:
-  PassThroughPipe() : PipeOp("PassThroughPipe", "Forward input batches unchanged") {}
+  PassThroughPipe() : PipeOp("PassThroughPipe") {}
 
   PipelinePipe Pipe() override {
     return [](const TaskContext& /*ctx*/, ThreadId /*thread_id*/,
@@ -145,8 +137,7 @@ class PassThroughPipe final : public PipeOp {
 class DelayLastBatchPipe final : public PipeOp {
  public:
   explicit DelayLastBatchPipe(std::size_t dop)
-      : PipeOp("DelayLastBatchPipe", "Buffer the last batch and flush it via Drain()"),
-        pending_(dop) {}
+      : PipeOp("DelayLastBatchPipe"), pending_(dop) {}
 
   PipelinePipe Pipe() override {
     return [this](const TaskContext& /*ctx*/, ThreadId thread_id,
@@ -194,7 +185,7 @@ class DelayLastBatchPipe final : public PipeOp {
 
 class RowCountSink final : public SinkOp {
  public:
-  RowCountSink() : SinkOp("RowCountSink", "Count rows across all batches") {}
+  RowCountSink() : SinkOp("RowCountSink") {}
 
   PipelineSink Sink() override {
     return [this](const TaskContext& /*ctx*/, ThreadId /*thread_id*/,
@@ -211,7 +202,7 @@ class RowCountSink final : public SinkOp {
     frontend_finished_.store(false);
 
     Task task(
-        "RowCountSink.Frontend", "Simulate IO-heavy finalize/report step",
+        "RowCountSink.Frontend",
         [this](const TaskContext& /*ctx*/, TaskId /*task_id*/) -> Result<TaskStatus> {
           if (!frontend_started_.exchange(true)) {
             return TaskStatus::Yield();
@@ -221,10 +212,7 @@ class RowCountSink final : public SinkOp {
         },
         TaskHint{TaskHint::Type::IO});
 
-    TaskGroup group("RowCountSink.Frontend",
-                    "Finalize sink state after pipeline execution",
-                    std::move(task),
-                    /*num_tasks=*/1);
+    TaskGroup group("RowCountSink.Frontend", std::move(task), /*num_tasks=*/1);
     return {std::move(group)};
   }
 
@@ -233,7 +221,7 @@ class RowCountSink final : public SinkOp {
     backend_finished_.store(false);
 
     Task task(
-        "RowCountSink.Backend", "Simulate IO-heavy sink teardown/cleanup",
+        "RowCountSink.Backend",
         [this](const TaskContext& /*ctx*/, TaskId /*task_id*/) -> Result<TaskStatus> {
           if (!backend_started_.exchange(true)) {
             return TaskStatus::Yield();
@@ -243,10 +231,7 @@ class RowCountSink final : public SinkOp {
         },
         TaskHint{TaskHint::Type::IO});
 
-    return TaskGroup("RowCountSink.Backend",
-                     "Cleanup sink resources",
-                     std::move(task),
-                     /*num_tasks=*/1);
+    return TaskGroup("RowCountSink.Backend", std::move(task), /*num_tasks=*/1);
   }
 
   std::unique_ptr<SourceOp> ImplicitSource() override {

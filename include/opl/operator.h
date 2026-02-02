@@ -25,7 +25,7 @@ class TaskGroup;
  * @brief Output/control signal returned by operator callbacks to the pipeline runtime.
  *
  * `OpOutput` is the small protocol between operator implementations and a pipeline
- * driver (e.g., `PipelineSegment`).
+ * driver (e.g., `PipeExec`).
  *
  * It mixes two kinds of information:
  * - flow control ("need more input", "have more internal output")
@@ -228,12 +228,10 @@ using PipelineSink = PipelinePipe<Traits>;
 template <OpenPipelineTraits Traits>
 class SourceOp {
  public:
-  SourceOp(std::string name = {}, std::string desc = {})
-      : name_(std::move(name)), desc_(std::move(desc)) {}
+  explicit SourceOp(std::string name = {}) : name_(std::move(name)) {}
   virtual ~SourceOp() = default;
 
   const std::string& Name() const noexcept { return name_; }
-  const std::string& Desc() const noexcept { return desc_; }
 
   virtual PipelineSource<Traits> Source() = 0;
   virtual std::vector<TaskGroup<Traits>> Frontend() = 0;
@@ -241,7 +239,6 @@ class SourceOp {
 
  private:
   std::string name_;
-  std::string desc_;
 };
 
 /**
@@ -259,12 +256,10 @@ class SourceOp {
 template <OpenPipelineTraits Traits>
 class PipeOp {
  public:
-  PipeOp(std::string name = {}, std::string desc = {})
-      : name_(std::move(name)), desc_(std::move(desc)) {}
+  explicit PipeOp(std::string name = {}) : name_(std::move(name)) {}
   virtual ~PipeOp() = default;
 
   const std::string& Name() const noexcept { return name_; }
-  const std::string& Desc() const noexcept { return desc_; }
 
   virtual PipelinePipe<Traits> Pipe() = 0;
   virtual PipelineDrain<Traits> Drain() = 0;  // empty std::function means “no drain”
@@ -272,7 +267,6 @@ class PipeOp {
 
  private:
   std::string name_;
-  std::string desc_;
 };
 
 /**
@@ -288,12 +282,10 @@ class PipeOp {
 template <OpenPipelineTraits Traits>
 class SinkOp {
  public:
-  SinkOp(std::string name = {}, std::string desc = {})
-      : name_(std::move(name)), desc_(std::move(desc)) {}
+  explicit SinkOp(std::string name = {}) : name_(std::move(name)) {}
   virtual ~SinkOp() = default;
 
   const std::string& Name() const noexcept { return name_; }
-  const std::string& Desc() const noexcept { return desc_; }
 
   virtual PipelineSink<Traits> Sink() = 0;
   virtual std::vector<TaskGroup<Traits>> Frontend() = 0;
@@ -302,7 +294,6 @@ class SinkOp {
 
  private:
   std::string name_;
-  std::string desc_;
 };
 
 }  // namespace opl

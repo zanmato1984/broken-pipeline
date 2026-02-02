@@ -32,7 +32,7 @@
  *
  * Helper:
  * - `#include <opl/pipeline_exec.h>` provides `opl::Compile(pipeline, dop)` and
- *   the compiled plan `opl::PipelineExec` (with `PipelineSegment` / `PipeExec`).
+ *   the compiled plan `opl::PipelineExec` (with `PipelineExecSegment` / `PipeExec`).
  */
 
 #include <opl/concepts.h>

@@ -30,7 +30,7 @@ static_assert(OpenPipelineTraits<SmokeTraits>);
 class CountingSource final : public SourceOp<SmokeTraits> {
  public:
   CountingSource(std::size_t dop, int n)
-      : SourceOp("CountingSource", ""), next_(dop, 1), n_(n) {}
+      : SourceOp("CountingSource"), next_(dop, 1), n_(n) {}
 
   PipelineSource<SmokeTraits> Source() override {
     return [this](const TaskContext<SmokeTraits>&, ThreadId thread_id) -> OpResult<SmokeTraits> {
@@ -53,7 +53,7 @@ class CountingSource final : public SourceOp<SmokeTraits> {
 
 class MultiplyPipe final : public PipeOp<SmokeTraits> {
  public:
-  explicit MultiplyPipe(int factor) : PipeOp("MultiplyPipe", ""), factor_(factor) {}
+  explicit MultiplyPipe(int factor) : PipeOp("MultiplyPipe"), factor_(factor) {}
 
   PipelinePipe<SmokeTraits> Pipe() override {
     return [this](const TaskContext<SmokeTraits>&,
@@ -76,7 +76,7 @@ class MultiplyPipe final : public PipeOp<SmokeTraits> {
 
 class SumSink final : public SinkOp<SmokeTraits> {
  public:
-  explicit SumSink(std::size_t dop) : SinkOp("SumSink", ""), sums_(dop, 0) {}
+  explicit SumSink(std::size_t dop) : SinkOp("SumSink"), sums_(dop, 0) {}
 
   PipelineSink<SmokeTraits> Sink() override {
     return [this](const TaskContext<SmokeTraits>&,
@@ -186,7 +186,7 @@ TEST(OplPipelineExecSmokeTest, RunsSingleStagePipeline) {
     return arrow::Status::NotImplemented("awaiter_factory not used in smoke test");
   };
 
-  ASSERT_OK(RunTaskGroup(exec.Segments()[0].Pipe().TaskGroup(), task_ctx));
+  ASSERT_OK(RunTaskGroup(exec.Segments()[0].PipeExec().TaskGroup(), task_ctx));
   ASSERT_EQ(sink.Total(), 12);
 }
 
