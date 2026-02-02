@@ -139,8 +139,6 @@ arrow::Status RunTaskGroup(const TaskGroup<SmokeTraits>& group,
     }
   }
 
-  ARROW_RETURN_NOT_OK(group.NotifyFinish(task_ctx));
-
   if (group.GetContinuation().has_value()) {
     auto cont = *group.GetContinuation();
     for (;;) {
@@ -176,7 +174,7 @@ TEST(OplPipelineExecSmokeTest, RunsSingleStagePipeline) {
   Pipeline<SmokeTraits> pipeline("P", {Pipeline<SmokeTraits>::Channel{&source, {&pipe}}}, &sink);
 
   auto exec = Compile(pipeline, dop);
-  ASSERT_EQ(exec.Stages().size(), 1);
+  ASSERT_EQ(exec.Segments().size(), 1);
 
   TaskContext<SmokeTraits> task_ctx;
   task_ctx.context = nullptr;
@@ -188,7 +186,7 @@ TEST(OplPipelineExecSmokeTest, RunsSingleStagePipeline) {
     return arrow::Status::NotImplemented("awaiter_factory not used in smoke test");
   };
 
-  ASSERT_OK(RunTaskGroup(exec.Stages()[0].Pipe().TaskGroup(), task_ctx));
+  ASSERT_OK(RunTaskGroup(exec.Segments()[0].Pipe().TaskGroup(), task_ctx));
   ASSERT_EQ(sink.Total(), 12);
 }
 

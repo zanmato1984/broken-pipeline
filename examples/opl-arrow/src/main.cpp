@@ -18,24 +18,24 @@ std::vector<opl_arrow::TaskGroup> CompileTaskGroups(const opl_arrow::Pipeline& p
   auto exec = opl::Compile(pipeline, dop);
 
   std::vector<opl_arrow::TaskGroup> task_groups;
-  task_groups.reserve(exec.Stages().size() * 2 + 3);
+  task_groups.reserve(exec.Segments().size() * 2 + 3);
 
-  for (const auto& stage : exec.Stages()) {
-    for (const auto& source : stage.Sources()) {
+  for (const auto& segment : exec.Segments()) {
+    for (const auto& source : segment.Sources()) {
       for (const auto& tg : source.frontend) {
         task_groups.push_back(tg);
       }
     }
 
-    task_groups.push_back(stage.Pipe().TaskGroup());
+    task_groups.push_back(segment.Pipe().TaskGroup());
   }
 
   for (const auto& tg : exec.Sink().frontend) {
     task_groups.push_back(tg);
   }
 
-  for (const auto& stage : exec.Stages()) {
-    for (const auto& source : stage.Sources()) {
+  for (const auto& segment : exec.Segments()) {
+    for (const auto& source : segment.Sources()) {
       if (source.backend.has_value()) {
         task_groups.push_back(*source.backend);
       }
@@ -79,11 +79,6 @@ opl_arrow::Status RunTaskGroup(const opl_arrow::TaskGroup& group,
         ++done_count;
       }
     }
-  }
-
-  auto notify_st = group.NotifyFinish(task_ctx);
-  if (!notify_st.ok()) {
-    return notify_st;
   }
 
   if (group.GetContinuation().has_value()) {

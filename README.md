@@ -173,8 +173,8 @@ the host is still responsible for orchestration and scheduling.
 
 Reference implementations live in:
 - `include/opl/pipeline_exec.h`: `opl::Compile(pipeline, dop)` compiles a `Pipeline` into a single
-  `opl::PipelineExec` (with an ordered list of `Stage`s)
-- `include/opl/pipeline_exec.h`: `Stage` / `PipeExec` small-step runtime for each stage
+  `opl::PipelineExec` (with an ordered list of `PipelineSegment`s)
+- `include/opl/pipeline_exec.h`: `PipelineSegment` / `PipeExec` small-step runtime for each segment
 
 ## Notes on Lifetime and Threading
 

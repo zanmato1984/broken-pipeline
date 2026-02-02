@@ -248,28 +248,22 @@ class Continuation {
 template <OpenPipelineTraits Traits>
 class TaskGroup {
  public:
-  using NotifyFinishFunc = std::function<Status<Traits>(const TaskContext<Traits>&)>;
-
   /**
    * @brief A conceptual group of N parallel instances of the same task.
    *
    * - `num_tasks` defines the group parallelism (often equals pipeline DOP).
    * - If provided, `cont` runs exactly once after all task instances finish successfully.
-   * - `notify` is an optional hook to stop "possibly infinite" tasks from waiting
-   *   (e.g., tell a sink to stop expecting more input).
    *
    * opl does not provide a scheduler, so the exact ordering/thread of
-   * `notify` and `cont` is scheduler-defined.
+   * `cont` is scheduler-defined.
    */
   TaskGroup(std::string name, std::string desc, Task<Traits> task, std::size_t num_tasks,
-            std::optional<Continuation<Traits>> cont = std::nullopt,
-            NotifyFinishFunc notify = {})
+            std::optional<Continuation<Traits>> cont = std::nullopt)
       : name_(std::move(name)),
         desc_(std::move(desc)),
         task_(std::move(task)),
         num_tasks_(num_tasks),
-        cont_(std::move(cont)),
-        notify_(std::move(notify)) {}
+        cont_(std::move(cont)) {}
 
   const std::string& Name() const noexcept { return name_; }
   const std::string& Desc() const noexcept { return desc_; }
@@ -280,20 +274,12 @@ class TaskGroup {
     return cont_;
   }
 
-  Status<Traits> NotifyFinish(const TaskContext<Traits>& ctx) const {
-    if (!notify_) {
-      return Traits::Status::OK();
-    }
-    return notify_(ctx);
-  }
-
  private:
   std::string name_;
   std::string desc_;
   Task<Traits> task_;
   std::size_t num_tasks_;
   std::optional<Continuation<Traits>> cont_;
-  NotifyFinishFunc notify_;
 };
 
 }  // namespace opl
