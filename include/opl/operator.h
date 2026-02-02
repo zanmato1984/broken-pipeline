@@ -25,7 +25,7 @@ class TaskGroup;
  * @brief Output/control signal returned by operator callbacks to the pipeline runtime.
  *
  * `OpOutput` is the small protocol between operator implementations and a pipeline
- * driver (e.g., `PipelineExec`).
+ * driver (e.g., `PipelineSegment`).
  *
  * It mixes two kinds of information:
  * - flow control ("need more input", "have more internal output")
