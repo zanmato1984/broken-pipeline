@@ -1,9 +1,7 @@
-#include "arrow_traits.h"
+#include <arrow_traits.h>
 
 #include <opl/pipeline_exec.h>
 
-#include <arrow/result.h>
-#include <arrow/status.h>
 #include <arrow/testing/gtest_util.h>
 
 #include <gtest/gtest.h>
@@ -18,76 +16,76 @@ namespace opl {
 
 namespace {
 
-using SmokeTraits = opl_test::ArrowTraits<int>;
+using O = ::opl_arrow::Aliases<int>;
+using SmokeTraits = O::Traits;
 
 static_assert(OpenPipelineTraits<SmokeTraits>);
 
-class CountingSource final : public SourceOp<SmokeTraits> {
+class CountingSource final : public O::SourceOp {
  public:
   CountingSource(std::size_t dop, int n)
-      : SourceOp("CountingSource"), next_(dop, 1), n_(n) {}
+      : O::SourceOp("CountingSource"), next_(dop, 1), n_(n) {}
 
-  PipelineSource<SmokeTraits> Source() override {
-    return [this](const TaskContext<SmokeTraits>&,
-                  ThreadId thread_id) -> OpResult<SmokeTraits> {
+  O::PipelineSource Source() override {
+    return [this](const O::TaskContext&, O::ThreadId thread_id) -> O::OpResult {
       auto& next = next_[thread_id];
       if (next <= n_) {
-        return OpResult<SmokeTraits>(OpOutput<SmokeTraits>::SourcePipeHasMore(next++));
+        return O::OpOutput::SourcePipeHasMore(next++);
       }
-      return OpResult<SmokeTraits>(OpOutput<SmokeTraits>::Finished());
+      return O::OpOutput::Finished();
     };
   }
 
-  std::vector<TaskGroup<SmokeTraits>> Frontend() override { return {}; }
+  std::vector<O::TaskGroup> Frontend() override { return {}; }
 
-  std::optional<TaskGroup<SmokeTraits>> Backend() override { return std::nullopt; }
+  std::optional<O::TaskGroup> Backend() override { return std::nullopt; }
 
  private:
   std::vector<int> next_;
   int n_;
 };
 
-class MultiplyPipe final : public PipeOp<SmokeTraits> {
+class MultiplyPipe final : public O::PipeOp {
  public:
-  explicit MultiplyPipe(int factor) : PipeOp("MultiplyPipe"), factor_(factor) {}
+  explicit MultiplyPipe(int factor) : O::PipeOp("MultiplyPipe"), factor_(factor) {}
 
-  PipelinePipe<SmokeTraits> Pipe() override {
-    return [this](const TaskContext<SmokeTraits>&, ThreadId,
-                  std::optional<SmokeTraits::Batch> input) -> OpResult<SmokeTraits> {
+  O::PipelinePipe Pipe() override {
+    return [this](const O::TaskContext&, O::ThreadId,
+                  std::optional<O::Batch> input) -> O::OpResult {
       if (!input.has_value()) {
-        return OpResult<SmokeTraits>(OpOutput<SmokeTraits>::PipeSinkNeedsMore());
+        return O::OpOutput::PipeSinkNeedsMore();
       }
-      return OpResult<SmokeTraits>(OpOutput<SmokeTraits>::PipeEven(*input * factor_));
+      return O::OpOutput::PipeEven(*input * factor_);
     };
   }
 
-  PipelineDrain<SmokeTraits> Drain() override { return {}; }
+  O::PipelineDrain Drain() override { return {}; }
 
-  std::unique_ptr<SourceOp<SmokeTraits>> ImplicitSource() override { return nullptr; }
+  std::unique_ptr<O::SourceOp> ImplicitSource() override { return nullptr; }
 
  private:
   int factor_;
 };
 
-class SumSink final : public SinkOp<SmokeTraits> {
+class SumSink final : public O::SinkOp {
  public:
-  explicit SumSink(std::size_t dop) : SinkOp("SumSink"), sums_(dop, 0) {}
+  explicit SumSink(std::size_t dop) : O::SinkOp("SumSink"), sums_(dop, 0) {}
 
-  PipelineSink<SmokeTraits> Sink() override {
-    return [this](const TaskContext<SmokeTraits>&, ThreadId thread_id,
-                  std::optional<SmokeTraits::Batch> input) -> OpResult<SmokeTraits> {
+  O::PipelineSink Sink() override {
+    return [this](const O::TaskContext&, O::ThreadId thread_id,
+                  std::optional<O::Batch> input) -> O::OpResult {
       if (input.has_value()) {
         sums_[thread_id] += *input;
       }
-      return OpResult<SmokeTraits>(OpOutput<SmokeTraits>::PipeSinkNeedsMore());
+      return O::OpOutput::PipeSinkNeedsMore();
     };
   }
 
-  std::vector<TaskGroup<SmokeTraits>> Frontend() override { return {}; }
+  std::vector<O::TaskGroup> Frontend() override { return {}; }
 
-  std::optional<TaskGroup<SmokeTraits>> Backend() override { return std::nullopt; }
+  std::optional<O::TaskGroup> Backend() override { return std::nullopt; }
 
-  std::unique_ptr<SourceOp<SmokeTraits>> ImplicitSource() override { return nullptr; }
+  std::unique_ptr<O::SourceOp> ImplicitSource() override { return nullptr; }
 
   int Total() const {
     int total = 0;
@@ -101,13 +99,12 @@ class SumSink final : public SinkOp<SmokeTraits> {
   std::vector<int> sums_;
 };
 
-arrow::Status RunTaskGroup(const TaskGroup<SmokeTraits>& group,
-                           const TaskContext<SmokeTraits>& task_ctx) {
+arrow::Status RunTaskGroup(const O::TaskGroup& group, const O::TaskContext& task_ctx) {
   std::vector<bool> done(group.NumTasks(), false);
   std::size_t done_count = 0;
 
   while (done_count < done.size()) {
-    for (TaskId task_id = 0; task_id < done.size(); ++task_id) {
+    for (O::TaskId task_id = 0; task_id < done.size(); ++task_id) {
       if (done[task_id]) {
         continue;
       }
@@ -165,19 +162,18 @@ TEST(OplPipelineExecSmokeTest, RunsSingleStagePipeline) {
   MultiplyPipe pipe(/*factor=*/2);
   SumSink sink(dop);
 
-  Pipeline<SmokeTraits> pipeline("P", {Pipeline<SmokeTraits>::Channel{&source, {&pipe}}},
-                                 &sink);
+  O::Pipeline pipeline("P", {O::PipelineChannel{&source, {&pipe}}}, &sink);
 
   auto exec = Compile(pipeline, dop);
   ASSERT_EQ(exec.Segments().size(), 1);
 
-  TaskContext<SmokeTraits> task_ctx;
+  O::TaskContext task_ctx;
   task_ctx.context = nullptr;
-  task_ctx.resumer_factory = []() -> SmokeTraits::Result<std::shared_ptr<Resumer>> {
+  task_ctx.resumer_factory = []() -> O::Result<std::shared_ptr<Resumer>> {
     return arrow::Status::NotImplemented("resumer_factory not used in smoke test");
   };
   task_ctx.awaiter_factory = [](std::vector<std::shared_ptr<Resumer>>)
-      -> SmokeTraits::Result<std::shared_ptr<Awaiter>> {
+      -> O::Result<std::shared_ptr<Awaiter>> {
     return arrow::Status::NotImplemented("awaiter_factory not used in smoke test");
   };
 

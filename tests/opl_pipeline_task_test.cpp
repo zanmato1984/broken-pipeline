@@ -1,4 +1,4 @@
-#include "arrow_traits.h"
+#include <arrow_traits.h>
 
 #include <opl/opl.h>
 
@@ -19,25 +19,26 @@ namespace opl {
 
 namespace {
 
-using TestTraits = ::opl_test::ArrowTraits<int>;
+using O = ::opl_arrow::Aliases<int>;
+using TestTraits = O::Traits;
 
 static_assert(OpenPipelineTraits<TestTraits>);
 
-using Batch = TestTraits::Batch;
-using ArrowStatus = TestTraits::Status;
+using Batch = O::Batch;
+using ArrowStatus = O::Status;
 template <class T>
-using Result = TestTraits::Result<T>;
+using Result = O::Result<T>;
 
-using TestTaskContext = opl::TaskContext<TestTraits>;
-using TestTaskGroup = opl::TaskGroup<TestTraits>;
+using TestTaskContext = O::TaskContext;
+using TestTaskGroup = O::TaskGroup;
 
-using TestOpOutput = opl::OpOutput<TestTraits>;
-using TestOpResult = opl::OpResult<TestTraits>;
-using TestPipelineSource = opl::PipelineSource<TestTraits>;
-using TestPipelinePipe = opl::PipelinePipe<TestTraits>;
-using TestPipelineDrain = opl::PipelineDrain<TestTraits>;
-using TestPipelineSink = opl::PipelineSink<TestTraits>;
-using TestPipeline = opl::Pipeline<TestTraits>;
+using TestOpOutput = O::OpOutput;
+using TestOpResult = O::OpResult;
+using TestPipelineSource = O::PipelineSource;
+using TestPipelinePipe = O::PipelinePipe;
+using TestPipelineDrain = O::PipelineDrain;
+using TestPipelineSink = O::PipelineSink;
+using TestPipeline = O::Pipeline;
 
 class TestResumer final : public Resumer {
  public:
