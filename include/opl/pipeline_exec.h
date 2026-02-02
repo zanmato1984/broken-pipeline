@@ -43,8 +43,8 @@ class PipeExec {
   opl::TaskGroup<Traits> TaskGroup() const {
     Task<Traits> task(
         std::string{},
-        [runtime = runtime_](const TaskContext<Traits>& ctx, TaskId task_id) {
-          return (*runtime)(ctx, task_id);
+        [exec = exec_](const TaskContext<Traits>& ctx, TaskId task_id) {
+          return (*exec)(ctx, task_id);
         });
     return opl::TaskGroup<Traits>(std::string{}, std::move(task), dop_);
   }
@@ -53,11 +53,11 @@ class PipeExec {
   PipeExec(const std::vector<typename Pipeline<Traits>::Channel>& channels,
            SinkOp<Traits>* sink_op,
            std::size_t dop)
-      : dop_(dop), runtime_(std::make_shared<Runtime>(channels, sink_op, dop_)) {}
+      : dop_(dop), exec_(std::make_shared<Exec>(channels, sink_op, dop_)) {}
 
   friend class PipelineExecSegment<Traits>;
 
-  class Runtime {
+  class Exec {
    public:
     class Channel {
      public:
@@ -260,9 +260,9 @@ class PipeExec {
       std::atomic_bool& cancelled_;
     };
 
-    Runtime(const std::vector<typename Pipeline<Traits>::Channel>& channels,
-            SinkOp<Traits>* sink_op,
-            std::size_t dop)
+    Exec(const std::vector<typename Pipeline<Traits>::Channel>& channels,
+         SinkOp<Traits>* sink_op,
+         std::size_t dop)
         : cancelled_(false) {
       channels_.reserve(channels.size());
       for (std::size_t i = 0; i < channels.size(); ++i) {
@@ -374,7 +374,7 @@ class PipeExec {
   };
 
   std::size_t dop_;
-  std::shared_ptr<Runtime> runtime_;
+  std::shared_ptr<Exec> exec_;
 };
 
 namespace detail {
