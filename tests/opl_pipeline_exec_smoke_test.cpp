@@ -1,5 +1,3 @@
-#include "arrow_traits.h"
-
 #include <opl/pipeline_exec.h>
 
 #include <arrow/result.h>
@@ -18,7 +16,14 @@ namespace opl {
 
 namespace {
 
-using SmokeTraits = opl_test::ArrowTraits<int>;
+struct SmokeTraits {
+  using Batch = int;
+  using Context = std::monostate;
+  using Status = arrow::Status;
+
+  template <class T>
+  using Result = arrow::Result<T>;
+};
 
 static_assert(OpenPipelineTraits<SmokeTraits>);
 

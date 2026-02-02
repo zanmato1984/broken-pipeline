@@ -1,7 +1,7 @@
-#include "arrow_traits.h"
-
 #include <opl/opl.h>
 
+#include <arrow/result.h>
+#include <arrow/status.h>
 #include <arrow/testing/gtest_util.h>
 
 #include <gtest/gtest.h>
@@ -19,7 +19,14 @@ namespace opl {
 
 namespace {
 
-using TestTraits = ::opl_test::ArrowTraits<int>;
+struct TestTraits {
+  using Batch = int;
+  using Context = std::monostate;
+  using Status = arrow::Status;
+
+  template <class T>
+  using Result = arrow::Result<T>;
+};
 
 static_assert(OpenPipelineTraits<TestTraits>);
 
