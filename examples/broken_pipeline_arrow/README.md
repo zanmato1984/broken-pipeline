@@ -15,13 +15,13 @@ This project depends on the Arrow C++ CMake package.
 From the repo root:
 
 ```bash
-cmake -S examples/broken_pipeline-arrow -B build/broken-pipeline-arrow
-cmake --build build/broken-pipeline-arrow
-./build/broken-pipeline-arrow/broken-pipeline-arrow-demo
+cmake -S examples/broken_pipeline_arrow -B build/broken_pipeline_arrow
+cmake --build build/broken_pipeline_arrow
+./build/broken_pipeline_arrow/broken-pipeline-arrow-demo
 ```
 
 If Arrow is installed in a non-default prefix, set `CMAKE_PREFIX_PATH`:
 
 ```bash
-cmake -S examples/broken_pipeline-arrow -B build/broken-pipeline-arrow -DCMAKE_PREFIX_PATH=/path/to/arrow
+cmake -S examples/broken_pipeline_arrow -B build/broken_pipeline_arrow -DCMAKE_PREFIX_PATH=/path/to/arrow
 ```

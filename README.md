@@ -195,4 +195,4 @@ cmake --build build
 
 ## Examples
 
-- `examples/broken_pipeline-arrow`: Apache Arrow based adoption example (requires Arrow C++ CMake package).
+- `examples/broken_pipeline_arrow`: Apache Arrow based adoption example (requires Arrow C++ CMake package).
