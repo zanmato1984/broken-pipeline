@@ -3,18 +3,18 @@ set_property(CACHE BROKEN_PIPELINE_ARROW_PROVIDER PROPERTY STRINGS bundled syste
 
 include(cmake/find/arrow.cmake)
 
-message(STATUS "Building the broken_pipeline googletest unit tests")
+message(STATUS "Building the broken-pipeline googletest unit tests")
 enable_testing()
 include(cmake/find/gtest.cmake)
 find_package(Threads REQUIRED)
 if(NOT BROKEN_PIPELINE_ARROW_CORE_TARGET)
-  message(FATAL_ERROR "broken_pipeline tests require an Arrow core library target")
+  message(FATAL_ERROR "broken-pipeline tests require an Arrow core library target")
 endif()
 if(NOT BROKEN_PIPELINE_ARROW_COMPUTE_TARGET)
-  message(FATAL_ERROR "broken_pipeline tests require an Arrow compute library target")
+  message(FATAL_ERROR "broken-pipeline tests require an Arrow compute library target")
 endif()
 if(NOT BROKEN_PIPELINE_ARROW_TESTING_TARGET)
-  message(FATAL_ERROR "broken_pipeline tests require an Arrow testing library target")
+  message(FATAL_ERROR "broken-pipeline tests require an Arrow testing library target")
 endif()
 
 function(add_broken_pipeline_test TEST_NAME TEST_SRC)

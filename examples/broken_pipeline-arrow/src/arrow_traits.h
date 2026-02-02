@@ -25,7 +25,7 @@
 namespace broken_pipeline_arrow {
 
 struct Context {
-  const char* query_name = "broken_pipeline-arrow-demo";
+  const char* query_name = "broken-pipeline-arrow-demo";
 };
 
 struct Traits {

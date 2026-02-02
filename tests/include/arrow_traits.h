@@ -24,7 +24,7 @@
 namespace broken_pipeline_test {
 
 struct Context {
-  const char* query_name = "broken_pipeline-tests";
+  const char* query_name = "broken-pipeline-tests";
 };
 
 struct Traits {

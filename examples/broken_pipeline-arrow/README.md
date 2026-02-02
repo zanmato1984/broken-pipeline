@@ -1,4 +1,4 @@
-# broken_pipeline-arrow
+# broken-pipeline-arrow
 
 Standalone example project showing how to adopt `broken_pipeline` in an Apache Arrow based
 codebase.
@@ -15,13 +15,13 @@ This project depends on the Arrow C++ CMake package.
 From the repo root:
 
 ```bash
-cmake -S examples/broken_pipeline-arrow -B build/broken_pipeline-arrow
-cmake --build build/broken_pipeline-arrow
-./build/broken_pipeline-arrow/broken_pipeline-arrow-demo
+cmake -S examples/broken_pipeline-arrow -B build/broken-pipeline-arrow
+cmake --build build/broken-pipeline-arrow
+./build/broken-pipeline-arrow/broken-pipeline-arrow-demo
 ```
 
 If Arrow is installed in a non-default prefix, set `CMAKE_PREFIX_PATH`:
 
 ```bash
-cmake -S examples/broken_pipeline-arrow -B build/broken_pipeline-arrow -DCMAKE_PREFIX_PATH=/path/to/arrow
+cmake -S examples/broken_pipeline-arrow -B build/broken-pipeline-arrow -DCMAKE_PREFIX_PATH=/path/to/arrow
 ```

@@ -1,8 +1,8 @@
-# broken_pipeline
+# broken-pipeline
 
 Header-only protocol/interfaces extracted from Ara’s execution model.
 
-broken_pipeline is a **C++20**, **traits-based**, **data-structure-agnostic** set of building
+broken-pipeline is a **C++20**, **traits-based**, **data-structure-agnostic** set of building
 blocks for implementing a batch-at-a-time execution engine:
 
 - Operators expose small-step, re-entrant callbacks that a pipeline driver can resume.
@@ -28,7 +28,7 @@ What this project intentionally does **not** provide:
 
 ## The Layered Model (Operator → Pipeline → Task → Scheduler)
 
-broken_pipeline deliberately separates concerns:
+broken-pipeline deliberately separates concerns:
 
 All public types live directly in `namespace broken_pipeline` (no sub-namespaces); headers are
 organized as a small set of top-level files:
@@ -48,10 +48,10 @@ organized as a small set of top-level files:
 
 4) **Scheduler (yours)**
 - “Where/when do tasks run? How do we wait? How do we handle Yield?”
-- broken_pipeline provides the semantic hooks (`Resumer`/`Awaiter`) but does not implement
+- broken-pipeline provides the semantic hooks (`Resumer`/`Awaiter`) but does not implement
   any scheduling policy or concurrency runtime.
 
-This architecture is what lets broken_pipeline be both:
+This architecture is what lets broken-pipeline be both:
 - highly generic (no Arrow / no Folly / no concrete data types)
 - scheduler-agnostic (sync or async, cooperative or preemptive)
 
@@ -85,7 +85,7 @@ Other notable signals:
 
 ## Usage
 
-`broken_pipeline` is fully generic via a user-defined `Traits` type (checked by C++20 concepts).
+broken-pipeline is fully generic via a user-defined `Traits` type (checked by C++20 concepts).
 
 Your `Traits` must define:
 - `using Batch = ...;` (movable)
@@ -98,7 +98,7 @@ Required surface:
 - `result.ok()`, `result.status()`, and `result.ValueOrDie()` (lvalue/const/rvalue)
 - `Result<T>(T)` for success and `Result<T>(Status)` for error
 
-broken_pipeline defines `broken_pipeline::TaskId` and `broken_pipeline::ThreadId` as `std::size_t`,
+broken-pipeline defines `broken_pipeline::TaskId` and `broken_pipeline::ThreadId` as `std::size_t`,
 so you do not provide id types in your `Traits`.
 
 Then include:
@@ -168,7 +168,7 @@ Key conventions:
 
 ## Driving a Pipeline
 
-broken_pipeline ships a small reference "compiler" that splits a `Pipeline` into executable stages, but
+broken-pipeline ships a small reference "compiler" that splits a `Pipeline` into executable stages, but
 the host is still responsible for orchestration and scheduling.
 
 Reference implementations live in:
