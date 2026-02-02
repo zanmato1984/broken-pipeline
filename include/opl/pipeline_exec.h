@@ -31,17 +31,15 @@ struct SinkExec {
   std::optional<TaskGroup<Traits>> backend;
 };
 
+template <OpenPipelineTraits Traits>
+class PipelineExecSegment;
+
 /**
  * @brief Encapsulation of the task group that runs a pipeline segment.
  */
 template <OpenPipelineTraits Traits>
 class PipeExec {
  public:
-  PipeExec(const std::vector<typename Pipeline<Traits>::Channel>& channels,
-           SinkOp<Traits>* sink_op,
-           std::size_t dop)
-      : dop_(dop), runtime_(std::make_shared<Runtime>(channels, sink_op, dop_)) {}
-
   opl::TaskGroup<Traits> TaskGroup() const {
     Task<Traits> task(
         std::string{},
@@ -52,6 +50,13 @@ class PipeExec {
   }
 
  private:
+  PipeExec(const std::vector<typename Pipeline<Traits>::Channel>& channels,
+           SinkOp<Traits>* sink_op,
+           std::size_t dop)
+      : dop_(dop), runtime_(std::make_shared<Runtime>(channels, sink_op, dop_)) {}
+
+  friend class PipelineExecSegment<Traits>;
+
   class Runtime {
    public:
     class Channel {
@@ -438,6 +443,13 @@ class PipelineExecSegment {
 template <OpenPipelineTraits Traits>
 class PipelineExec {
  public:
+  const std::string& Name() const noexcept { return name_; }
+  std::size_t Dop() const noexcept { return dop_; }
+
+  const SinkExec<Traits>& Sink() const noexcept { return sink_; }
+  const std::vector<PipelineExecSegment<Traits>>& Segments() const noexcept { return segments_; }
+
+ private:
   PipelineExec(std::string name,
                SinkExec<Traits> sink,
                std::vector<PipelineExecSegment<Traits>> segments,
@@ -447,13 +459,8 @@ class PipelineExec {
         segments_(std::move(segments)),
         dop_(dop) {}
 
-  const std::string& Name() const noexcept { return name_; }
-  std::size_t Dop() const noexcept { return dop_; }
+  friend class detail::PipelineCompiler<Traits>;
 
-  const SinkExec<Traits>& Sink() const noexcept { return sink_; }
-  const std::vector<PipelineExecSegment<Traits>>& Segments() const noexcept { return segments_; }
-
- private:
   std::string name_;
 
   SinkExec<Traits> sink_;
