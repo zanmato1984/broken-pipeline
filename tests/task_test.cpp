@@ -13,7 +13,7 @@ namespace broken_pipeline_test {
 
 namespace {
 
-class NoopAwaiter final : public broken_pipeline::Awaiter {};
+class NoopAwaiter final : public Awaiter {};
 
 }  // namespace
 
@@ -28,8 +28,8 @@ TEST(BrokenPipelineTaskTest, BasicTask) {
 }
 
 TEST(BrokenPipelineTaskTest, BasicContinuation) {
-  broken_pipeline::Continuation<Traits> cont(
-      "BasicContinuation", [](const TaskContext&) { return TaskStatus::Finished(); });
+  Continuation cont("BasicContinuation",
+                    [](const TaskContext&) { return TaskStatus::Finished(); });
 
   TaskContext ctx;
   auto res = cont(ctx);
@@ -57,8 +57,7 @@ TEST(BrokenPipelineTaskTest, TaskStatus) {
 
 TEST(BrokenPipelineTaskTest, BasicTaskGroup) {
   Task task("T", [](const TaskContext&, TaskId) { return TaskStatus::Finished(); });
-  broken_pipeline::Continuation<Traits> cont(
-      "C", [](const TaskContext&) { return TaskStatus::Finished(); });
+  Continuation cont("C", [](const TaskContext&) { return TaskStatus::Finished(); });
 
   TaskGroup tg("G", task, /*num_tasks=*/1, cont);
   ASSERT_EQ(tg.Name(), "G");

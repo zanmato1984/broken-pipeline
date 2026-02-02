@@ -25,7 +25,7 @@
 namespace broken_pipeline_arrow {
 
 struct Context {
-  const char* query_name = "broken-pipeline-arrow-demo";
+  const char* query_name = "broken-pipeline-arrow";
 };
 
 struct Traits {
@@ -37,7 +37,7 @@ struct Traits {
   using Result = arrow::Result<T>;
 };
 
-// Convenience aliases for the demo so other headers don't have to repeat the plumbing.
+// Convenience aliases for the example so other headers don't have to repeat the plumbing.
 using Batch = Traits::Batch;
 using Status = Traits::Status;
 

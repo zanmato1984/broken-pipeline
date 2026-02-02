@@ -3,7 +3,7 @@
 Standalone example project showing how to adopt `broken_pipeline` in an Apache Arrow based
 codebase.
 
-This example demonstrates:
+This example shows:
 - Declaring a `Traits` type that aliases Arrow's `arrow::Status` and `arrow::Result<T>`.
 - Using an Arrow-native batch type (`std::shared_ptr<arrow::RecordBatch>`).
 - Splitting a `Pipeline` into stages and building `TaskGroup`s via `broken_pipeline/pipeline_exec.h`.
@@ -17,7 +17,7 @@ From the repo root:
 ```bash
 cmake -S examples/broken_pipeline_arrow -B build/broken_pipeline_arrow
 cmake --build build/broken_pipeline_arrow
-./build/broken_pipeline_arrow/broken-pipeline-arrow-demo
+./build/broken_pipeline_arrow/broken-pipeline-arrow
 ```
 
 If Arrow is installed in a non-default prefix, set `CMAKE_PREFIX_PATH`:

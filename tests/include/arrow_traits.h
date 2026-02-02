@@ -47,6 +47,7 @@ using TaskContext = broken_pipeline::TaskContext<Traits>;
 using TaskGroup = broken_pipeline::TaskGroup<Traits>;
 
 using Task = broken_pipeline::Task<Traits>;
+using Continuation = broken_pipeline::Continuation<Traits>;
 using TaskId = broken_pipeline::TaskId;
 using ThreadId = broken_pipeline::ThreadId;
 using TaskStatus = broken_pipeline::TaskStatus;

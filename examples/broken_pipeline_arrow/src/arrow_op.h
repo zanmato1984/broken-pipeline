@@ -65,7 +65,7 @@ class BatchesSource final : public SourceOp {
     Task task(
         "BatchesSource.Frontend",
         [this](const TaskContext& /*ctx*/, TaskId /*task_id*/) -> Result<TaskStatus> {
-          // Demonstrate TaskStatus::Yield() and TaskHint::IO for IO-heavy work.
+          // Show TaskStatus::Yield() and TaskHint::IO for IO-heavy work.
           if (!frontend_started_.exchange(true)) {
             return TaskStatus::Yield();
           }
@@ -129,7 +129,7 @@ class PassThroughPipe final : public PipeOp {
 };
 
 // A pipe that uses Drain() to flush the last buffered batch at end-of-stream.
-// This demonstrates the "tail output" interface: the pipeline driver calls Drain() only
+// This shows the "tail output" interface: the pipeline driver calls Drain() only
 // after observing Finished() from the upstream source.
 class DelayLastBatchPipe final : public PipeOp {
  public:

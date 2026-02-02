@@ -73,7 +73,7 @@ broken_pipeline_arrow::Status RunTaskGroup(const broken_pipeline_arrow::TaskGrou
       }
 
       if (ts.IsBlocked()) {
-        return arrow::Status::NotImplemented("Demo scheduler does not support Blocked()");
+        return arrow::Status::NotImplemented("Example scheduler does not support Blocked()");
       }
 
       if (ts.IsFinished() || ts.IsCancelled()) {
@@ -95,7 +95,7 @@ broken_pipeline_arrow::Status RunTaskGroup(const broken_pipeline_arrow::TaskGrou
         continue;
       }
       if (ts.IsBlocked()) {
-        return arrow::Status::NotImplemented("Demo scheduler does not support Blocked()");
+        return arrow::Status::NotImplemented("Example scheduler does not support Blocked()");
       }
       if (ts.IsFinished() || ts.IsCancelled()) {
         break;
@@ -153,13 +153,13 @@ int main() {
   task_ctx.resumer_factory =
       []() -> broken_pipeline_arrow::Result<std::shared_ptr<broken_pipeline::Resumer>> {
     return broken_pipeline_arrow::Result<std::shared_ptr<broken_pipeline::Resumer>>(
-        arrow::Status::NotImplemented("resumer_factory not used in demo"));
+        arrow::Status::NotImplemented("resumer_factory not used in example"));
   };
   task_ctx.awaiter_factory =
       [](std::vector<std::shared_ptr<broken_pipeline::Resumer>>)
           -> broken_pipeline_arrow::Result<std::shared_ptr<broken_pipeline::Awaiter>> {
     return broken_pipeline_arrow::Result<std::shared_ptr<broken_pipeline::Awaiter>>(
-        arrow::Status::NotImplemented("awaiter_factory not used in demo"));
+        arrow::Status::NotImplemented("awaiter_factory not used in example"));
   };
 
   auto st = RunTaskGroups(groups, task_ctx);
