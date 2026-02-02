@@ -1,4 +1,4 @@
-#include <opl/concepts.h>
+#include "arrow_traits.h"
 
 #include <arrow/array.h>
 #include <arrow/builder.h>
@@ -15,14 +15,7 @@ namespace opl {
 
 namespace {
 
-struct ArrowTraits {
-  using Batch = std::shared_ptr<arrow::Array>;
-  using Context = std::monostate;
-  using Status = arrow::Status;
-
-  template <class T>
-  using Result = arrow::Result<T>;
-};
+using ArrowTraits = opl_test::ArrowTraits<std::shared_ptr<arrow::Array>>;
 
 static_assert(OpenPipelineTraits<ArrowTraits>);
 
