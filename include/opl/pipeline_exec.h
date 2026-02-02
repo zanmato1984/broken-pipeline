@@ -542,34 +542,34 @@ class PipelineCompiler {
     for (auto* source : sources_keep_order_) {
       auto& segment_info = topology_[source];
       if (implicit_sources_keepalive_.count(source) > 0) {
-        segments_[segment_info.first].first.push_back(
+        segment_infos_[segment_info.first].first.push_back(
             std::move(implicit_sources_keepalive_[source]));
       }
-      segments_[segment_info.first].second.push_back(std::move(segment_info.second));
+      segment_infos_[segment_info.first].second.push_back(std::move(segment_info.second));
     }
   }
 
   std::vector<PipelineExecSegment<Traits>> BuildSegments() {
-    std::vector<PipelineExecSegment<Traits>> segment_execs;
+    std::vector<PipelineExecSegment<Traits>> segments;
 
-    if (segments_.empty()) {
-      return segment_execs;
+    if (segment_infos_.empty()) {
+      return segments;
     }
 
-    segment_execs.reserve(segments_.size());
+    segments.reserve(segment_infos_.size());
 
-    for (auto& [id, segment_info] : segments_) {
+    for (auto& [id, segment_info] : segment_infos_) {
       auto implicit_sources = std::move(segment_info.first);
       auto pipeline_channels = std::move(segment_info.second);
 
       auto name =
           "PipelineExecSegment" + std::to_string(id) + "(" + pipeline_.Name() + ")";
-      segment_execs.push_back(PipelineExecSegment<Traits>(
+      segments.push_back(PipelineExecSegment<Traits>(
           std::move(name), std::move(pipeline_channels), std::move(implicit_sources),
           pipeline_.Sink(), dop_));
     }
 
-    return segment_execs;
+    return segments;
   }
 
   const Pipeline<Traits>& pipeline_;
@@ -584,7 +584,7 @@ class PipelineCompiler {
 
   std::map<std::size_t, std::pair<std::vector<std::unique_ptr<SourceOp<Traits>>>,
                                   std::vector<typename Pipeline<Traits>::Channel>>>
-      segments_;
+      segment_infos_;
 };
 
 }  // namespace detail
