@@ -1,4 +1,4 @@
-#include <arrow_traits.h>
+#include "arrow_traits.h"
 
 #include <opl/task.h>
 
@@ -18,25 +18,26 @@ class NoopAwaiter final : public Awaiter {};
 }  // namespace
 
 TEST(OplTaskTest, BasicTask) {
-  using O = opl_arrow::Aliases<int>;
+  using Traits = opl_test::ArrowTraits<int>;
+  using Task = opl::Task<Traits>;
+  using TaskContext = opl::TaskContext<Traits>;
 
-  O::Task task("BasicTask",
-               [](const O::TaskContext&, O::TaskId) { return O::TaskStatus::Finished(); });
+  Task task("BasicTask", [](const TaskContext&, TaskId) { return TaskStatus::Finished(); });
 
-  O::TaskContext ctx;
+  TaskContext ctx;
   auto res = task(ctx, 0);
   ASSERT_TRUE(res.ok());
   ASSERT_TRUE(res->IsFinished()) << res->ToString();
 }
 
 TEST(OplTaskTest, BasicContinuation) {
-  using O = opl_arrow::Aliases<int>;
+  using Traits = opl_test::ArrowTraits<int>;
+  using TaskContext = opl::TaskContext<Traits>;
 
-  O::Continuation cont(
-      "BasicContinuation",
-      [](const O::TaskContext&) { return O::TaskStatus::Finished(); });
+  opl::Continuation<Traits> cont("BasicContinuation",
+                                 [](const TaskContext&) { return TaskStatus::Finished(); });
 
-  O::TaskContext ctx;
+  TaskContext ctx;
   auto res = cont(ctx);
   ASSERT_TRUE(res.ok());
   ASSERT_TRUE(res->IsFinished()) << res->ToString();
@@ -61,12 +62,16 @@ TEST(OplTaskTest, TaskStatus) {
 }
 
 TEST(OplTaskTest, BasicTaskGroup) {
-  using O = opl_arrow::Aliases<int>;
+  using Traits = opl_test::ArrowTraits<int>;
+  using Task = opl::Task<Traits>;
+  using TaskContext = opl::TaskContext<Traits>;
+  using TaskGroup = opl::TaskGroup<Traits>;
 
-  O::Task task("T", [](const O::TaskContext&, O::TaskId) { return O::TaskStatus::Finished(); });
-  O::Continuation cont("C", [](const O::TaskContext&) { return O::TaskStatus::Finished(); });
+  Task task("T", [](const TaskContext&, TaskId) { return TaskStatus::Finished(); });
+  opl::Continuation<Traits> cont("C",
+                                 [](const TaskContext&) { return TaskStatus::Finished(); });
 
-  O::TaskGroup tg("G", task, /*num_tasks=*/1, cont);
+  TaskGroup tg("G", task, /*num_tasks=*/1, cont);
   ASSERT_EQ(tg.Name(), "G");
   ASSERT_EQ(tg.NumTasks(), 1);
   ASSERT_TRUE(tg.GetContinuation().has_value());
@@ -75,10 +80,12 @@ TEST(OplTaskTest, BasicTaskGroup) {
 }
 
 TEST(OplTaskTest, TaskHintDefaultsToCpu) {
-  using O = opl_arrow::Aliases<int>;
+  using Traits = opl_test::ArrowTraits<int>;
+  using Task = opl::Task<Traits>;
+  using TaskContext = opl::TaskContext<Traits>;
 
-  O::Task t("T", [](const O::TaskContext&, O::TaskId) { return O::TaskStatus::Finished(); });
-  EXPECT_EQ(t.Hint().type, O::TaskHint::Type::CPU);
+  Task t("T", [](const TaskContext&, TaskId) { return TaskStatus::Finished(); });
+  EXPECT_EQ(t.Hint().type, TaskHint::Type::CPU);
 }
 
 }  // namespace opl

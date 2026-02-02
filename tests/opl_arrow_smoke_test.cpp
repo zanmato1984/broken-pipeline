@@ -1,4 +1,4 @@
-#include <arrow_traits.h>
+#include "arrow_traits.h"
 
 #include <arrow/array.h>
 #include <arrow/builder.h>
@@ -15,7 +15,7 @@ namespace opl {
 
 namespace {
 
-using ArrowTraits = opl_arrow::Traits<std::shared_ptr<arrow::Array>>;
+using ArrowTraits = opl_test::ArrowTraits<std::shared_ptr<arrow::Array>>;
 
 static_assert(OpenPipelineTraits<ArrowTraits>);
 
