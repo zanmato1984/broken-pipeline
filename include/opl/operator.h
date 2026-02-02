@@ -102,9 +102,13 @@ class OpOutput {
   }
   static OpOutput Cancelled() { return OpOutput(Code::CANCELLED); }
 
-  bool IsPipeSinkNeedsMore() const noexcept { return code_ == Code::PIPE_SINK_NEEDS_MORE; }
+  bool IsPipeSinkNeedsMore() const noexcept {
+    return code_ == Code::PIPE_SINK_NEEDS_MORE;
+  }
   bool IsPipeEven() const noexcept { return code_ == Code::PIPE_EVEN; }
-  bool IsSourcePipeHasMore() const noexcept { return code_ == Code::SOURCE_PIPE_HAS_MORE; }
+  bool IsSourcePipeHasMore() const noexcept {
+    return code_ == Code::SOURCE_PIPE_HAS_MORE;
+  }
   bool IsBlocked() const noexcept { return code_ == Code::BLOCKED; }
   bool IsPipeYield() const noexcept { return code_ == Code::PIPE_YIELD; }
   bool IsPipeYieldBack() const noexcept { return code_ == Code::PIPE_YIELD_BACK; }
@@ -180,7 +184,8 @@ using OpResult = Result<Traits, OpOutput<Traits>>;
  * A source typically returns:
  * - `Finished()` when it has no more data
  * - `SourcePipeHasMore(batch)` for more data
- * - `Blocked(resumer)` if it needs to wait for an external event (async IO / backpressure)
+ * - `Blocked(resumer)` if it needs to wait for an external event (async IO /
+ * backpressure)
  */
 template <OpenPipelineTraits Traits>
 using PipelineSource =
@@ -196,9 +201,8 @@ using PipelineSource =
  *   after Yield).
  */
 template <OpenPipelineTraits Traits>
-using PipelinePipe = std::function<OpResult<Traits>(const TaskContext<Traits>&,
-                                                    ThreadId,
-                                                    std::optional<typename Traits::Batch>)>;
+using PipelinePipe = std::function<OpResult<Traits>(
+    const TaskContext<Traits>&, ThreadId, std::optional<typename Traits::Batch>)>;
 
 /**
  * @brief Drain callback signature.
@@ -245,13 +249,14 @@ class SourceOp {
  * @brief Pipe operator interface (transform operator).
  *
  * A pipe participates in the main streaming path via `Pipe()`, may optionally implement
- * `Drain()` for tail output, and may optionally introduce a new stage via `ImplicitSource()`.
+ * `Drain()` for tail output, and may optionally introduce a new stage via
+ * `ImplicitSource()`.
  *
  * `ImplicitSource()` is the hook used to split a pipeline into multiple sub-pipeline
  * stages (via host orchestration):
  * - returning `nullptr` means "no split here"
- * - returning a source means "downstream operators become a new sub-pipeline stage rooted at
- *   this implicit source"
+ * - returning a source means "downstream operators become a new sub-pipeline stage rooted
+ * at this implicit source"
  */
 template <OpenPipelineTraits Traits>
 class PipeOp {

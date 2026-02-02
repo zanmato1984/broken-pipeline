@@ -41,18 +41,16 @@ template <OpenPipelineTraits Traits>
 class PipeExec {
  public:
   opl::TaskGroup<Traits> TaskGroup() const {
-    Task<Traits> task(
-        std::string{},
-        [exec = exec_](const TaskContext<Traits>& ctx, TaskId task_id) {
-          return (*exec)(ctx, task_id);
-        });
+    Task<Traits> task(std::string{},
+                      [exec = exec_](const TaskContext<Traits>& ctx, TaskId task_id) {
+                        return (*exec)(ctx, task_id);
+                      });
     return opl::TaskGroup<Traits>(std::string{}, std::move(task), dop_);
   }
 
  private:
   PipeExec(const std::vector<typename Pipeline<Traits>::Channel>& channels,
-           SinkOp<Traits>* sink_op,
-           std::size_t dop)
+           SinkOp<Traits>* sink_op, std::size_t dop)
       : dop_(dop), exec_(std::make_shared<Exec>(channels, sink_op, dop_)) {}
 
   friend class PipelineExecSegment<Traits>;
@@ -61,11 +59,8 @@ class PipeExec {
    public:
     class Channel {
      public:
-      Channel(const typename Pipeline<Traits>::Channel& channel,
-              SinkOp<Traits>* sink_op,
-              std::size_t channel_id,
-              std::size_t dop,
-              std::atomic_bool& cancelled)
+      Channel(const typename Pipeline<Traits>::Channel& channel, SinkOp<Traits>* sink_op,
+              std::size_t channel_id, std::size_t dop, std::atomic_bool& cancelled)
           : channel_id_(channel_id),
             source_(channel.source_op->Source()),
             pipes_(channel.pipe_ops.size()),
@@ -88,7 +83,8 @@ class PipeExec {
         }
       }
 
-      OpResult<Traits> operator()(const TaskContext<Traits>& task_ctx, ThreadId thread_id) {
+      OpResult<Traits> operator()(const TaskContext<Traits>& task_ctx,
+                                  ThreadId thread_id) {
         if (cancelled_.load()) {
           return OpResult<Traits>(OpOutput<Traits>::Cancelled());
         }
@@ -166,7 +162,8 @@ class PipeExec {
             if (drain_out.IsFinished()) {
               ++tl.draining;
             }
-            return Pipe(task_ctx, thread_id, drain_id + 1, std::move(drain_out.GetBatch()));
+            return Pipe(task_ctx, thread_id, drain_id + 1,
+                        std::move(drain_out.GetBatch()));
           }
         }
 
@@ -174,8 +171,7 @@ class PipeExec {
       }
 
      private:
-      OpResult<Traits> Pipe(const TaskContext<Traits>& task_ctx,
-                            ThreadId thread_id,
+      OpResult<Traits> Pipe(const TaskContext<Traits>& task_ctx, ThreadId thread_id,
                             std::size_t pipe_id,
                             std::optional<typename Traits::Batch> input) {
         auto& tl = thread_locals_[thread_id];
@@ -208,7 +204,8 @@ class PipeExec {
             return pipe_r;
           }
 
-          assert(out.IsPipeSinkNeedsMore() || out.IsPipeEven() || out.IsSourcePipeHasMore());
+          assert(out.IsPipeSinkNeedsMore() || out.IsPipeEven() ||
+                 out.IsSourcePipeHasMore());
 
           if (out.IsPipeEven() || out.IsSourcePipeHasMore()) {
             if (out.IsSourcePipeHasMore()) {
@@ -225,8 +222,7 @@ class PipeExec {
         return Sink(task_ctx, thread_id, std::move(input));
       }
 
-      OpResult<Traits> Sink(const TaskContext<Traits>& task_ctx,
-                            ThreadId thread_id,
+      OpResult<Traits> Sink(const TaskContext<Traits>& task_ctx, ThreadId thread_id,
                             std::optional<typename Traits::Batch> input) {
         auto sink_r = sink_(task_ctx, thread_id, std::move(input));
         if (!sink_r.ok()) {
@@ -261,8 +257,7 @@ class PipeExec {
     };
 
     Exec(const std::vector<typename Pipeline<Traits>::Channel>& channels,
-         SinkOp<Traits>* sink_op,
-         std::size_t dop)
+         SinkOp<Traits>* sink_op, std::size_t dop)
         : cancelled_(false) {
       channels_.reserve(channels.size());
       for (std::size_t i = 0; i < channels.size(); ++i) {
@@ -274,7 +269,8 @@ class PipeExec {
       }
     }
 
-    Result<Traits, TaskStatus> operator()(const TaskContext<Traits>& task_ctx, TaskId task_id) {
+    Result<Traits, TaskStatus> operator()(const TaskContext<Traits>& task_ctx,
+                                          TaskId task_id) {
       const ThreadId thread_id = static_cast<ThreadId>(task_id);
       if (cancelled_.load()) {
         return Result<Traits, TaskStatus>(TaskStatus::Cancelled());
@@ -408,14 +404,15 @@ class PipelineExecSegment {
     return source_execs;
   }
 
-  opl::PipeExec<Traits> PipeExec() const { return opl::PipeExec<Traits>(channels_, sink_op_, dop_); }
+  opl::PipeExec<Traits> PipeExec() const {
+    return opl::PipeExec<Traits>(channels_, sink_op_, dop_);
+  }
 
  private:
-  PipelineExecSegment(std::string name,
-                      std::vector<typename Pipeline<Traits>::Channel> channels,
-                      std::vector<std::unique_ptr<SourceOp<Traits>>> implicit_sources_keepalive,
-                      SinkOp<Traits>* sink_op,
-                      std::size_t dop)
+  PipelineExecSegment(
+      std::string name, std::vector<typename Pipeline<Traits>::Channel> channels,
+      std::vector<std::unique_ptr<SourceOp<Traits>>> implicit_sources_keepalive,
+      SinkOp<Traits>* sink_op, std::size_t dop)
       : name_(std::move(name)),
         channels_(std::move(channels)),
         implicit_sources_keepalive_(std::move(implicit_sources_keepalive)),
@@ -438,7 +435,8 @@ class PipelineExecSegment {
  * - one `SinkExec` (lifecycle task groups for the sink)
  * - an ordered sequence of `PipelineExecSegment`s
  *
- * The host is responsible for orchestrating ordering between segment/source/sink task groups.
+ * The host is responsible for orchestrating ordering between segment/source/sink task
+ * groups.
  */
 template <OpenPipelineTraits Traits>
 class PipelineExec {
@@ -447,13 +445,13 @@ class PipelineExec {
   std::size_t Dop() const noexcept { return dop_; }
 
   const SinkExec<Traits>& Sink() const noexcept { return sink_; }
-  const std::vector<PipelineExecSegment<Traits>>& Segments() const noexcept { return segments_; }
+  const std::vector<PipelineExecSegment<Traits>>& Segments() const noexcept {
+    return segments_;
+  }
 
  private:
-  PipelineExec(std::string name,
-               SinkExec<Traits> sink,
-               std::vector<PipelineExecSegment<Traits>> segments,
-               std::size_t dop)
+  PipelineExec(std::string name, SinkExec<Traits> sink,
+               std::vector<PipelineExecSegment<Traits>> segments, std::size_t dop)
       : name_(std::move(name)),
         sink_(std::move(sink)),
         segments_(std::move(segments)),
@@ -472,7 +470,8 @@ class PipelineExec {
 namespace detail {
 
 /**
- * @brief Internal compiler that splits a `Pipeline` into an ordered list of `PipelineExecSegment`s.
+ * @brief Internal compiler that splits a `Pipeline` into an ordered list of
+ * `PipelineExecSegment`s.
  *
  * Splitting rule (current):
  * - Only pipe implicit sources (`PipeOp::ImplicitSource()`) create segment boundaries.
@@ -494,8 +493,8 @@ class PipelineCompiler {
     sink.frontend = pipeline_.Sink()->Frontend();
     sink.backend = pipeline_.Sink()->Backend();
 
-    return PipelineExec<Traits>(
-        pipeline_.Name(), std::move(sink), std::move(segments), dop_);
+    return PipelineExec<Traits>(pipeline_.Name(), std::move(sink), std::move(segments),
+                                dop_);
   }
 
  private:
@@ -504,9 +503,9 @@ class PipelineCompiler {
 
     for (auto& channel : pipeline_.Channels()) {
       std::size_t id = 0;
-      topology_.emplace(channel.source_op,
-                        std::pair<std::size_t, typename Pipeline<Traits>::Channel>{id++,
-                                                                                   channel});
+      topology_.emplace(
+          channel.source_op,
+          std::pair<std::size_t, typename Pipeline<Traits>::Channel>{id++, channel});
       sources_keep_order_.push_back(channel.source_op);
 
       for (std::size_t i = 0; i < channel.pipe_ops.size(); ++i) {
@@ -522,10 +521,9 @@ class PipelineCompiler {
                 std::vector<PipeOp<Traits>*>(channel.pipe_ops.begin() + i + 1,
                                              channel.pipe_ops.end())};
 
-            topology_.emplace(
-                implicit_source,
-                std::pair<std::size_t, typename Pipeline<Traits>::Channel>{
-                    id++, std::move(new_channel)});
+            topology_.emplace(implicit_source,
+                              std::pair<std::size_t, typename Pipeline<Traits>::Channel>{
+                                  id++, std::move(new_channel)});
             sources_keep_order_.push_back(implicit_source);
             implicit_sources_keepalive_.emplace(implicit_source,
                                                 std::move(implicit_source_up));
@@ -564,12 +562,11 @@ class PipelineCompiler {
       auto implicit_sources = std::move(segment_info.first);
       auto pipeline_channels = std::move(segment_info.second);
 
-      auto name = "PipelineExecSegment" + std::to_string(id) + "(" + pipeline_.Name() + ")";
-      segment_execs.push_back(PipelineExecSegment<Traits>(std::move(name),
-                                                          std::move(pipeline_channels),
-                                                          std::move(implicit_sources),
-                                                          pipeline_.Sink(),
-                                                          dop_));
+      auto name =
+          "PipelineExecSegment" + std::to_string(id) + "(" + pipeline_.Name() + ")";
+      segment_execs.push_back(PipelineExecSegment<Traits>(
+          std::move(name), std::move(pipeline_channels), std::move(implicit_sources),
+          pipeline_.Sink(), dop_));
     }
 
     return segment_execs;
@@ -578,15 +575,15 @@ class PipelineCompiler {
   const Pipeline<Traits>& pipeline_;
   std::size_t dop_;
 
-  std::unordered_map<SourceOp<Traits>*, std::pair<std::size_t, typename Pipeline<Traits>::Channel>>
+  std::unordered_map<SourceOp<Traits>*,
+                     std::pair<std::size_t, typename Pipeline<Traits>::Channel>>
       topology_;
   std::vector<SourceOp<Traits>*> sources_keep_order_;
   std::unordered_map<SourceOp<Traits>*, std::unique_ptr<SourceOp<Traits>>>
       implicit_sources_keepalive_;
 
-  std::map<std::size_t,
-           std::pair<std::vector<std::unique_ptr<SourceOp<Traits>>>,
-                     std::vector<typename Pipeline<Traits>::Channel>>>
+  std::map<std::size_t, std::pair<std::vector<std::unique_ptr<SourceOp<Traits>>>,
+                                  std::vector<typename Pipeline<Traits>::Channel>>>
       segments_;
 };
 

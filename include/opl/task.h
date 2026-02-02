@@ -14,7 +14,8 @@
 namespace opl {
 
 /**
- * @brief A scheduler-owned "waker" that transitions a previously blocked task back to runnable.
+ * @brief A scheduler-owned "waker" that transitions a previously blocked task back to
+ * runnable.
  *
  * opl operators never block threads directly. Instead, when an operator cannot
  * make progress (e.g., waiting on IO or downstream backpressure), it returns
@@ -53,8 +54,8 @@ template <OpenPipelineTraits Traits>
 using ResumerFactory = std::function<Result<Traits, std::shared_ptr<Resumer>>()>;
 
 template <OpenPipelineTraits Traits>
-using AwaiterFactory =
-    std::function<Result<Traits, std::shared_ptr<Awaiter>>(std::vector<std::shared_ptr<Resumer>>)>;
+using AwaiterFactory = std::function<Result<Traits, std::shared_ptr<Awaiter>>(
+    std::vector<std::shared_ptr<Resumer>>)>;
 
 /**
  * @brief Per-task immutable context + scheduler factory hooks.

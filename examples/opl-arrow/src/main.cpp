@@ -8,8 +8,8 @@
 #include <opl/opl.h>
 #include <opl/pipeline_exec.h>
 
-#include "arrow_traits.h"
 #include "arrow_op.h"
+#include "arrow_traits.h"
 
 namespace {
 
@@ -52,7 +52,7 @@ std::vector<opl_arrow::TaskGroup> CompileTaskGroups(const opl_arrow::Pipeline& p
 }
 
 opl_arrow::Status RunTaskGroup(const opl_arrow::TaskGroup& group,
-                              const opl_arrow::TaskContext& task_ctx) {
+                               const opl_arrow::TaskContext& task_ctx) {
   std::vector<bool> done(group.NumTasks(), false);
   std::size_t done_count = 0;
 
@@ -107,7 +107,7 @@ opl_arrow::Status RunTaskGroup(const opl_arrow::TaskGroup& group,
 }
 
 opl_arrow::Status RunTaskGroups(const std::vector<opl_arrow::TaskGroup>& groups,
-                               const opl_arrow::TaskContext& task_ctx) {
+                                const opl_arrow::TaskContext& task_ctx) {
   for (const auto& group : groups) {
     auto st = RunTaskGroup(group, task_ctx);
     if (!st.ok()) {
@@ -139,9 +139,8 @@ int main() {
   opl_arrow::DelayLastBatchPipe drain_pipe(dop);
   opl_arrow::RowCountSink sink;
 
-  opl_arrow::Pipeline pipeline("P",
-                               {opl_arrow::PipelineChannel{&source, {&pipe, &drain_pipe}}},
-                               &sink);
+  opl_arrow::Pipeline pipeline(
+      "P", {opl_arrow::PipelineChannel{&source, {&pipe, &drain_pipe}}}, &sink);
 
   auto groups = CompileTaskGroups(pipeline, dop);
 
@@ -152,9 +151,8 @@ int main() {
     return opl_arrow::Result<std::shared_ptr<opl::Resumer>>(
         arrow::Status::NotImplemented("resumer_factory not used in demo"));
   };
-  task_ctx.awaiter_factory =
-      [](std::vector<std::shared_ptr<opl::Resumer>>)
-          -> opl_arrow::Result<std::shared_ptr<opl::Awaiter>> {
+  task_ctx.awaiter_factory = [](std::vector<std::shared_ptr<opl::Resumer>>)
+      -> opl_arrow::Result<std::shared_ptr<opl::Awaiter>> {
     return opl_arrow::Result<std::shared_ptr<opl::Awaiter>>(
         arrow::Status::NotImplemented("awaiter_factory not used in demo"));
   };
@@ -165,11 +163,11 @@ int main() {
     return 1;
   }
 
-  std::cout << "total_rows=" << sink.TotalRows() << " source_frontend="
-            << (source.FrontendFinished() ? "yes" : "no") << " source_backend="
-            << (source.BackendFinished() ? "yes" : "no") << " sink_frontend="
-            << (sink.FrontendFinished() ? "yes" : "no") << " sink_backend="
-            << (sink.BackendFinished() ? "yes" : "no") << " drained_batches="
-            << drain_pipe.DrainedBatches() << "\n";
+  std::cout << "total_rows=" << sink.TotalRows()
+            << " source_frontend=" << (source.FrontendFinished() ? "yes" : "no")
+            << " source_backend=" << (source.BackendFinished() ? "yes" : "no")
+            << " sink_frontend=" << (sink.FrontendFinished() ? "yes" : "no")
+            << " sink_backend=" << (sink.BackendFinished() ? "yes" : "no")
+            << " drained_batches=" << drain_pipe.DrainedBatches() << "\n";
   return 0;
 }

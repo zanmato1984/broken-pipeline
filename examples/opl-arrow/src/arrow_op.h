@@ -20,8 +20,7 @@
 namespace opl_arrow {
 
 inline Result<Batch> MakeInt32Batch(const std::shared_ptr<arrow::Schema>& schema,
-                                   std::int32_t start,
-                                   std::int32_t length) {
+                                    std::int32_t start, std::int32_t length) {
   arrow::Int32Builder b;
   for (std::int32_t i = 0; i < length; ++i) {
     auto st = b.Append(start + i);
@@ -126,9 +125,7 @@ class PassThroughPipe final : public PipeOp {
 
   PipelineDrain Drain() override { return {}; }
 
-  std::unique_ptr<SourceOp> ImplicitSource() override {
-    return nullptr;
-  }
+  std::unique_ptr<SourceOp> ImplicitSource() override { return nullptr; }
 };
 
 // A pipe that uses Drain() to flush the last buffered batch at end-of-stream.
@@ -172,9 +169,7 @@ class DelayLastBatchPipe final : public PipeOp {
     };
   }
 
-  std::unique_ptr<SourceOp> ImplicitSource() override {
-    return nullptr;
-  }
+  std::unique_ptr<SourceOp> ImplicitSource() override { return nullptr; }
 
   std::size_t DrainedBatches() const { return drained_batches_.load(); }
 
@@ -234,9 +229,7 @@ class RowCountSink final : public SinkOp {
     return TaskGroup("RowCountSink.Backend", std::move(task), /*num_tasks=*/1);
   }
 
-  std::unique_ptr<SourceOp> ImplicitSource() override {
-    return nullptr;
-  }
+  std::unique_ptr<SourceOp> ImplicitSource() override { return nullptr; }
 
   std::size_t TotalRows() const { return total_rows_.load(); }
   bool FrontendFinished() const { return frontend_finished_.load(); }

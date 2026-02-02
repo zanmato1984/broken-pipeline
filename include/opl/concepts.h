@@ -82,16 +82,14 @@ concept OpenPipelineTraits =
       typename Traits::Context;
       typename Traits::Status;
       typename Result<Traits, int>;
-    } &&
-    std::movable<typename Traits::Batch> &&
+    } && std::movable<typename Traits::Batch> &&
     std::is_object_v<typename Traits::Context> &&
     requires {
       { Traits::Status::OK() } -> std::same_as<typename Traits::Status>;
     } &&
     requires(const typename Traits::Status& status) {
       { status.ok() } -> std::same_as<bool>;
-    } &&
-    std::constructible_from<Result<Traits, int>, int> &&
+    } && std::constructible_from<Result<Traits, int>, int> &&
     std::constructible_from<Result<Traits, int>, typename Traits::Status> &&
     requires(Result<Traits, int> result, const Result<Traits, int>& cresult) {
       { result.ok() } -> std::same_as<bool>;

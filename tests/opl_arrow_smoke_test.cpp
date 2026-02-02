@@ -46,7 +46,8 @@ arrow::Status RunArrowArraySmoke() {
   }
 
   auto int32_array = std::static_pointer_cast<arrow::Int32Array>(array);
-  if (int32_array->Value(0) != 1 || int32_array->Value(1) != 2 || int32_array->Value(2) != 3) {
+  if (int32_array->Value(0) != 1 || int32_array->Value(1) != 2 ||
+      int32_array->Value(2) != 3) {
     return arrow::Status::Invalid("unexpected int32 values");
   }
 

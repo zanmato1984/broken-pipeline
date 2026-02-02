@@ -33,7 +33,8 @@ class CountingSource final : public SourceOp<SmokeTraits> {
       : SourceOp("CountingSource"), next_(dop, 1), n_(n) {}
 
   PipelineSource<SmokeTraits> Source() override {
-    return [this](const TaskContext<SmokeTraits>&, ThreadId thread_id) -> OpResult<SmokeTraits> {
+    return [this](const TaskContext<SmokeTraits>&,
+                  ThreadId thread_id) -> OpResult<SmokeTraits> {
       auto& next = next_[thread_id];
       if (next <= n_) {
         return OpResult<SmokeTraits>(OpOutput<SmokeTraits>::SourcePipeHasMore(next++));
@@ -56,8 +57,7 @@ class MultiplyPipe final : public PipeOp<SmokeTraits> {
   explicit MultiplyPipe(int factor) : PipeOp("MultiplyPipe"), factor_(factor) {}
 
   PipelinePipe<SmokeTraits> Pipe() override {
-    return [this](const TaskContext<SmokeTraits>&,
-                  ThreadId,
+    return [this](const TaskContext<SmokeTraits>&, ThreadId,
                   std::optional<SmokeTraits::Batch> input) -> OpResult<SmokeTraits> {
       if (!input.has_value()) {
         return OpResult<SmokeTraits>(OpOutput<SmokeTraits>::PipeSinkNeedsMore());
@@ -79,8 +79,7 @@ class SumSink final : public SinkOp<SmokeTraits> {
   explicit SumSink(std::size_t dop) : SinkOp("SumSink"), sums_(dop, 0) {}
 
   PipelineSink<SmokeTraits> Sink() override {
-    return [this](const TaskContext<SmokeTraits>&,
-                  ThreadId thread_id,
+    return [this](const TaskContext<SmokeTraits>&, ThreadId thread_id,
                   std::optional<SmokeTraits::Batch> input) -> OpResult<SmokeTraits> {
       if (input.has_value()) {
         sums_[thread_id] += *input;
@@ -171,7 +170,8 @@ TEST(OplPipelineExecSmokeTest, RunsSingleStagePipeline) {
   MultiplyPipe pipe(/*factor=*/2);
   SumSink sink(dop);
 
-  Pipeline<SmokeTraits> pipeline("P", {Pipeline<SmokeTraits>::Channel{&source, {&pipe}}}, &sink);
+  Pipeline<SmokeTraits> pipeline("P", {Pipeline<SmokeTraits>::Channel{&source, {&pipe}}},
+                                 &sink);
 
   auto exec = Compile(pipeline, dop);
   ASSERT_EQ(exec.Segments().size(), 1);
@@ -181,8 +181,8 @@ TEST(OplPipelineExecSmokeTest, RunsSingleStagePipeline) {
   task_ctx.resumer_factory = []() -> SmokeTraits::Result<std::shared_ptr<Resumer>> {
     return arrow::Status::NotImplemented("resumer_factory not used in smoke test");
   };
-  task_ctx.awaiter_factory =
-      [](std::vector<std::shared_ptr<Resumer>>) -> SmokeTraits::Result<std::shared_ptr<Awaiter>> {
+  task_ctx.awaiter_factory = [](std::vector<std::shared_ptr<Resumer>>)
+      -> SmokeTraits::Result<std::shared_ptr<Awaiter>> {
     return arrow::Status::NotImplemented("awaiter_factory not used in smoke test");
   };
 
