@@ -9,16 +9,16 @@
 #include <variant>
 #include <vector>
 
-#include <opl/concepts.h>
+#include <broken_pipeline/concepts.h>
 
-namespace opl {
+namespace broken_pipeline {
 
 class Resumer;
 
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 struct TaskContext;
 
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 class TaskGroup;
 
 /**
@@ -38,7 +38,7 @@ class TaskGroup;
  *   *internal output pending*, so the driver should resume the same operator again
  *   (typically by calling it with `std::nullopt` input).
  */
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 class OpOutput {
  public:
   enum class Code {
@@ -173,7 +173,7 @@ class OpOutput {
  *
  * Operators return `Traits::Result<OpOutput<Traits>>`.
  */
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 using OpResult = Result<Traits, OpOutput<Traits>>;
 
 /**
@@ -187,7 +187,7 @@ using OpResult = Result<Traits, OpOutput<Traits>>;
  * - `Blocked(resumer)` if it needs to wait for an external event (async IO /
  * backpressure)
  */
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 using PipelineSource =
     std::function<OpResult<Traits>(const TaskContext<Traits>&, ThreadId)>;
 
@@ -200,7 +200,7 @@ using PipelineSource =
  *   output from internal state (e.g., after `SOURCE_PIPE_HAS_MORE`, after Blocked, or
  *   after Yield).
  */
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 using PipelinePipe = std::function<OpResult<Traits>(
     const TaskContext<Traits>&, ThreadId, std::optional<typename Traits::Batch>)>;
 
@@ -212,11 +212,11 @@ using PipelinePipe = std::function<OpResult<Traits>(
  *
  * An operator that does not need draining should return an empty `std::function{}`.
  */
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 using PipelineDrain =
     std::function<OpResult<Traits>(const TaskContext<Traits>&, ThreadId)>;
 
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 using PipelineSink = PipelinePipe<Traits>;
 
 /**
@@ -226,10 +226,10 @@ using PipelineSink = PipelinePipe<Traits>;
  * - `Frontend()`: stage work before the source is run (e.g., start scan, open files).
  * - `Backend()`: optional extra stage work after the pipeline stage is done.
  *
- * opl does not impose a specific driver/scheduler for these hooks; the host
+ * broken_pipeline does not impose a specific driver/scheduler for these hooks; the host
  * orchestration decides ordering.
  */
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 class SourceOp {
  public:
   explicit SourceOp(std::string name = {}) : name_(std::move(name)) {}
@@ -258,7 +258,7 @@ class SourceOp {
  * - returning a source means "downstream operators become a new sub-pipeline stage rooted
  * at this implicit source"
  */
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 class PipeOp {
  public:
   explicit PipeOp(std::string name = {}) : name_(std::move(name)) {}
@@ -284,7 +284,7 @@ class PipeOp {
  * `ImplicitSource()` hook which can be used by higher-level orchestration to chain a sink
  * output into a subsequent pipeline.
  */
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 class SinkOp {
  public:
   explicit SinkOp(std::string name = {}) : name_(std::move(name)) {}
@@ -301,4 +301,4 @@ class SinkOp {
   std::string name_;
 };
 
-}  // namespace opl
+}  // namespace broken_pipeline

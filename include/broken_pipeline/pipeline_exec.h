@@ -12,40 +12,40 @@
 #include <utility>
 #include <vector>
 
-#include <opl/concepts.h>
-#include <opl/operator.h>
-#include <opl/pipeline.h>
-#include <opl/task.h>
+#include <broken_pipeline/concepts.h>
+#include <broken_pipeline/operator.h>
+#include <broken_pipeline/pipeline.h>
+#include <broken_pipeline/task.h>
 
-namespace opl {
+namespace broken_pipeline {
 
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 struct SourceExec {
   std::vector<TaskGroup<Traits>> frontend;
   std::optional<TaskGroup<Traits>> backend;
 };
 
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 struct SinkExec {
   std::vector<TaskGroup<Traits>> frontend;
   std::optional<TaskGroup<Traits>> backend;
 };
 
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 class PipelineExecSegment;
 
 /**
  * @brief Encapsulation of the task group that runs a pipeline segment.
  */
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 class PipeExec {
  public:
-  opl::TaskGroup<Traits> TaskGroup() const {
+  broken_pipeline::TaskGroup<Traits> TaskGroup() const {
     Task<Traits> task(std::string{},
                       [exec = exec_](const TaskContext<Traits>& ctx, TaskId task_id) {
                         return (*exec)(ctx, task_id);
                       });
-    return opl::TaskGroup<Traits>(std::string{}, std::move(task), dop_);
+    return broken_pipeline::TaskGroup<Traits>(std::string{}, std::move(task), dop_);
   }
 
  private:
@@ -374,7 +374,7 @@ class PipeExec {
 };
 
 namespace detail {
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 class PipelineCompiler;
 }  // namespace detail
 
@@ -384,7 +384,7 @@ class PipelineCompiler;
  * A `PipelineExecSegment` is a small-step, multiplexed runtime over one or more channels
  * (sources feeding the shared sink). Segments are executed in sequence order by the host.
  */
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 class PipelineExecSegment {
  public:
   const std::string& Name() const noexcept { return name_; }
@@ -413,8 +413,8 @@ class PipelineExecSegment {
     return source_execs;
   }
 
-  opl::PipeExec<Traits> PipeExec() const {
-    return opl::PipeExec<Traits>(channels_, sink_op_, dop_);
+  broken_pipeline::PipeExec<Traits> PipeExec() const {
+    return broken_pipeline::PipeExec<Traits>(channels_, sink_op_, dop_);
   }
 
  private:
@@ -447,7 +447,7 @@ class PipelineExecSegment {
  * The host is responsible for orchestrating ordering between segment/source/sink task
  * groups.
  */
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 class PipelineExec {
  public:
   const std::string& Name() const noexcept { return name_; }
@@ -487,7 +487,7 @@ namespace detail {
  * - When a pipe provides an implicit source, the downstream pipe chain becomes a new
  *   channel rooted at that implicit source in a later segment.
  */
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 class PipelineCompiler {
  public:
   PipelineCompiler(const Pipeline<Traits>& pipeline, std::size_t dop)
@@ -598,9 +598,9 @@ class PipelineCompiler {
 
 }  // namespace detail
 
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 PipelineExec<Traits> Compile(const Pipeline<Traits>& pipeline, std::size_t dop) {
   return detail::PipelineCompiler<Traits>(pipeline, dop).Compile();
 }
 
-}  // namespace opl
+}  // namespace broken_pipeline

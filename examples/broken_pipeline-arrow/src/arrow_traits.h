@@ -3,40 +3,41 @@
 /**
  * @file arrow_traits.h
  *
- * @brief `broken_pipeline` Traits for unit tests (Arrow Status/Result).
+ * @brief Example `broken_pipeline` Traits implementation backed by Apache Arrow.
  *
  * broken_pipeline does not define its own Status/Result type. Instead, all broken_pipeline APIs
  * are parameterized by `Traits::Status` and `Traits::Result<T>`.
  *
- * In this test Traits:
+ * In this example:
  * - `Status` maps to `arrow::Status`
  * - `Result<T>` maps to `arrow::Result<T>`
- * - `Batch` maps to `int`
+ * - `Batch` maps to `std::shared_ptr<arrow::RecordBatch>`
  */
 
 #include <memory>
 
+#include <arrow/record_batch.h>
 #include <arrow/result.h>
 #include <arrow/status.h>
 
 #include <broken_pipeline/broken_pipeline.h>
 
-namespace broken_pipeline_test {
+namespace broken_pipeline_arrow {
 
 struct Context {
-  const char* query_name = "broken_pipeline-tests";
+  const char* query_name = "broken_pipeline-arrow-demo";
 };
 
 struct Traits {
-  using Batch = int;
-  using Context = broken_pipeline_test::Context;
+  using Batch = std::shared_ptr<arrow::RecordBatch>;
+  using Context = broken_pipeline_arrow::Context;
   using Status = arrow::Status;
 
   template <class T>
   using Result = arrow::Result<T>;
 };
 
-// Convenience aliases for tests so callers don't have to repeat the plumbing.
+// Convenience aliases for the demo so other headers don't have to repeat the plumbing.
 using Batch = Traits::Batch;
 using Status = Traits::Status;
 
@@ -51,8 +52,6 @@ using TaskId = broken_pipeline::TaskId;
 using ThreadId = broken_pipeline::ThreadId;
 using TaskStatus = broken_pipeline::TaskStatus;
 using TaskHint = broken_pipeline::TaskHint;
-using Resumer = broken_pipeline::Resumer;
-using Awaiter = broken_pipeline::Awaiter;
 
 using OpOutput = broken_pipeline::OpOutput<Traits>;
 using OpResult = broken_pipeline::OpResult<Traits>;
@@ -68,4 +67,4 @@ using SinkOp = broken_pipeline::SinkOp<Traits>;
 using Pipeline = broken_pipeline::Pipeline<Traits>;
 using PipelineChannel = Pipeline::Channel;
 
-}  // namespace broken_pipeline_test
+}  // namespace broken_pipeline_arrow

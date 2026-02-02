@@ -12,7 +12,7 @@
 #include <utility>
 #include <vector>
 
-namespace opl_test {
+namespace broken_pipeline_test {
 
 namespace {
 
@@ -379,7 +379,7 @@ Status RunSingleTaskToDone(const TaskGroup& group, const TaskContext& task_ctx,
 
 }  // namespace
 
-TEST(OplPipeExecTest, EmptySourceFinishesWithoutCallingSink) {
+TEST(BrokenPipelinePipeExecTest, EmptySourceFinishesWithoutCallingSink) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces);
@@ -401,7 +401,7 @@ TEST(OplPipeExecTest, EmptySourceFinishesWithoutCallingSink) {
   EXPECT_EQ(traces[0], (Trace{"Source", "Source", std::nullopt, "FINISHED"}));
 }
 
-TEST(OplPipeExecTest, OnePass) {
+TEST(BrokenPipelinePipeExecTest, OnePass) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -432,7 +432,7 @@ TEST(OplPipeExecTest, OnePass) {
   EXPECT_EQ(traces[2], (Trace{"Source", "Source", std::nullopt, "FINISHED"}));
 }
 
-TEST(OplPipeExecTest, PipeNeedsMoreGoesBackToSource) {
+TEST(BrokenPipelinePipeExecTest, PipeNeedsMoreGoesBackToSource) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -467,7 +467,7 @@ TEST(OplPipeExecTest, PipeNeedsMoreGoesBackToSource) {
   EXPECT_EQ(traces[4], (Trace{"Sink", "Sink", Batch{2}, "PIPE_SINK_NEEDS_MORE"}));
 }
 
-TEST(OplPipeExecTest, PipeHasMoreResumesPipeBeforeSource) {
+TEST(BrokenPipelinePipeExecTest, PipeHasMoreResumesPipeBeforeSource) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -508,7 +508,7 @@ TEST(OplPipeExecTest, PipeHasMoreResumesPipeBeforeSource) {
   EXPECT_EQ(traces[5], (Trace{"Source", "Source", std::nullopt, "FINISHED"}));
 }
 
-TEST(OplPipeExecTest, PipeYieldHandshake) {
+TEST(BrokenPipelinePipeExecTest, PipeYieldHandshake) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -546,7 +546,7 @@ TEST(OplPipeExecTest, PipeYieldHandshake) {
   EXPECT_EQ(traces[2], (Trace{"Pipe", "Pipe", std::nullopt, "PIPE_YIELD_BACK"}));
 }
 
-TEST(OplPipeExecTest, PipeBlockedResumesWithNullInput) {
+TEST(BrokenPipelinePipeExecTest, PipeBlockedResumesWithNullInput) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -590,7 +590,7 @@ TEST(OplPipeExecTest, PipeBlockedResumesWithNullInput) {
   EXPECT_EQ(traces[1], (Trace{"Pipe", "Pipe", Batch{1}, "BLOCKED"}));
 }
 
-TEST(OplPipeExecTest, SinkBackpressureResumesWithNullInput) {
+TEST(BrokenPipelinePipeExecTest, SinkBackpressureResumesWithNullInput) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -633,7 +633,7 @@ TEST(OplPipeExecTest, SinkBackpressureResumesWithNullInput) {
   EXPECT_EQ(traces[2], (Trace{"Sink", "Sink", std::nullopt, "BLOCKED"}));
 }
 
-TEST(OplPipeExecTest, DrainProducesTailOutput) {
+TEST(BrokenPipelinePipeExecTest, DrainProducesTailOutput) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces);
@@ -667,7 +667,7 @@ TEST(OplPipeExecTest, DrainProducesTailOutput) {
   EXPECT_EQ(traces[4], (Trace{"Sink", "Sink", Batch{2}, "PIPE_SINK_NEEDS_MORE"}));
 }
 
-TEST(OplPipeExecTest, MultiChannelAllBlockedReturnsTaskBlocked) {
+TEST(BrokenPipelinePipeExecTest, MultiChannelAllBlockedReturnsTaskBlocked) {
   std::vector<Trace> traces;
 
   ScriptedSource source1("Source1", {{BlockedStep()}}, &traces);
@@ -689,7 +689,7 @@ TEST(OplPipeExecTest, MultiChannelAllBlockedReturnsTaskBlocked) {
   ASSERT_EQ(awaiter->Resumers().size(), 2);
 }
 
-TEST(OplPipeExecTest, ErrorCancelsSubsequentCalls) {
+TEST(BrokenPipelinePipeExecTest, ErrorCancelsSubsequentCalls) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source", {{ErrorStep(Status::UnknownError("boom"))}}, &traces);
@@ -709,4 +709,4 @@ TEST(OplPipeExecTest, ErrorCancelsSubsequentCalls) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-}  // namespace opl_test
+}  // namespace broken_pipeline_test

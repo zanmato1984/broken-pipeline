@@ -9,15 +9,15 @@
 #include <utility>
 #include <vector>
 
-#include <opl/concepts.h>
+#include <broken_pipeline/concepts.h>
 
-namespace opl {
+namespace broken_pipeline {
 
 /**
  * @brief A scheduler-owned "waker" that transitions a previously blocked task back to
  * runnable.
  *
- * opl operators never block threads directly. Instead, when an operator cannot
+ * broken_pipeline operators never block threads directly. Instead, when an operator cannot
  * make progress (e.g., waiting on IO or downstream backpressure), it returns
  * `OpOutput::Blocked(resumer)`.
  *
@@ -37,23 +37,23 @@ class Resumer {
 /**
  * @brief A scheduler-owned wait handle for one or more resumers.
  *
- * `Awaiter` is intentionally opaque to opl core. The scheduler decides how
+ * `Awaiter` is intentionally opaque to broken_pipeline core. The scheduler decides how
  * to block (or suspend) until a resumer (or group of resumers) is resumed.
  *
  * For example, a synchronous scheduler may implement an awaiter using condition
  * variables, while an async scheduler may implement it using futures/coroutines.
  *
- * opl only stores `std::shared_ptr<Awaiter>` inside `TaskStatus::Blocked(...)`.
+ * broken_pipeline only stores `std::shared_ptr<Awaiter>` inside `TaskStatus::Blocked(...)`.
  */
 class Awaiter {
  public:
   virtual ~Awaiter() = default;
 };
 
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 using ResumerFactory = std::function<Result<Traits, std::shared_ptr<Resumer>>()>;
 
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 using AwaiterFactory = std::function<Result<Traits, std::shared_ptr<Awaiter>>(
     std::vector<std::shared_ptr<Resumer>>)>;
 
@@ -61,7 +61,7 @@ using AwaiterFactory = std::function<Result<Traits, std::shared_ptr<Awaiter>>(
  * @brief Per-task immutable context + scheduler factory hooks.
  *
  * A scheduler is expected to create one `TaskContext` and pass it to all task instances
- * in a `TaskGroup`. opl itself does not construct these.
+ * in a `TaskGroup`. broken_pipeline itself does not construct these.
  *
  * - `context` is an optional user-defined pointer to query-level state (can be null).
  * - The factories provide scheduler-specific primitives for blocking and resumption.
@@ -70,7 +70,7 @@ using AwaiterFactory = std::function<Result<Traits, std::shared_ptr<Awaiter>>(
  * - waiting/suspending using the awaiter
  * - rescheduling the task when resumed
  */
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 struct TaskContext {
   const typename Traits::Context* context = nullptr;
   ResumerFactory<Traits> resumer_factory;
@@ -80,7 +80,7 @@ struct TaskContext {
 /**
  * @brief The control protocol between a Task and a Scheduler.
  *
- * opl tasks are **small-step and repeatable**: a scheduler repeatedly invokes
+ * broken_pipeline tasks are **small-step and repeatable**: a scheduler repeatedly invokes
  * a task until it returns `Finished`/`Cancelled` or an error.
  *
  * - `Continue`: still running; scheduler may invoke again immediately or later.
@@ -153,7 +153,7 @@ class TaskStatus {
 /**
  * @brief Scheduling hint for a task instance.
  *
- * opl core does not ship a scheduler, but some schedulers may use this hint to
+ * broken_pipeline core does not ship a scheduler, but some schedulers may use this hint to
  * choose between CPU vs IO pools or adjust priorities.
  */
 struct TaskHint {
@@ -167,14 +167,14 @@ struct TaskHint {
 /**
  * @brief Task instance id within a group.
  *
- * opl uses a uniform `std::size_t` task id. It is typically interpreted as a
+ * broken_pipeline uses a uniform `std::size_t` task id. It is typically interpreted as a
  * lane index for operators.
  */
 
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 using TaskResult = Result<Traits, TaskStatus>;
 
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 class Task {
  public:
   /**
@@ -208,7 +208,7 @@ class Task {
   TaskHint hint_;
 };
 
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 class Continuation {
  public:
   /**
@@ -236,7 +236,7 @@ class Continuation {
   TaskHint hint_;
 };
 
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 class TaskGroup {
  public:
   /**
@@ -245,7 +245,7 @@ class TaskGroup {
    * - `num_tasks` defines the group parallelism (often equals pipeline DOP).
    * - If provided, `cont` runs exactly once after all task instances finish successfully.
    *
-   * opl does not provide a scheduler, so the exact ordering/thread of
+   * broken_pipeline does not provide a scheduler, so the exact ordering/thread of
    * `cont` is scheduler-defined.
    */
   TaskGroup(std::string name, Task<Traits> task, std::size_t num_tasks,
@@ -270,4 +270,4 @@ class TaskGroup {
   std::optional<Continuation<Traits>> cont_;
 };
 
-}  // namespace opl
+}  // namespace broken_pipeline

@@ -1,6 +1,6 @@
 #include "arrow_traits.h"
 
-#include <opl/task.h>
+#include <broken_pipeline/task.h>
 
 #include <arrow/status.h>
 #include <arrow/testing/gtest_util.h>
@@ -9,15 +9,15 @@
 
 #include <memory>
 
-namespace opl_test {
+namespace broken_pipeline_test {
 
 namespace {
 
-class NoopAwaiter final : public opl::Awaiter {};
+class NoopAwaiter final : public broken_pipeline::Awaiter {};
 
 }  // namespace
 
-TEST(OplTaskTest, BasicTask) {
+TEST(BrokenPipelineTaskTest, BasicTask) {
   Task task("BasicTask",
             [](const TaskContext&, TaskId) { return TaskStatus::Finished(); });
 
@@ -27,8 +27,8 @@ TEST(OplTaskTest, BasicTask) {
   ASSERT_TRUE(res->IsFinished()) << res->ToString();
 }
 
-TEST(OplTaskTest, BasicContinuation) {
-  opl::Continuation<Traits> cont(
+TEST(BrokenPipelineTaskTest, BasicContinuation) {
+  broken_pipeline::Continuation<Traits> cont(
       "BasicContinuation", [](const TaskContext&) { return TaskStatus::Finished(); });
 
   TaskContext ctx;
@@ -37,7 +37,7 @@ TEST(OplTaskTest, BasicContinuation) {
   ASSERT_TRUE(res->IsFinished()) << res->ToString();
 }
 
-TEST(OplTaskTest, TaskStatus) {
+TEST(BrokenPipelineTaskTest, TaskStatus) {
   EXPECT_TRUE(TaskStatus::Continue().IsContinue());
   EXPECT_TRUE(TaskStatus::Yield().IsYield());
   EXPECT_TRUE(TaskStatus::Finished().IsFinished());
@@ -55,9 +55,9 @@ TEST(OplTaskTest, TaskStatus) {
   EXPECT_EQ(blocked.ToString(), "BLOCKED");
 }
 
-TEST(OplTaskTest, BasicTaskGroup) {
+TEST(BrokenPipelineTaskTest, BasicTaskGroup) {
   Task task("T", [](const TaskContext&, TaskId) { return TaskStatus::Finished(); });
-  opl::Continuation<Traits> cont(
+  broken_pipeline::Continuation<Traits> cont(
       "C", [](const TaskContext&) { return TaskStatus::Finished(); });
 
   TaskGroup tg("G", task, /*num_tasks=*/1, cont);
@@ -68,9 +68,9 @@ TEST(OplTaskTest, BasicTaskGroup) {
   ASSERT_EQ(tg.GetContinuation()->Name(), "C");
 }
 
-TEST(OplTaskTest, TaskHintDefaultsToCpu) {
+TEST(BrokenPipelineTaskTest, TaskHintDefaultsToCpu) {
   Task t("T", [](const TaskContext&, TaskId) { return TaskStatus::Finished(); });
   EXPECT_EQ(t.Hint().type, TaskHint::Type::CPU);
 }
 
-}  // namespace opl_test
+}  // namespace broken_pipeline_test

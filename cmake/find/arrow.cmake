@@ -1,36 +1,36 @@
 include_guard(GLOBAL)
 
-# opl Arrow integration (tests-only for now).
+# broken_pipeline Arrow integration (tests-only for now).
 #
 # Goals:
 # - Support both "system" and "bundled" Arrow (bundled is Arrow 22.x only).
-# - Use ArrowTesting for gtest utilities when building opl tests.
+# - Use ArrowTesting for gtest utilities when building broken_pipeline tests.
 # - When Arrow is built as a subproject, compute include directories so our test targets can
 #   include Arrow's generated headers reliably.
 
-set(_opl_allowed_arrow_providers bundled system)
-if(NOT OPL_ARROW_PROVIDER IN_LIST _opl_allowed_arrow_providers)
+set(_broken_pipeline_allowed_arrow_providers bundled system)
+if(NOT BROKEN_PIPELINE_ARROW_PROVIDER IN_LIST _broken_pipeline_allowed_arrow_providers)
   message(
     FATAL_ERROR
-    "Invalid OPL_ARROW_PROVIDER='${OPL_ARROW_PROVIDER}'. Allowed: bundled|system")
+    "Invalid BROKEN_PIPELINE_ARROW_PROVIDER='${BROKEN_PIPELINE_ARROW_PROVIDER}'. Allowed: bundled|system")
 endif()
 
-set(OPL_ARROW_CORE_TARGET "")
-set(OPL_ARROW_COMPUTE_TARGET "")
-set(OPL_ARROW_TESTING_TARGET "")
-set(OPL_ARROW_INCLUDE_DIRS "")
+set(BROKEN_PIPELINE_ARROW_CORE_TARGET "")
+set(BROKEN_PIPELINE_ARROW_COMPUTE_TARGET "")
+set(BROKEN_PIPELINE_ARROW_TESTING_TARGET "")
+set(BROKEN_PIPELINE_ARROW_INCLUDE_DIRS "")
 
-function(_opl_select_target OUT_VAR)
-  foreach(_opl_candidate IN LISTS ARGN)
-    if(TARGET "${_opl_candidate}")
-      set(${OUT_VAR} "${_opl_candidate}" PARENT_SCOPE)
+function(_broken_pipeline_select_target OUT_VAR)
+  foreach(_broken_pipeline_candidate IN LISTS ARGN)
+    if(TARGET "${_broken_pipeline_candidate}")
+      set(${OUT_VAR} "${_broken_pipeline_candidate}" PARENT_SCOPE)
       return()
     endif()
   endforeach()
   message(FATAL_ERROR "Failed to select a required CMake target")
 endfunction()
 
-if(OPL_ARROW_PROVIDER STREQUAL "system")
+if(BROKEN_PIPELINE_ARROW_PROVIDER STREQUAL "system")
   message(STATUS "Using system Arrow")
 
   set(Arrow_FIND_QUIETLY 0)
@@ -39,23 +39,24 @@ if(OPL_ARROW_PROVIDER STREQUAL "system")
   find_package(ArrowTesting CONFIG REQUIRED)
   find_package(ArrowCompute CONFIG QUIET)
 
-  _opl_select_target(OPL_ARROW_CORE_TARGET Arrow::arrow_shared arrow_shared Arrow::arrow arrow)
-  _opl_select_target(
-    OPL_ARROW_COMPUTE_TARGET
+  _broken_pipeline_select_target(
+    BROKEN_PIPELINE_ARROW_CORE_TARGET Arrow::arrow_shared arrow_shared Arrow::arrow arrow)
+  _broken_pipeline_select_target(
+    BROKEN_PIPELINE_ARROW_COMPUTE_TARGET
     ArrowCompute::arrow_compute_shared
     arrow_compute_shared
     ArrowCompute::arrow_compute
     arrow_compute
     Arrow::arrow_compute_shared
     Arrow::arrow_compute)
-  _opl_select_target(
-    OPL_ARROW_TESTING_TARGET
+  _broken_pipeline_select_target(
+    BROKEN_PIPELINE_ARROW_TESTING_TARGET
     ArrowTesting::arrow_testing_shared
     arrow_testing_shared
     ArrowTesting::arrow_testing
     arrow_testing)
 
-  set(OPL_ARROW_INCLUDE_DIRS "")
+  set(BROKEN_PIPELINE_ARROW_INCLUDE_DIRS "")
   return()
 endif()
 
@@ -124,55 +125,57 @@ set(ARROW_WITH_ZSTD OFF CACHE BOOL "" FORCE)
 
 include(CheckCXXCompilerFlag)
 
-set(_opl_arrow_extra_cxx_flags "")
+set(_broken_pipeline_arrow_extra_cxx_flags "")
 
-function(_opl_maybe_append_cxx_flag FLAG)
-  string(REPLACE "-" "_" _opl_flag_var "${FLAG}")
-  string(REPLACE "+" "x" _opl_flag_var "${_opl_flag_var}")
-  set(_opl_check_var "OPL_SUPPORTS_${_opl_flag_var}")
+function(_broken_pipeline_maybe_append_cxx_flag FLAG)
+  string(REPLACE "-" "_" _broken_pipeline_flag_var "${FLAG}")
+  string(REPLACE "+" "x" _broken_pipeline_flag_var "${_broken_pipeline_flag_var}")
+  set(_broken_pipeline_check_var "BROKEN_PIPELINE_SUPPORTS_${_broken_pipeline_flag_var}")
 
-  check_cxx_compiler_flag("${FLAG}" "${_opl_check_var}")
-  if(${_opl_check_var})
-    set(_opl_arrow_extra_cxx_flags "${_opl_arrow_extra_cxx_flags} ${FLAG}" PARENT_SCOPE)
+  check_cxx_compiler_flag("${FLAG}" "${_broken_pipeline_check_var}")
+  if(${_broken_pipeline_check_var})
+    set(_broken_pipeline_arrow_extra_cxx_flags "${_broken_pipeline_arrow_extra_cxx_flags} ${FLAG}"
+        PARENT_SCOPE)
   endif()
 endfunction()
 
-_opl_maybe_append_cxx_flag("-Wno-thread-safety-analysis")
-_opl_maybe_append_cxx_flag("-Wno-non-virtual-dtor")
-_opl_maybe_append_cxx_flag("-Wno-deprecated-declarations")
-_opl_maybe_append_cxx_flag("-Wno-unused-but-set-variable")
-_opl_maybe_append_cxx_flag("-Wno-implicit-const-int-float-conversion")
-_opl_maybe_append_cxx_flag("-Wno-non-c-typedef-for-linkage")
-_opl_maybe_append_cxx_flag("-Wno-unused-function")
-_opl_maybe_append_cxx_flag("-Wno-unused-private-field")
+_broken_pipeline_maybe_append_cxx_flag("-Wno-thread-safety-analysis")
+_broken_pipeline_maybe_append_cxx_flag("-Wno-non-virtual-dtor")
+_broken_pipeline_maybe_append_cxx_flag("-Wno-deprecated-declarations")
+_broken_pipeline_maybe_append_cxx_flag("-Wno-unused-but-set-variable")
+_broken_pipeline_maybe_append_cxx_flag("-Wno-implicit-const-int-float-conversion")
+_broken_pipeline_maybe_append_cxx_flag("-Wno-non-c-typedef-for-linkage")
+_broken_pipeline_maybe_append_cxx_flag("-Wno-unused-function")
+_broken_pipeline_maybe_append_cxx_flag("-Wno-unused-private-field")
 
-set(ARROW_CXXFLAGS "${ARROW_CXXFLAGS} ${_opl_arrow_extra_cxx_flags}" CACHE STRING "" FORCE)
+set(ARROW_CXXFLAGS "${ARROW_CXXFLAGS} ${_broken_pipeline_arrow_extra_cxx_flags}" CACHE STRING "" FORCE)
 
 FetchContent_MakeAvailable(arrow)
 
-set(_opl_arrow_cpp_source_dir "${arrow_SOURCE_DIR}")
-if(EXISTS "${_opl_arrow_cpp_source_dir}/cpp/src/arrow/api.h")
-  set(_opl_arrow_cpp_source_dir "${_opl_arrow_cpp_source_dir}/cpp")
-elseif(NOT EXISTS "${_opl_arrow_cpp_source_dir}/src/arrow/api.h")
+set(_broken_pipeline_arrow_cpp_source_dir "${arrow_SOURCE_DIR}")
+if(EXISTS "${_broken_pipeline_arrow_cpp_source_dir}/cpp/src/arrow/api.h")
+  set(_broken_pipeline_arrow_cpp_source_dir "${_broken_pipeline_arrow_cpp_source_dir}/cpp")
+elseif(NOT EXISTS "${_broken_pipeline_arrow_cpp_source_dir}/src/arrow/api.h")
   message(
     FATAL_ERROR
     "Unexpected Arrow source layout at '${arrow_SOURCE_DIR}': can't locate cpp/src/arrow/api.h")
 endif()
 
-set(OPL_ARROW_INCLUDE_DIRS
-    "${_opl_arrow_cpp_source_dir}/src"
-    "${_opl_arrow_cpp_source_dir}/src/generated"
+set(BROKEN_PIPELINE_ARROW_INCLUDE_DIRS
+    "${_broken_pipeline_arrow_cpp_source_dir}/src"
+    "${_broken_pipeline_arrow_cpp_source_dir}/src/generated"
     "${arrow_BINARY_DIR}/src")
 
-_opl_select_target(OPL_ARROW_CORE_TARGET Arrow::arrow_shared arrow_shared Arrow::arrow arrow)
-_opl_select_target(
-  OPL_ARROW_COMPUTE_TARGET
+_broken_pipeline_select_target(
+  BROKEN_PIPELINE_ARROW_CORE_TARGET Arrow::arrow_shared arrow_shared Arrow::arrow arrow)
+_broken_pipeline_select_target(
+  BROKEN_PIPELINE_ARROW_COMPUTE_TARGET
   ArrowCompute::arrow_compute_shared
   arrow_compute_shared
   ArrowCompute::arrow_compute
   arrow_compute)
-_opl_select_target(
-  OPL_ARROW_TESTING_TARGET
+_broken_pipeline_select_target(
+  BROKEN_PIPELINE_ARROW_TESTING_TARGET
   ArrowTesting::arrow_testing_shared
   arrow_testing_shared
   ArrowTesting::arrow_testing

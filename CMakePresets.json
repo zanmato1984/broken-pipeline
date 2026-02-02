@@ -21,8 +21,8 @@
       "inherits": "base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "OPL_BUILD_TESTS": "ON",
-        "OPL_ARROW_PROVIDER": "bundled"
+        "BROKEN_PIPELINE_BUILD_TESTS": "ON",
+        "BROKEN_PIPELINE_ARROW_PROVIDER": "bundled"
       }
     }
   ],

@@ -1,8 +1,8 @@
-# opl
+# broken_pipeline
 
 Header-only protocol/interfaces extracted from Ara’s execution model.
 
-opl is a **C++20**, **traits-based**, **data-structure-agnostic** set of building
+broken_pipeline is a **C++20**, **traits-based**, **data-structure-agnostic** set of building
 blocks for implementing a batch-at-a-time execution engine:
 
 - Operators expose small-step, re-entrant callbacks that a pipeline driver can resume.
@@ -28,30 +28,30 @@ What this project intentionally does **not** provide:
 
 ## The Layered Model (Operator → Pipeline → Task → Scheduler)
 
-opl deliberately separates concerns:
+broken_pipeline deliberately separates concerns:
 
-All public types live directly in `namespace opl` (no sub-namespaces); headers are
+All public types live directly in `namespace broken_pipeline` (no sub-namespaces); headers are
 organized as a small set of top-level files:
 
-1) **Operator protocol** (`include/opl/operator.h`)
+1) **Operator protocol** (`include/broken_pipeline/operator.h`)
 - “How do I transform/consume/produce batches?”
 - Exposes a small set of flow-control signals (`OpOutput`).
 
-2) **Pipeline driver** (`include/opl/pipeline.h` + `include/opl/pipeline_exec.h`)
+2) **Pipeline driver** (`include/broken_pipeline/pipeline.h` + `include/broken_pipeline/pipeline_exec.h`)
 - “How do I wire Source/Pipe/Sink together and resume them correctly?”
 - Encodes “drain after upstream finished”, “resume an operator that has more internal
   output”, “propagate blocked/yield” as a state machine.
 
-3) **Task protocol** (`include/opl/task.h`)
+3) **Task protocol** (`include/broken_pipeline/task.h`)
 - “How do I package execution into schedulable units?”
 - Exposes `TaskStatus` (`Continue/Blocked/Yield/Finished/Cancelled`) for scheduler control.
 
 4) **Scheduler (yours)**
 - “Where/when do tasks run? How do we wait? How do we handle Yield?”
-- opl provides the semantic hooks (`Resumer`/`Awaiter`) but does not implement
+- broken_pipeline provides the semantic hooks (`Resumer`/`Awaiter`) but does not implement
   any scheduling policy or concurrency runtime.
 
-This architecture is what lets opl be both:
+This architecture is what lets broken_pipeline be both:
 - highly generic (no Arrow / no Folly / no concrete data types)
 - scheduler-agnostic (sync or async, cooperative or preemptive)
 
@@ -59,7 +59,7 @@ This architecture is what lets opl be both:
 
 ### TaskStatus (Task → Scheduler)
 
-Defined in `include/opl/task.h`:
+Defined in `include/broken_pipeline/task.h`:
 
 - `Continue`: task is still running; scheduler may invoke again.
 - `Blocked(awaiter)`: task cannot proceed until awaited condition is resumed.
@@ -69,7 +69,7 @@ Defined in `include/opl/task.h`:
 
 ### OpOutput (Operator → Pipeline driver)
 
-Defined in `include/opl/operator.h`:
+Defined in `include/broken_pipeline/operator.h`:
 
 The most important distinction:
 - `PIPE_SINK_NEEDS_MORE`: operator needs more upstream input.
@@ -85,7 +85,7 @@ Other notable signals:
 
 ## Usage
 
-`opl` is fully generic via a user-defined `Traits` type (checked by C++20 concepts).
+`broken_pipeline` is fully generic via a user-defined `Traits` type (checked by C++20 concepts).
 
 Your `Traits` must define:
 - `using Batch = ...;` (movable)
@@ -98,13 +98,13 @@ Required surface:
 - `result.ok()`, `result.status()`, and `result.ValueOrDie()` (lvalue/const/rvalue)
 - `Result<T>(T)` for success and `Result<T>(Status)` for error
 
-opl defines `opl::TaskId` and `opl::ThreadId` as `std::size_t`,
+broken_pipeline defines `broken_pipeline::TaskId` and `broken_pipeline::ThreadId` as `std::size_t`,
 so you do not provide id types in your `Traits`.
 
 Then include:
 
 ```cpp
-#include <opl/opl.h>
+#include <broken_pipeline/broken_pipeline.h>
 ```
 
 ## Minimal Traits Example (no dependencies)
@@ -154,7 +154,7 @@ struct Traits {
 
 ## Operator Skeleton
 
-All operator interfaces live in `namespace opl` (defined in `include/opl/operator.h`):
+All operator interfaces live in `namespace broken_pipeline` (defined in `include/broken_pipeline/operator.h`):
 - `SourceOp<Traits>` → `Source()`, `Frontend()`, `Backend()`
 - `PipeOp<Traits>` → `Pipe()`, `Drain()`, `ImplicitSource()`
 - `SinkOp<Traits>` → `Sink()`, `Frontend()`, `Backend()`, `ImplicitSource()`
@@ -168,13 +168,14 @@ Key conventions:
 
 ## Driving a Pipeline
 
-opl ships a small reference "compiler" that splits a `Pipeline` into executable stages, but
+broken_pipeline ships a small reference "compiler" that splits a `Pipeline` into executable stages, but
 the host is still responsible for orchestration and scheduling.
 
 Reference implementations live in:
-- `include/opl/pipeline_exec.h`: `opl::Compile(pipeline, dop)` compiles a `Pipeline` into a single
-  `opl::PipelineExec` (with an ordered list of `PipelineExecSegment`s)
-- `include/opl/pipeline_exec.h`: `PipelineExecSegment` / `PipeExec` small-step runtime for each segment
+- `include/broken_pipeline/pipeline_exec.h`: `broken_pipeline::Compile(pipeline, dop)` compiles a
+  `Pipeline` into a single `broken_pipeline::PipelineExec` (with an ordered list of
+  `PipelineExecSegment`s)
+- `include/broken_pipeline/pipeline_exec.h`: `PipelineExecSegment` / `PipeExec` small-step runtime for each segment
 
 ## Notes on Lifetime and Threading
 
@@ -194,4 +195,4 @@ cmake --build build
 
 ## Examples
 
-- `examples/opl-arrow`: Apache Arrow based adoption example (requires Arrow C++ CMake package).
+- `examples/broken_pipeline-arrow`: Apache Arrow based adoption example (requires Arrow C++ CMake package).

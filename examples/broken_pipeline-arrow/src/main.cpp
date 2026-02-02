@@ -5,19 +5,19 @@
 
 #include <arrow/status.h>
 
-#include <opl/opl.h>
-#include <opl/pipeline_exec.h>
+#include <broken_pipeline/broken_pipeline.h>
+#include <broken_pipeline/pipeline_exec.h>
 
 #include "arrow_op.h"
 #include "arrow_traits.h"
 
 namespace {
 
-std::vector<opl_arrow::TaskGroup> CompileTaskGroups(const opl_arrow::Pipeline& pipeline,
-                                                    std::size_t dop) {
-  auto exec = opl::Compile(pipeline, dop);
+std::vector<broken_pipeline_arrow::TaskGroup> CompileTaskGroups(
+    const broken_pipeline_arrow::Pipeline& pipeline, std::size_t dop) {
+  auto exec = broken_pipeline::Compile(pipeline, dop);
 
-  std::vector<opl_arrow::TaskGroup> task_groups;
+  std::vector<broken_pipeline_arrow::TaskGroup> task_groups;
   task_groups.reserve(exec.Segments().size() * 2 + 3);
 
   for (const auto& segment : exec.Segments()) {
@@ -51,13 +51,13 @@ std::vector<opl_arrow::TaskGroup> CompileTaskGroups(const opl_arrow::Pipeline& p
   return task_groups;
 }
 
-opl_arrow::Status RunTaskGroup(const opl_arrow::TaskGroup& group,
-                               const opl_arrow::TaskContext& task_ctx) {
+broken_pipeline_arrow::Status RunTaskGroup(const broken_pipeline_arrow::TaskGroup& group,
+                                           const broken_pipeline_arrow::TaskContext& task_ctx) {
   std::vector<bool> done(group.NumTasks(), false);
   std::size_t done_count = 0;
 
   while (done_count < done.size()) {
-    for (opl_arrow::TaskId task_id = 0; task_id < done.size(); ++task_id) {
+    for (broken_pipeline_arrow::TaskId task_id = 0; task_id < done.size(); ++task_id) {
       if (done[task_id]) {
         continue;
       }
@@ -103,18 +103,19 @@ opl_arrow::Status RunTaskGroup(const opl_arrow::TaskGroup& group,
     }
   }
 
-  return opl_arrow::Status::OK();
+  return broken_pipeline_arrow::Status::OK();
 }
 
-opl_arrow::Status RunTaskGroups(const std::vector<opl_arrow::TaskGroup>& groups,
-                                const opl_arrow::TaskContext& task_ctx) {
+broken_pipeline_arrow::Status RunTaskGroups(
+    const std::vector<broken_pipeline_arrow::TaskGroup>& groups,
+    const broken_pipeline_arrow::TaskContext& task_ctx) {
   for (const auto& group : groups) {
     auto st = RunTaskGroup(group, task_ctx);
     if (!st.ok()) {
       return st;
     }
   }
-  return opl_arrow::Status::OK();
+  return broken_pipeline_arrow::Status::OK();
 }
 
 }  // namespace
@@ -126,7 +127,8 @@ int main() {
 
   std::vector<std::shared_ptr<arrow::RecordBatch>> batches;
   for (int i = 0; i < 3; ++i) {
-    auto rb_r = opl_arrow::MakeInt32Batch(schema, /*start=*/i * 10, /*length=*/5);
+    auto rb_r =
+        broken_pipeline_arrow::MakeInt32Batch(schema, /*start=*/i * 10, /*length=*/5);
     if (!rb_r.ok()) {
       std::cerr << "MakeInt32Batch failed: " << rb_r.status().ToString() << "\n";
       return 1;
@@ -134,26 +136,29 @@ int main() {
     batches.push_back(*rb_r);
   }
 
-  opl_arrow::BatchesSource source(std::move(batches));
-  opl_arrow::PassThroughPipe pipe;
-  opl_arrow::DelayLastBatchPipe drain_pipe(dop);
-  opl_arrow::RowCountSink sink;
+  broken_pipeline_arrow::BatchesSource source(std::move(batches));
+  broken_pipeline_arrow::PassThroughPipe pipe;
+  broken_pipeline_arrow::DelayLastBatchPipe drain_pipe(dop);
+  broken_pipeline_arrow::RowCountSink sink;
 
-  opl_arrow::Pipeline pipeline(
-      "P", {opl_arrow::PipelineChannel{&source, {&pipe, &drain_pipe}}}, &sink);
+  broken_pipeline_arrow::Pipeline pipeline(
+      "P", {broken_pipeline_arrow::PipelineChannel{&source, {&pipe, &drain_pipe}}},
+      &sink);
 
   auto groups = CompileTaskGroups(pipeline, dop);
 
-  opl_arrow::Context context;
-  opl_arrow::TaskContext task_ctx;
+  broken_pipeline_arrow::Context context;
+  broken_pipeline_arrow::TaskContext task_ctx;
   task_ctx.context = &context;
-  task_ctx.resumer_factory = []() -> opl_arrow::Result<std::shared_ptr<opl::Resumer>> {
-    return opl_arrow::Result<std::shared_ptr<opl::Resumer>>(
+  task_ctx.resumer_factory =
+      []() -> broken_pipeline_arrow::Result<std::shared_ptr<broken_pipeline::Resumer>> {
+    return broken_pipeline_arrow::Result<std::shared_ptr<broken_pipeline::Resumer>>(
         arrow::Status::NotImplemented("resumer_factory not used in demo"));
   };
-  task_ctx.awaiter_factory = [](std::vector<std::shared_ptr<opl::Resumer>>)
-      -> opl_arrow::Result<std::shared_ptr<opl::Awaiter>> {
-    return opl_arrow::Result<std::shared_ptr<opl::Awaiter>>(
+  task_ctx.awaiter_factory =
+      [](std::vector<std::shared_ptr<broken_pipeline::Resumer>>)
+          -> broken_pipeline_arrow::Result<std::shared_ptr<broken_pipeline::Awaiter>> {
+    return broken_pipeline_arrow::Result<std::shared_ptr<broken_pipeline::Awaiter>>(
         arrow::Status::NotImplemented("awaiter_factory not used in demo"));
   };
 

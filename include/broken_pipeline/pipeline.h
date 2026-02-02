@@ -4,17 +4,17 @@
 #include <utility>
 #include <vector>
 
-#include <opl/concepts.h>
+#include <broken_pipeline/concepts.h>
 
-namespace opl {
+namespace broken_pipeline {
 
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 class SourceOp;
 
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 class PipeOp;
 
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 class SinkOp;
 
 /**
@@ -30,7 +30,7 @@ class SinkOp;
  * - A pipeline may be split into multiple stages if any `PipeOp` returns a
  *   non-null `ImplicitSource()`.
  */
-template <OpenPipelineTraits Traits>
+template <BrokenPipelineTraits Traits>
 class Pipeline {
  public:
   struct Channel {
@@ -52,4 +52,4 @@ class Pipeline {
   SinkOp<Traits>* sink_op_;
 };
 
-}  // namespace opl
+}  // namespace broken_pipeline

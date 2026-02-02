@@ -1,6 +1,6 @@
 #include "arrow_traits.h"
 
-#include <opl/pipeline_exec.h>
+#include <broken_pipeline/pipeline_exec.h>
 
 #include <gtest/gtest.h>
 
@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-namespace opl_test {
+namespace broken_pipeline_test {
 
 namespace {
 
@@ -71,14 +71,14 @@ class FooSink final : public SinkOp {
 
 }  // namespace
 
-TEST(OplPipelineCompileTest, EmptyPipeline) {
+TEST(BrokenPipelinePipelineCompileTest, EmptyPipeline) {
   FooSink sink;
   Pipeline pipeline("EmptyPipeline", {}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   ASSERT_TRUE(exec.Segments().empty());
 }
 
-TEST(OplPipelineCompileTest, SingleChannelPipeline) {
+TEST(BrokenPipelinePipelineCompileTest, SingleChannelPipeline) {
   FooSource source;
   FooPipe pipe;
   FooSink sink;
@@ -98,7 +98,7 @@ TEST(OplPipelineCompileTest, SingleChannelPipeline) {
   ASSERT_EQ(ch0.pipe_ops[0], &pipe);
 }
 
-TEST(OplPipelineCompileTest, DoubleChannelPipeline) {
+TEST(BrokenPipelinePipelineCompileTest, DoubleChannelPipeline) {
   FooSource source1, source2;
   FooPipe pipe;
   FooSink sink;
@@ -118,7 +118,7 @@ TEST(OplPipelineCompileTest, DoubleChannelPipeline) {
   ASSERT_EQ(seg0.Channels()[1].source_op, &source2);
 }
 
-TEST(OplPipelineCompileTest, DoublePhysicalPipeline) {
+TEST(BrokenPipelinePipelineCompileTest, DoublePhysicalPipeline) {
   FooSource source;
   auto implicit_source_up = std::make_unique<FooSource>("ImplicitSource");
   auto* implicit_source = implicit_source_up.get();
@@ -142,7 +142,7 @@ TEST(OplPipelineCompileTest, DoublePhysicalPipeline) {
   ASSERT_TRUE(seg1.Channels()[0].pipe_ops.empty());
 }
 
-TEST(OplPipelineCompileTest, DoublePhysicalDoubleChannelPipeline) {
+TEST(BrokenPipelinePipelineCompileTest, DoublePhysicalDoubleChannelPipeline) {
   FooSource source1, source2;
 
   auto implicit_source1_up = std::make_unique<FooSource>("ImplicitSource1");
@@ -173,7 +173,7 @@ TEST(OplPipelineCompileTest, DoublePhysicalDoubleChannelPipeline) {
   ASSERT_EQ(seg1.Channels()[1].source_op, implicit_source2);
 }
 
-TEST(OplPipelineCompileTest, TripplePhysicalPipeline) {
+TEST(BrokenPipelinePipelineCompileTest, TripplePhysicalPipeline) {
   FooSource source1, source2;
 
   auto implicit_source1_up = std::make_unique<FooSource>("ImplicitSource1");
@@ -268,4 +268,4 @@ TEST(OplPipelineCompileTest, OddQuadroStagePipeline) {
   ASSERT_EQ(seg3.Channels()[0].source_op, implicit_source4);
 }
 
-}  // namespace opl_test
+}  // namespace broken_pipeline_test

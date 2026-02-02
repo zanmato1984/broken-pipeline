@@ -1,32 +1,34 @@
-set(OPL_ARROW_PROVIDER "bundled" CACHE STRING "Arrow provider (bundled|system)")
-set_property(CACHE OPL_ARROW_PROVIDER PROPERTY STRINGS bundled system)
+set(BROKEN_PIPELINE_ARROW_PROVIDER "bundled" CACHE STRING "Arrow provider (bundled|system)")
+set_property(CACHE BROKEN_PIPELINE_ARROW_PROVIDER PROPERTY STRINGS bundled system)
 
 include(cmake/find/arrow.cmake)
 
-message(STATUS "Building the opl googletest unit tests")
+message(STATUS "Building the broken_pipeline googletest unit tests")
 enable_testing()
 include(cmake/find/gtest.cmake)
 find_package(Threads REQUIRED)
-if(NOT OPL_ARROW_CORE_TARGET)
-  message(FATAL_ERROR "opl tests require an Arrow core library target")
+if(NOT BROKEN_PIPELINE_ARROW_CORE_TARGET)
+  message(FATAL_ERROR "broken_pipeline tests require an Arrow core library target")
 endif()
-if(NOT OPL_ARROW_COMPUTE_TARGET)
-  message(FATAL_ERROR "opl tests require an Arrow compute library target")
+if(NOT BROKEN_PIPELINE_ARROW_COMPUTE_TARGET)
+  message(FATAL_ERROR "broken_pipeline tests require an Arrow compute library target")
 endif()
-if(NOT OPL_ARROW_TESTING_TARGET)
-  message(FATAL_ERROR "opl tests require an Arrow testing library target")
+if(NOT BROKEN_PIPELINE_ARROW_TESTING_TARGET)
+  message(FATAL_ERROR "broken_pipeline tests require an Arrow testing library target")
 endif()
 
-function(add_opl_test TEST_NAME TEST_SRC)
+function(add_broken_pipeline_test TEST_NAME TEST_SRC)
   add_executable(${TEST_NAME} ${TEST_SRC})
   target_link_libraries(
     ${TEST_NAME}
-    PRIVATE opl GTest::gtest GTest::gtest_main Threads::Threads ${OPL_ARROW_CORE_TARGET}
-            ${OPL_ARROW_COMPUTE_TARGET} ${OPL_ARROW_TESTING_TARGET})
+    PRIVATE broken_pipeline GTest::gtest GTest::gtest_main Threads::Threads
+            ${BROKEN_PIPELINE_ARROW_CORE_TARGET} ${BROKEN_PIPELINE_ARROW_COMPUTE_TARGET}
+            ${BROKEN_PIPELINE_ARROW_TESTING_TARGET})
 
-  if(OPL_ARROW_INCLUDE_DIRS)
-    foreach(_opl_arrow_inc_dir IN LISTS OPL_ARROW_INCLUDE_DIRS)
-      target_include_directories(${TEST_NAME} SYSTEM PRIVATE "$<BUILD_INTERFACE:${_opl_arrow_inc_dir}>")
+  if(BROKEN_PIPELINE_ARROW_INCLUDE_DIRS)
+    foreach(_broken_pipeline_arrow_inc_dir IN LISTS BROKEN_PIPELINE_ARROW_INCLUDE_DIRS)
+      target_include_directories(
+        ${TEST_NAME} SYSTEM PRIVATE "$<BUILD_INTERFACE:${_broken_pipeline_arrow_inc_dir}>")
     endforeach()
   endif()
 

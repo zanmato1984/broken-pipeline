@@ -1,11 +1,11 @@
 #pragma once
 
 /**
- * @file opl.h
+ * @file broken_pipeline.h
  *
- * @brief Public umbrella header for the core opl protocol.
+ * @brief Public umbrella header for the core broken_pipeline protocol.
  *
- * opl is a **header-only, purely generic (traits-based)** set of interfaces and
+ * broken_pipeline is a **header-only, purely generic (traits-based)** set of interfaces and
  * small protocol data structures for building a query/execution engine in the style of
  * Ara:
  *
@@ -14,7 +14,7 @@
  * - Execution is expressed in terms of `Task` / `TaskGroup` and a small `TaskStatus`
  *   protocol (Continue/Blocked/Yield/Finished/Cancelled).
  *
- * What opl **does not** provide:
+ * What broken_pipeline **does not** provide:
  * - No concrete operators.
  * - No scheduler/executor implementation.
  * - No async/future library dependency.
@@ -31,14 +31,14 @@
  * - Pipeline graph: `Pipeline`
  *
  * Helper:
- * - `#include <opl/pipeline_exec.h>` provides `opl::Compile(pipeline, dop)` and
- *   the compiled plan `opl::PipelineExec` (with `PipelineExecSegment` / `PipeExec`).
+ * - `#include <broken_pipeline/pipeline_exec.h>` provides `broken_pipeline::Compile(pipeline, dop)`
+ *   and the compiled plan `broken_pipeline::PipelineExec` (with `PipelineExecSegment` / `PipeExec`).
  */
 
-#include <opl/concepts.h>
+#include <broken_pipeline/concepts.h>
 
-#include <opl/operator.h>
-#include <opl/pipeline.h>
-#include <opl/task.h>
+#include <broken_pipeline/operator.h>
+#include <broken_pipeline/pipeline.h>
+#include <broken_pipeline/task.h>
 
-#include <opl/pipeline_exec.h>
+#include <broken_pipeline/pipeline_exec.h>

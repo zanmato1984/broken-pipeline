@@ -2,7 +2,7 @@ message(STATUS "Finding GTest")
 
 # When using bundled Arrow, Arrow provides googletest targets (`gtest`/`gtest_main`)
 # via ArrowTesting. Reuse those targets instead of fetching another copy.
-if(OPL_ARROW_PROVIDER STREQUAL "bundled")
+if(BROKEN_PIPELINE_ARROW_PROVIDER STREQUAL "bundled")
   if(NOT TARGET gtest OR NOT TARGET gtest_main)
     message(
       FATAL_ERROR
