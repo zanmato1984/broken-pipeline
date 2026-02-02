@@ -3,7 +3,7 @@
 /**
  * @file arrow_traits.h
  *
- * @brief `opl` Traits implementation backed by Apache Arrow, for unit tests.
+ * @brief `opl` Traits for unit tests (Arrow Status/Result).
  *
  * opl does not define its own Status/Result type. Instead, all opl APIs are parameterized
  * by `Traits::Status` and `Traits::Result<T>`.
@@ -11,12 +11,11 @@
  * In this test Traits:
  * - `Status` maps to `arrow::Status`
  * - `Result<T>` maps to `arrow::Result<T>`
- * - `Batch` maps to `std::shared_ptr<arrow::RecordBatch>`
+ * - `Batch` maps to `int`
  */
 
 #include <memory>
 
-#include <arrow/record_batch.h>
 #include <arrow/result.h>
 #include <arrow/status.h>
 
@@ -29,7 +28,7 @@ struct Context {
 };
 
 struct Traits {
-  using Batch = std::shared_ptr<arrow::RecordBatch>;
+  using Batch = int;
   using Context = opl_test::Context;
   using Status = arrow::Status;
 
@@ -52,6 +51,8 @@ using TaskId = opl::TaskId;
 using ThreadId = opl::ThreadId;
 using TaskStatus = opl::TaskStatus;
 using TaskHint = opl::TaskHint;
+using Resumer = opl::Resumer;
+using Awaiter = opl::Awaiter;
 
 using OpOutput = opl::OpOutput<Traits>;
 using OpResult = opl::OpResult<Traits>;

@@ -1,7 +1,5 @@
-#include <opl/opl.h>
+#include "arrow_traits.h"
 
-#include <arrow/result.h>
-#include <arrow/status.h>
 #include <arrow/testing/gtest_util.h>
 
 #include <gtest/gtest.h>
@@ -12,41 +10,11 @@
 #include <optional>
 #include <string>
 #include <utility>
-#include <variant>
 #include <vector>
 
 namespace opl_test {
 
-using namespace opl;
-
 namespace {
-
-struct TestTraits {
-  using Batch = int;
-  using Context = std::monostate;
-  using Status = arrow::Status;
-
-  template <class T>
-  using Result = arrow::Result<T>;
-};
-
-static_assert(OpenPipelineTraits<TestTraits>);
-
-using Batch = TestTraits::Batch;
-using ArrowStatus = TestTraits::Status;
-template <class T>
-using Result = TestTraits::Result<T>;
-
-using TestTaskContext = opl::TaskContext<TestTraits>;
-using TestTaskGroup = opl::TaskGroup<TestTraits>;
-
-using TestOpOutput = opl::OpOutput<TestTraits>;
-using TestOpResult = opl::OpResult<TestTraits>;
-using TestPipelineSource = opl::PipelineSource<TestTraits>;
-using TestPipelinePipe = opl::PipelinePipe<TestTraits>;
-using TestPipelineDrain = opl::PipelineDrain<TestTraits>;
-using TestPipelineSink = opl::PipelineSink<TestTraits>;
-using TestPipeline = opl::Pipeline<TestTraits>;
 
 class TestResumer final : public Resumer {
  public:
@@ -99,12 +67,11 @@ struct Step {
 
   Kind kind = Kind::OUTPUT;
   std::optional<std::optional<Batch>> expected_input;
-  std::optional<TestOpOutput> output;
-  std::optional<ArrowStatus> error;
+  std::optional<OpOutput> output;
+  std::optional<Status> error;
 };
 
-Step OutputStep(TestOpOutput out,
-                std::optional<std::optional<Batch>> expected_input = {}) {
+Step OutputStep(OpOutput out, std::optional<std::optional<Batch>> expected_input = {}) {
   Step s;
   s.kind = Step::Kind::OUTPUT;
   s.expected_input = std::move(expected_input);
@@ -119,8 +86,7 @@ Step BlockedStep(std::optional<std::optional<Batch>> expected_input = {}) {
   return s;
 }
 
-Step ErrorStep(ArrowStatus status,
-               std::optional<std::optional<Batch>> expected_input = {}) {
+Step ErrorStep(Status status, std::optional<std::optional<Batch>> expected_input = {}) {
   Step s;
   s.kind = Step::Kind::ERROR;
   s.expected_input = std::move(expected_input);
@@ -128,17 +94,17 @@ Step ErrorStep(ArrowStatus status,
   return s;
 }
 
-class ScriptedSource final : public SourceOp<TestTraits> {
+class ScriptedSource final : public SourceOp {
  public:
   ScriptedSource(std::string name, std::vector<std::vector<Step>> steps,
                  std::vector<Trace>* traces)
-      : SourceOp<TestTraits>(std::move(name)),
+      : SourceOp(std::move(name)),
         steps_(std::move(steps)),
         pcs_(steps_.size(), 0),
         traces_(traces) {}
 
-  TestPipelineSource Source() override {
-    return [this](const TestTaskContext& task_ctx, ThreadId tid) -> TestOpResult {
+  PipelineSource Source() override {
+    return [this](const TaskContext& task_ctx, ThreadId tid) -> OpResult {
       auto step = NextStep(tid);
       if (step.kind == Step::Kind::ERROR) {
         traces_->push_back(Trace{Name(), "Source", std::nullopt, step.error->ToString()});
@@ -152,7 +118,7 @@ class ScriptedSource final : public SourceOp<TestTraits> {
           return resumer_r.status();
         }
         auto resumer = std::move(resumer_r).ValueOrDie();
-        auto out = TestOpOutput::Blocked(std::move(resumer));
+        auto out = OpOutput::Blocked(std::move(resumer));
         traces_->push_back(Trace{Name(), "Source", std::nullopt, out.ToString()});
         return out;
       }
@@ -163,18 +129,18 @@ class ScriptedSource final : public SourceOp<TestTraits> {
     };
   }
 
-  std::vector<TestTaskGroup> Frontend() override { return {}; }
-  std::optional<TestTaskGroup> Backend() override { return std::nullopt; }
+  std::vector<TaskGroup> Frontend() override { return {}; }
+  std::optional<TaskGroup> Backend() override { return std::nullopt; }
 
  private:
   Step NextStep(ThreadId tid) {
     if (tid >= steps_.size()) {
       ADD_FAILURE() << "ScriptedSource thread_id out of range";
-      return ErrorStep(ArrowStatus::Invalid("ScriptedSource thread_id out of range"));
+      return ErrorStep(Status::Invalid("ScriptedSource thread_id out of range"));
     }
     if (pcs_[tid] >= steps_[tid].size()) {
       ADD_FAILURE() << "ScriptedSource script exhausted";
-      return ErrorStep(ArrowStatus::Invalid("ScriptedSource script exhausted"));
+      return ErrorStep(Status::Invalid("ScriptedSource script exhausted"));
     }
     return steps_[tid][pcs_[tid]++];
   }
@@ -184,46 +150,46 @@ class ScriptedSource final : public SourceOp<TestTraits> {
   std::vector<Trace>* traces_;
 };
 
-class ScriptedPipe final : public PipeOp<TestTraits> {
+class ScriptedPipe final : public PipeOp {
  public:
   ScriptedPipe(std::string name, std::vector<std::vector<Step>> pipe_steps,
                std::vector<std::vector<Step>> drain_steps, std::vector<Trace>* traces)
-      : PipeOp<TestTraits>(std::move(name)),
+      : PipeOp(std::move(name)),
         pipe_steps_(std::move(pipe_steps)),
         drain_steps_(std::move(drain_steps)),
         pipe_pcs_(pipe_steps_.size(), 0),
         drain_pcs_(drain_steps_.size(), 0),
         traces_(traces) {}
 
-  TestPipelinePipe Pipe() override {
-    return [this](const TestTaskContext& task_ctx, ThreadId tid,
-                  std::optional<Batch> input) -> TestOpResult {
+  PipelinePipe Pipe() override {
+    return [this](const TaskContext& task_ctx, ThreadId tid,
+                  std::optional<Batch> input) -> OpResult {
       auto step = NextPipeStep(tid, input);
       return ExecuteStep(task_ctx, tid, "Pipe", std::move(step), std::move(input));
     };
   }
 
-  TestPipelineDrain Drain() override {
+  PipelineDrain Drain() override {
     if (drain_steps_.empty()) {
       return {};
     }
-    return [this](const TestTaskContext& task_ctx, ThreadId tid) -> TestOpResult {
+    return [this](const TaskContext& task_ctx, ThreadId tid) -> OpResult {
       auto step = NextDrainStep(tid);
       return ExecuteStep(task_ctx, tid, "Drain", std::move(step), std::nullopt);
     };
   }
 
-  std::unique_ptr<SourceOp<TestTraits>> ImplicitSource() override { return nullptr; }
+  std::unique_ptr<SourceOp> ImplicitSource() override { return nullptr; }
 
  private:
   Step NextPipeStep(ThreadId tid, const std::optional<Batch>& input) {
     if (tid >= pipe_steps_.size()) {
       ADD_FAILURE() << "ScriptedPipe thread_id out of range";
-      return ErrorStep(ArrowStatus::Invalid("ScriptedPipe thread_id out of range"));
+      return ErrorStep(Status::Invalid("ScriptedPipe thread_id out of range"));
     }
     if (pipe_pcs_[tid] >= pipe_steps_[tid].size()) {
       ADD_FAILURE() << "ScriptedPipe pipe script exhausted";
-      return ErrorStep(ArrowStatus::Invalid("ScriptedPipe pipe script exhausted"));
+      return ErrorStep(Status::Invalid("ScriptedPipe pipe script exhausted"));
     }
     Step step = pipe_steps_[tid][pipe_pcs_[tid]++];
     CheckExpectedInput(step, input);
@@ -233,11 +199,11 @@ class ScriptedPipe final : public PipeOp<TestTraits> {
   Step NextDrainStep(ThreadId tid) {
     if (tid >= drain_steps_.size()) {
       ADD_FAILURE() << "ScriptedPipe thread_id out of range (drain)";
-      return ErrorStep(ArrowStatus::Invalid("ScriptedPipe thread_id out of range"));
+      return ErrorStep(Status::Invalid("ScriptedPipe thread_id out of range"));
     }
     if (drain_pcs_[tid] >= drain_steps_[tid].size()) {
       ADD_FAILURE() << "ScriptedPipe drain script exhausted";
-      return ErrorStep(ArrowStatus::Invalid("ScriptedPipe drain script exhausted"));
+      return ErrorStep(Status::Invalid("ScriptedPipe drain script exhausted"));
     }
     return drain_steps_[tid][drain_pcs_[tid]++];
   }
@@ -252,8 +218,8 @@ class ScriptedPipe final : public PipeOp<TestTraits> {
     }
   }
 
-  TestOpResult ExecuteStep(const TestTaskContext& task_ctx, ThreadId tid,
-                           std::string method, Step step, std::optional<Batch> input) {
+  OpResult ExecuteStep(const TaskContext& task_ctx, ThreadId tid, std::string method,
+                       Step step, std::optional<Batch> input) {
     if (step.kind == Step::Kind::ERROR) {
       traces_->push_back(
           Trace{Name(), std::move(method), std::move(input), step.error->ToString()});
@@ -268,7 +234,7 @@ class ScriptedPipe final : public PipeOp<TestTraits> {
         return resumer_r.status();
       }
       auto resumer = std::move(resumer_r).ValueOrDie();
-      auto out = TestOpOutput::Blocked(std::move(resumer));
+      auto out = OpOutput::Blocked(std::move(resumer));
       traces_->push_back(
           Trace{Name(), std::move(method), std::move(input), out.ToString()});
       return out;
@@ -287,18 +253,18 @@ class ScriptedPipe final : public PipeOp<TestTraits> {
   std::vector<Trace>* traces_;
 };
 
-class ScriptedSink final : public SinkOp<TestTraits> {
+class ScriptedSink final : public SinkOp {
  public:
   ScriptedSink(std::string name, std::vector<std::vector<Step>> steps,
                std::vector<Trace>* traces)
-      : SinkOp<TestTraits>(std::move(name)),
+      : SinkOp(std::move(name)),
         steps_(std::move(steps)),
         pcs_(steps_.size(), 0),
         traces_(traces) {}
 
-  TestPipelineSink Sink() override {
-    return [this](const TestTaskContext& task_ctx, ThreadId tid,
-                  std::optional<Batch> input) -> TestOpResult {
+  PipelineSink Sink() override {
+    return [this](const TaskContext& task_ctx, ThreadId tid,
+                  std::optional<Batch> input) -> OpResult {
       auto step = NextStep(tid, input);
       if (step.kind == Step::Kind::ERROR) {
         traces_->push_back(
@@ -313,7 +279,7 @@ class ScriptedSink final : public SinkOp<TestTraits> {
           return resumer_r.status();
         }
         auto resumer = std::move(resumer_r).ValueOrDie();
-        auto out = TestOpOutput::Blocked(std::move(resumer));
+        auto out = OpOutput::Blocked(std::move(resumer));
         traces_->push_back(Trace{Name(), "Sink", std::move(input), out.ToString()});
         return out;
       }
@@ -324,19 +290,19 @@ class ScriptedSink final : public SinkOp<TestTraits> {
     };
   }
 
-  std::vector<TestTaskGroup> Frontend() override { return {}; }
-  std::optional<TestTaskGroup> Backend() override { return std::nullopt; }
-  std::unique_ptr<SourceOp<TestTraits>> ImplicitSource() override { return nullptr; }
+  std::vector<TaskGroup> Frontend() override { return {}; }
+  std::optional<TaskGroup> Backend() override { return std::nullopt; }
+  std::unique_ptr<SourceOp> ImplicitSource() override { return nullptr; }
 
  private:
   Step NextStep(ThreadId tid, const std::optional<Batch>& input) {
     if (tid >= steps_.size()) {
       ADD_FAILURE() << "ScriptedSink thread_id out of range";
-      return ErrorStep(ArrowStatus::Invalid("ScriptedSink thread_id out of range"));
+      return ErrorStep(Status::Invalid("ScriptedSink thread_id out of range"));
     }
     if (pcs_[tid] >= steps_[tid].size()) {
       ADD_FAILURE() << "ScriptedSink script exhausted";
-      return ErrorStep(ArrowStatus::Invalid("ScriptedSink script exhausted"));
+      return ErrorStep(Status::Invalid("ScriptedSink script exhausted"));
     }
     Step step = steps_[tid][pcs_[tid]++];
     if (step.expected_input.has_value()) {
@@ -353,8 +319,8 @@ class ScriptedSink final : public SinkOp<TestTraits> {
   std::vector<Trace>* traces_;
 };
 
-TestTaskContext MakeTaskContext() {
-  TestTaskContext task_ctx;
+TaskContext MakeTaskContext() {
+  TaskContext task_ctx;
   task_ctx.context = nullptr;
   task_ctx.resumer_factory = []() -> Result<std::shared_ptr<Resumer>> {
     return std::make_shared<TestResumer>();
@@ -366,15 +332,14 @@ TestTaskContext MakeTaskContext() {
   return task_ctx;
 }
 
-ArrowStatus RunSingleTaskToDone(const TestTaskGroup& group,
-                                const TestTaskContext& task_ctx,
-                                std::vector<TaskStatus>* statuses = nullptr) {
+Status RunSingleTaskToDone(const TaskGroup& group, const TaskContext& task_ctx,
+                           std::vector<TaskStatus>* statuses = nullptr) {
   bool done = false;
   std::size_t steps = 0;
   while (!done) {
     if (steps++ >= 1000u) {
       ADD_FAILURE() << "RunSingleTaskToDone exceeded step limit";
-      return ArrowStatus::Invalid("RunSingleTaskToDone exceeded step limit");
+      return Status::Invalid("RunSingleTaskToDone exceeded step limit");
     }
 
     auto status_r = group.GetTask()(task_ctx, /*task_id=*/0);
@@ -397,19 +362,19 @@ ArrowStatus RunSingleTaskToDone(const TestTaskGroup& group,
       auto* awaiter = dynamic_cast<TestAwaiter*>(ts.GetAwaiter().get());
       if (awaiter == nullptr) {
         ADD_FAILURE() << "unexpected awaiter type";
-        return ArrowStatus::Invalid("unexpected awaiter type");
+        return Status::Invalid("unexpected awaiter type");
       }
       for (auto& resumer : awaiter->Resumers()) {
         if (resumer == nullptr) {
           ADD_FAILURE() << "null resumer";
-          return ArrowStatus::Invalid("null resumer");
+          return Status::Invalid("null resumer");
         }
         resumer->Resume();
       }
       continue;
     }
   }
-  return ArrowStatus::OK();
+  return Status::OK();
 }
 
 }  // namespace
@@ -417,10 +382,10 @@ ArrowStatus RunSingleTaskToDone(const TestTaskGroup& group,
 TEST(OplPipeExecTest, EmptySourceFinishesWithoutCallingSink) {
   std::vector<Trace> traces;
 
-  ScriptedSource source("Source", {{OutputStep(TestOpOutput::Finished())}}, &traces);
+  ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces);
   ScriptedSink sink("Sink", {{}}, &traces);
 
-  TestPipeline pipeline("P", {TestPipeline::Channel{&source, {}}}, &sink);
+  Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   ASSERT_EQ(exec.Segments().size(), 1);
 
@@ -440,16 +405,16 @@ TEST(OplPipeExecTest, OnePass) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
-                        {{OutputStep(TestOpOutput::SourcePipeHasMore(/*batch=*/1)),
-                          OutputStep(TestOpOutput::Finished())}},
+                        {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/1)),
+                          OutputStep(OpOutput::Finished())}},
                         &traces);
 
   ScriptedSink sink("Sink",
-                    {{OutputStep(TestOpOutput::PipeSinkNeedsMore(),
+                    {{OutputStep(OpOutput::PipeSinkNeedsMore(),
                                  std::optional<std::optional<Batch>>(Batch{1}))}},
                     &traces);
 
-  TestPipeline pipeline("P", {TestPipeline::Channel{&source, {}}}, &sink);
+  Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = exec.Segments()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
@@ -471,23 +436,23 @@ TEST(OplPipeExecTest, PipeNeedsMoreGoesBackToSource) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
-                        {{OutputStep(TestOpOutput::SourcePipeHasMore(/*batch=*/1)),
-                          OutputStep(TestOpOutput::Finished(std::optional<Batch>(2)))}},
+                        {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/1)),
+                          OutputStep(OpOutput::Finished(std::optional<Batch>(2)))}},
                         &traces);
 
   ScriptedPipe pipe("Pipe",
-                    {{OutputStep(TestOpOutput::PipeSinkNeedsMore(),
+                    {{OutputStep(OpOutput::PipeSinkNeedsMore(),
                                  std::optional<std::optional<Batch>>(Batch{1})),
-                      OutputStep(TestOpOutput::PipeEven(/*batch=*/2),
+                      OutputStep(OpOutput::PipeEven(/*batch=*/2),
                                  std::optional<std::optional<Batch>>(Batch{2}))}},
                     /*drain_steps=*/{}, &traces);
 
   ScriptedSink sink("Sink",
-                    {{OutputStep(TestOpOutput::PipeSinkNeedsMore(),
+                    {{OutputStep(OpOutput::PipeSinkNeedsMore(),
                                  std::optional<std::optional<Batch>>(Batch{2}))}},
                     &traces);
 
-  TestPipeline pipeline("P", {TestPipeline::Channel{&source, {&pipe}}}, &sink);
+  Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = exec.Segments()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
@@ -506,26 +471,26 @@ TEST(OplPipeExecTest, PipeHasMoreResumesPipeBeforeSource) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
-                        {{OutputStep(TestOpOutput::SourcePipeHasMore(/*batch=*/1)),
-                          OutputStep(TestOpOutput::Finished())}},
+                        {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/1)),
+                          OutputStep(OpOutput::Finished())}},
                         &traces);
 
   ScriptedPipe pipe(
       "Pipe",
-      {{OutputStep(TestOpOutput::SourcePipeHasMore(/*batch=*/10),
+      {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/10),
                    std::optional<std::optional<Batch>>(Batch{1})),
-        OutputStep(TestOpOutput::PipeEven(/*batch=*/11),
+        OutputStep(OpOutput::PipeEven(/*batch=*/11),
                    std::optional<std::optional<Batch>>(std::optional<Batch>{}))}},
       /*drain_steps=*/{}, &traces);
 
   ScriptedSink sink("Sink",
-                    {{OutputStep(TestOpOutput::PipeSinkNeedsMore(),
+                    {{OutputStep(OpOutput::PipeSinkNeedsMore(),
                                  std::optional<std::optional<Batch>>(Batch{10})),
-                      OutputStep(TestOpOutput::PipeSinkNeedsMore(),
+                      OutputStep(OpOutput::PipeSinkNeedsMore(),
                                  std::optional<std::optional<Batch>>(Batch{11}))}},
                     &traces);
 
-  TestPipeline pipeline("P", {TestPipeline::Channel{&source, {&pipe}}}, &sink);
+  Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = exec.Segments()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
@@ -547,23 +512,22 @@ TEST(OplPipeExecTest, PipeYieldHandshake) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
-                        {{OutputStep(TestOpOutput::SourcePipeHasMore(/*batch=*/1)),
-                          OutputStep(TestOpOutput::Finished())}},
+                        {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/1)),
+                          OutputStep(OpOutput::Finished())}},
                         &traces);
 
   ScriptedPipe pipe(
       "Pipe",
-      {{OutputStep(TestOpOutput::PipeYield(),
-                   std::optional<std::optional<Batch>>(Batch{1})),
-        OutputStep(TestOpOutput::PipeYieldBack(),
+      {{OutputStep(OpOutput::PipeYield(), std::optional<std::optional<Batch>>(Batch{1})),
+        OutputStep(OpOutput::PipeYieldBack(),
                    std::optional<std::optional<Batch>>(std::optional<Batch>{})),
-        OutputStep(TestOpOutput::PipeSinkNeedsMore(),
+        OutputStep(OpOutput::PipeSinkNeedsMore(),
                    std::optional<std::optional<Batch>>(std::optional<Batch>{}))}},
       /*drain_steps=*/{}, &traces);
 
   ScriptedSink sink("Sink", {{}} /*unused*/, &traces);
 
-  TestPipeline pipeline("P", {TestPipeline::Channel{&source, {&pipe}}}, &sink);
+  Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = exec.Segments()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
@@ -586,20 +550,20 @@ TEST(OplPipeExecTest, PipeBlockedResumesWithNullInput) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
-                        {{OutputStep(TestOpOutput::SourcePipeHasMore(/*batch=*/1)),
-                          OutputStep(TestOpOutput::Finished())}},
+                        {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/1)),
+                          OutputStep(OpOutput::Finished())}},
                         &traces);
 
   ScriptedPipe pipe(
       "Pipe",
       {{BlockedStep(std::optional<std::optional<Batch>>(Batch{1})),
-        OutputStep(TestOpOutput::PipeSinkNeedsMore(),
+        OutputStep(OpOutput::PipeSinkNeedsMore(),
                    std::optional<std::optional<Batch>>(std::optional<Batch>{}))}},
       /*drain_steps=*/{}, &traces);
 
   ScriptedSink sink("Sink", {{}} /*unused*/, &traces);
 
-  TestPipeline pipeline("P", {TestPipeline::Channel{&source, {&pipe}}}, &sink);
+  Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = exec.Segments()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
@@ -630,19 +594,19 @@ TEST(OplPipeExecTest, SinkBackpressureResumesWithNullInput) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
-                        {{OutputStep(TestOpOutput::SourcePipeHasMore(/*batch=*/1)),
-                          OutputStep(TestOpOutput::Finished())}},
+                        {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/1)),
+                          OutputStep(OpOutput::Finished())}},
                         &traces);
 
   ScriptedSink sink(
       "Sink",
       {{BlockedStep(std::optional<std::optional<Batch>>(Batch{1})),
         BlockedStep(std::optional<std::optional<Batch>>(std::optional<Batch>{})),
-        OutputStep(TestOpOutput::PipeSinkNeedsMore(),
+        OutputStep(OpOutput::PipeSinkNeedsMore(),
                    std::optional<std::optional<Batch>>(std::optional<Batch>{}))}},
       &traces);
 
-  TestPipeline pipeline("P", {TestPipeline::Channel{&source, {}}}, &sink);
+  Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = exec.Segments()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
@@ -672,23 +636,23 @@ TEST(OplPipeExecTest, SinkBackpressureResumesWithNullInput) {
 TEST(OplPipeExecTest, DrainProducesTailOutput) {
   std::vector<Trace> traces;
 
-  ScriptedSource source("Source", {{OutputStep(TestOpOutput::Finished())}}, &traces);
+  ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces);
 
   ScriptedPipe pipe("Pipe",
                     /*pipe_steps=*/{{}},
                     /*drain_steps=*/
-                    {{OutputStep(TestOpOutput::SourcePipeHasMore(/*batch=*/1)),
-                      OutputStep(TestOpOutput::Finished(std::optional<Batch>(2)))}},
+                    {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/1)),
+                      OutputStep(OpOutput::Finished(std::optional<Batch>(2)))}},
                     &traces);
 
   ScriptedSink sink("Sink",
-                    {{OutputStep(TestOpOutput::PipeSinkNeedsMore(),
+                    {{OutputStep(OpOutput::PipeSinkNeedsMore(),
                                  std::optional<std::optional<Batch>>(Batch{1})),
-                      OutputStep(TestOpOutput::PipeSinkNeedsMore(),
+                      OutputStep(OpOutput::PipeSinkNeedsMore(),
                                  std::optional<std::optional<Batch>>(Batch{2}))}},
                     &traces);
 
-  TestPipeline pipeline("P", {TestPipeline::Channel{&source, {&pipe}}}, &sink);
+  Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = exec.Segments()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
@@ -710,9 +674,8 @@ TEST(OplPipeExecTest, MultiChannelAllBlockedReturnsTaskBlocked) {
   ScriptedSource source2("Source2", {{BlockedStep()}}, &traces);
   ScriptedSink sink("Sink", {{}}, &traces);
 
-  TestPipeline pipeline(
-      "P", {TestPipeline::Channel{&source1, {}}, TestPipeline::Channel{&source2, {}}},
-      &sink);
+  Pipeline pipeline("P", {PipelineChannel{&source1, {}}, PipelineChannel{&source2, {}}},
+                    &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = exec.Segments()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
@@ -729,11 +692,10 @@ TEST(OplPipeExecTest, MultiChannelAllBlockedReturnsTaskBlocked) {
 TEST(OplPipeExecTest, ErrorCancelsSubsequentCalls) {
   std::vector<Trace> traces;
 
-  ScriptedSource source("Source", {{ErrorStep(ArrowStatus::UnknownError("boom"))}},
-                        &traces);
+  ScriptedSource source("Source", {{ErrorStep(Status::UnknownError("boom"))}}, &traces);
   ScriptedSink sink("Sink", {{}}, &traces);
 
-  TestPipeline pipeline("P", {TestPipeline::Channel{&source, {}}}, &sink);
+  Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = exec.Segments()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
