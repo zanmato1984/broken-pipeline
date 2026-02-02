@@ -15,7 +15,9 @@
 #include <variant>
 #include <vector>
 
-namespace opl {
+namespace opl_test {
+
+using namespace opl;
 
 namespace {
 
@@ -251,8 +253,7 @@ class ScriptedPipe final : public PipeOp<TestTraits> {
   }
 
   TestOpResult ExecuteStep(const TestTaskContext& task_ctx, ThreadId tid,
-                           std::string method,
-                       Step step, std::optional<Batch> input) {
+                           std::string method, Step step, std::optional<Batch> input) {
     if (step.kind == Step::Kind::ERROR) {
       traces_->push_back(
           Trace{Name(), std::move(method), std::move(input), step.error->ToString()});
@@ -268,8 +269,8 @@ class ScriptedPipe final : public PipeOp<TestTraits> {
       }
       auto resumer = std::move(resumer_r).ValueOrDie();
       auto out = TestOpOutput::Blocked(std::move(resumer));
-      traces_->push_back(Trace{Name(), std::move(method), std::move(input),
-                               out.ToString()});
+      traces_->push_back(
+          Trace{Name(), std::move(method), std::move(input), out.ToString()});
       return out;
     }
 
@@ -300,7 +301,8 @@ class ScriptedSink final : public SinkOp<TestTraits> {
                   std::optional<Batch> input) -> TestOpResult {
       auto step = NextStep(tid, input);
       if (step.kind == Step::Kind::ERROR) {
-        traces_->push_back(Trace{Name(), "Sink", std::move(input), step.error->ToString()});
+        traces_->push_back(
+            Trace{Name(), "Sink", std::move(input), step.error->ToString()});
         return *step.error;
       }
       if (step.kind == Step::Kind::BLOCKED) {
@@ -357,8 +359,8 @@ TestTaskContext MakeTaskContext() {
   task_ctx.resumer_factory = []() -> Result<std::shared_ptr<Resumer>> {
     return std::make_shared<TestResumer>();
   };
-  task_ctx.awaiter_factory =
-      [](std::vector<std::shared_ptr<Resumer>> resumers) -> Result<std::shared_ptr<Awaiter>> {
+  task_ctx.awaiter_factory = [](std::vector<std::shared_ptr<Resumer>> resumers)
+      -> Result<std::shared_ptr<Awaiter>> {
     return std::make_shared<TestAwaiter>(std::move(resumers));
   };
   return task_ctx;
@@ -468,19 +470,17 @@ TEST(OplPipeExecTest, OnePass) {
 TEST(OplPipeExecTest, PipeNeedsMoreGoesBackToSource) {
   std::vector<Trace> traces;
 
-  ScriptedSource source(
-      "Source",
-      {{OutputStep(TestOpOutput::SourcePipeHasMore(/*batch=*/1)),
-        OutputStep(TestOpOutput::Finished(std::optional<Batch>(2)))}},
-      &traces);
+  ScriptedSource source("Source",
+                        {{OutputStep(TestOpOutput::SourcePipeHasMore(/*batch=*/1)),
+                          OutputStep(TestOpOutput::Finished(std::optional<Batch>(2)))}},
+                        &traces);
 
-  ScriptedPipe pipe(
-      "Pipe",
-      {{OutputStep(TestOpOutput::PipeSinkNeedsMore(),
-                   std::optional<std::optional<Batch>>(Batch{1})),
-        OutputStep(TestOpOutput::PipeEven(/*batch=*/2),
-                   std::optional<std::optional<Batch>>(Batch{2}))}},
-      /*drain_steps=*/{}, &traces);
+  ScriptedPipe pipe("Pipe",
+                    {{OutputStep(TestOpOutput::PipeSinkNeedsMore(),
+                                 std::optional<std::optional<Batch>>(Batch{1})),
+                      OutputStep(TestOpOutput::PipeEven(/*batch=*/2),
+                                 std::optional<std::optional<Batch>>(Batch{2}))}},
+                    /*drain_steps=*/{}, &traces);
 
   ScriptedSink sink("Sink",
                     {{OutputStep(TestOpOutput::PipeSinkNeedsMore(),
@@ -505,11 +505,10 @@ TEST(OplPipeExecTest, PipeNeedsMoreGoesBackToSource) {
 TEST(OplPipeExecTest, PipeHasMoreResumesPipeBeforeSource) {
   std::vector<Trace> traces;
 
-  ScriptedSource source(
-      "Source",
-      {{OutputStep(TestOpOutput::SourcePipeHasMore(/*batch=*/1)),
-        OutputStep(TestOpOutput::Finished())}},
-      &traces);
+  ScriptedSource source("Source",
+                        {{OutputStep(TestOpOutput::SourcePipeHasMore(/*batch=*/1)),
+                          OutputStep(TestOpOutput::Finished())}},
+                        &traces);
 
   ScriptedPipe pipe(
       "Pipe",
@@ -547,11 +546,10 @@ TEST(OplPipeExecTest, PipeHasMoreResumesPipeBeforeSource) {
 TEST(OplPipeExecTest, PipeYieldHandshake) {
   std::vector<Trace> traces;
 
-  ScriptedSource source(
-      "Source",
-      {{OutputStep(TestOpOutput::SourcePipeHasMore(/*batch=*/1)),
-        OutputStep(TestOpOutput::Finished())}},
-      &traces);
+  ScriptedSource source("Source",
+                        {{OutputStep(TestOpOutput::SourcePipeHasMore(/*batch=*/1)),
+                          OutputStep(TestOpOutput::Finished())}},
+                        &traces);
 
   ScriptedPipe pipe(
       "Pipe",
@@ -587,11 +585,10 @@ TEST(OplPipeExecTest, PipeYieldHandshake) {
 TEST(OplPipeExecTest, PipeBlockedResumesWithNullInput) {
   std::vector<Trace> traces;
 
-  ScriptedSource source(
-      "Source",
-      {{OutputStep(TestOpOutput::SourcePipeHasMore(/*batch=*/1)),
-        OutputStep(TestOpOutput::Finished())}},
-      &traces);
+  ScriptedSource source("Source",
+                        {{OutputStep(TestOpOutput::SourcePipeHasMore(/*batch=*/1)),
+                          OutputStep(TestOpOutput::Finished())}},
+                        &traces);
 
   ScriptedPipe pipe(
       "Pipe",
@@ -632,11 +629,10 @@ TEST(OplPipeExecTest, PipeBlockedResumesWithNullInput) {
 TEST(OplPipeExecTest, SinkBackpressureResumesWithNullInput) {
   std::vector<Trace> traces;
 
-  ScriptedSource source(
-      "Source",
-      {{OutputStep(TestOpOutput::SourcePipeHasMore(/*batch=*/1)),
-        OutputStep(TestOpOutput::Finished())}},
-      &traces);
+  ScriptedSource source("Source",
+                        {{OutputStep(TestOpOutput::SourcePipeHasMore(/*batch=*/1)),
+                          OutputStep(TestOpOutput::Finished())}},
+                        &traces);
 
   ScriptedSink sink(
       "Sink",
@@ -678,20 +674,19 @@ TEST(OplPipeExecTest, DrainProducesTailOutput) {
 
   ScriptedSource source("Source", {{OutputStep(TestOpOutput::Finished())}}, &traces);
 
-  ScriptedPipe pipe(
-      "Pipe",
-      /*pipe_steps=*/{{}},
-      /*drain_steps=*/{{OutputStep(TestOpOutput::SourcePipeHasMore(/*batch=*/1)),
-                        OutputStep(TestOpOutput::Finished(std::optional<Batch>(2)))}},
-      &traces);
+  ScriptedPipe pipe("Pipe",
+                    /*pipe_steps=*/{{}},
+                    /*drain_steps=*/
+                    {{OutputStep(TestOpOutput::SourcePipeHasMore(/*batch=*/1)),
+                      OutputStep(TestOpOutput::Finished(std::optional<Batch>(2)))}},
+                    &traces);
 
-  ScriptedSink sink(
-      "Sink",
-      {{OutputStep(TestOpOutput::PipeSinkNeedsMore(),
-                   std::optional<std::optional<Batch>>(Batch{1})),
-        OutputStep(TestOpOutput::PipeSinkNeedsMore(),
-                   std::optional<std::optional<Batch>>(Batch{2}))}},
-      &traces);
+  ScriptedSink sink("Sink",
+                    {{OutputStep(TestOpOutput::PipeSinkNeedsMore(),
+                                 std::optional<std::optional<Batch>>(Batch{1})),
+                      OutputStep(TestOpOutput::PipeSinkNeedsMore(),
+                                 std::optional<std::optional<Batch>>(Batch{2}))}},
+                    &traces);
 
   TestPipeline pipeline("P", {TestPipeline::Channel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
@@ -716,8 +711,7 @@ TEST(OplPipeExecTest, MultiChannelAllBlockedReturnsTaskBlocked) {
   ScriptedSink sink("Sink", {{}}, &traces);
 
   TestPipeline pipeline(
-      "P",
-      {TestPipeline::Channel{&source1, {}}, TestPipeline::Channel{&source2, {}}},
+      "P", {TestPipeline::Channel{&source1, {}}, TestPipeline::Channel{&source2, {}}},
       &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = exec.Segments()[0].PipeExec().TaskGroup();
@@ -753,4 +747,4 @@ TEST(OplPipeExecTest, ErrorCancelsSubsequentCalls) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-}  // namespace opl
+}  // namespace opl_test

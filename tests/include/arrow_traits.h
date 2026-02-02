@@ -68,4 +68,3 @@ using Pipeline = opl::Pipeline<Traits>;
 using PipelineChannel = Pipeline::Channel;
 
 }  // namespace opl_test
-

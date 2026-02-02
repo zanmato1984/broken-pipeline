@@ -10,74 +10,70 @@
 #include <utility>
 #include <vector>
 
-namespace opl {
+namespace opl_test {
 
 namespace {
 
-class FooSource final : public opl_test::SourceOp {
+class FooSource final : public SourceOp {
  public:
   explicit FooSource(std::string name = "FooSource") : SourceOp(std::move(name)) {}
 
-  opl_test::PipelineSource Source() override {
-    return [](const opl_test::TaskContext&, opl_test::ThreadId) -> opl_test::OpResult {
-      return opl_test::OpOutput::Finished();
-    };
+  PipelineSource Source() override {
+    return [](const TaskContext&, ThreadId) -> OpResult { return OpOutput::Finished(); };
   }
 
-  std::vector<opl_test::TaskGroup> Frontend() override { return {}; }
+  std::vector<TaskGroup> Frontend() override { return {}; }
 
-  std::optional<opl_test::TaskGroup> Backend() override { return std::nullopt; }
+  std::optional<TaskGroup> Backend() override { return std::nullopt; }
 };
 
-class FooPipe final : public opl_test::PipeOp {
+class FooPipe final : public PipeOp {
  public:
-  FooPipe(std::string name = "FooPipe", opl_test::PipelineDrain drain = {},
-          std::unique_ptr<opl_test::SourceOp> implicit_source = nullptr)
+  FooPipe(std::string name = "FooPipe", PipelineDrain drain = {},
+          std::unique_ptr<SourceOp> implicit_source = nullptr)
       : PipeOp(std::move(name)),
         drain_(std::move(drain)),
         implicit_source_(std::move(implicit_source)) {}
 
-  opl_test::PipelinePipe Pipe() override {
-    return [](const opl_test::TaskContext&, opl_test::ThreadId,
-              std::optional<opl_test::Batch>) -> opl_test::OpResult {
-      return opl_test::OpOutput::PipeSinkNeedsMore();
+  PipelinePipe Pipe() override {
+    return [](const TaskContext&, ThreadId, std::optional<Batch>) -> OpResult {
+      return OpOutput::PipeSinkNeedsMore();
     };
   }
 
-  opl_test::PipelineDrain Drain() override { return drain_; }
+  PipelineDrain Drain() override { return drain_; }
 
-  std::unique_ptr<opl_test::SourceOp> ImplicitSource() override {
+  std::unique_ptr<SourceOp> ImplicitSource() override {
     return std::move(implicit_source_);
   }
 
  private:
-  opl_test::PipelineDrain drain_;
-  std::unique_ptr<opl_test::SourceOp> implicit_source_;
+  PipelineDrain drain_;
+  std::unique_ptr<SourceOp> implicit_source_;
 };
 
-class FooSink final : public opl_test::SinkOp {
+class FooSink final : public SinkOp {
  public:
   explicit FooSink(std::string name = "FooSink") : SinkOp(std::move(name)) {}
 
-  opl_test::PipelineSink Sink() override {
-    return [](const opl_test::TaskContext&, opl_test::ThreadId,
-              std::optional<opl_test::Batch>) -> opl_test::OpResult {
-      return opl_test::OpOutput::PipeSinkNeedsMore();
+  PipelineSink Sink() override {
+    return [](const TaskContext&, ThreadId, std::optional<Batch>) -> OpResult {
+      return OpOutput::PipeSinkNeedsMore();
     };
   }
 
-  std::vector<opl_test::TaskGroup> Frontend() override { return {}; }
+  std::vector<TaskGroup> Frontend() override { return {}; }
 
-  std::optional<opl_test::TaskGroup> Backend() override { return std::nullopt; }
+  std::optional<TaskGroup> Backend() override { return std::nullopt; }
 
-  std::unique_ptr<opl_test::SourceOp> ImplicitSource() override { return nullptr; }
+  std::unique_ptr<SourceOp> ImplicitSource() override { return nullptr; }
 };
 
 }  // namespace
 
 TEST(OplPipelineCompileTest, EmptyPipeline) {
   FooSink sink;
-  opl_test::Pipeline pipeline("EmptyPipeline", {}, &sink);
+  Pipeline pipeline("EmptyPipeline", {}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   ASSERT_TRUE(exec.Segments().empty());
 }
@@ -87,10 +83,7 @@ TEST(OplPipelineCompileTest, SingleChannelPipeline) {
   FooPipe pipe;
   FooSink sink;
 
-  opl_test::Pipeline pipeline(
-      "SingleChannelPipeline",
-      {opl_test::PipelineChannel{&source, {&pipe}}},
-      &sink);
+  Pipeline pipeline("SingleChannelPipeline", {PipelineChannel{&source, {&pipe}}}, &sink);
 
   auto exec = Compile(pipeline, /*dop=*/1);
   ASSERT_EQ(exec.Segments().size(), 1);
@@ -110,11 +103,9 @@ TEST(OplPipelineCompileTest, DoubleChannelPipeline) {
   FooPipe pipe;
   FooSink sink;
 
-  opl_test::Pipeline pipeline(
+  Pipeline pipeline(
       "DoubleChannelPipeline",
-      {opl_test::PipelineChannel{&source1, {&pipe}},
-       opl_test::PipelineChannel{&source2, {&pipe}}},
-      &sink);
+      {PipelineChannel{&source1, {&pipe}}, PipelineChannel{&source2, {&pipe}}}, &sink);
 
   auto exec = Compile(pipeline, /*dop=*/1);
   ASSERT_EQ(exec.Segments().size(), 1);
@@ -134,8 +125,7 @@ TEST(OplPipelineCompileTest, DoublePhysicalPipeline) {
   FooPipe pipe("FooPipe", {}, std::move(implicit_source_up));
   FooSink sink;
 
-  opl_test::Pipeline pipeline("DoublePhysicalPipeline",
-                              {opl_test::PipelineChannel{&source, {&pipe}}}, &sink);
+  Pipeline pipeline("DoublePhysicalPipeline", {PipelineChannel{&source, {&pipe}}}, &sink);
 
   auto exec = Compile(pipeline, /*dop=*/1);
   ASSERT_EQ(exec.Segments().size(), 2);
@@ -164,11 +154,9 @@ TEST(OplPipelineCompileTest, DoublePhysicalDoubleChannelPipeline) {
   FooPipe pipe2("Pipe2", {}, std::move(implicit_source2_up));
   FooSink sink;
 
-  opl_test::Pipeline pipeline(
+  Pipeline pipeline(
       "DoublePhysicalDoubleChannelPipeline",
-      {opl_test::PipelineChannel{&source1, {&pipe1}},
-       opl_test::PipelineChannel{&source2, {&pipe2}}},
-      &sink);
+      {PipelineChannel{&source1, {&pipe1}}, PipelineChannel{&source2, {&pipe2}}}, &sink);
 
   auto exec = Compile(pipeline, /*dop=*/1);
   ASSERT_EQ(exec.Segments().size(), 2);
@@ -200,11 +188,10 @@ TEST(OplPipelineCompileTest, TripplePhysicalPipeline) {
   FooPipe pipe3("Pipe3", {}, std::move(implicit_source3_up));
   FooSink sink;
 
-  opl_test::Pipeline pipeline(
-      "TripplePhysicalPipeline",
-      {opl_test::PipelineChannel{&source1, {&pipe1, &pipe3}},
-       opl_test::PipelineChannel{&source2, {&pipe2, &pipe3}}},
-      &sink);
+  Pipeline pipeline("TripplePhysicalPipeline",
+                    {PipelineChannel{&source1, {&pipe1, &pipe3}},
+                     PipelineChannel{&source2, {&pipe2, &pipe3}}},
+                    &sink);
 
   auto exec = Compile(pipeline, /*dop=*/1);
   ASSERT_EQ(exec.Segments().size(), 3);
@@ -249,12 +236,11 @@ TEST(OplPipelineCompileTest, OddQuadroStagePipeline) {
   FooPipe pipe4("Pipe4", {}, std::move(implicit_source4_up));
   FooSink sink;
 
-  opl_test::Pipeline pipeline(
+  Pipeline pipeline(
       "OddQuadroStagePipeline",
-      {opl_test::PipelineChannel{&source1, {&pipe1, &pipe2, &pipe4}},
-       opl_test::PipelineChannel{&source2, {&pipe2, &pipe4}},
-       opl_test::PipelineChannel{&source3, {&pipe3, &pipe4}},
-       opl_test::PipelineChannel{&source4, {&pipe4}}},
+      {PipelineChannel{&source1, {&pipe1, &pipe2, &pipe4}},
+       PipelineChannel{&source2, {&pipe2, &pipe4}},
+       PipelineChannel{&source3, {&pipe3, &pipe4}}, PipelineChannel{&source4, {&pipe4}}},
       &sink);
 
   auto exec = Compile(pipeline, /*dop=*/1);
@@ -282,5 +268,4 @@ TEST(OplPipelineCompileTest, OddQuadroStagePipeline) {
   ASSERT_EQ(seg3.Channels()[0].source_op, implicit_source4);
 }
 
-}  // namespace opl
-
+}  // namespace opl_test
