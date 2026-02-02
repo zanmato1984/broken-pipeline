@@ -20,7 +20,7 @@ namespace opl {
  * make progress (e.g., waiting on IO or downstream backpressure), it returns
  * `OpOutput::Blocked(resumer)`.
  *
- * A scheduler turns one or more `Resumer` objects into an `Awaiter` (single/any/all)
+ * A scheduler turns one or more `Resumer` objects into an `Awaiter`
  * and returns `TaskStatus::Blocked(awaiter)` from the task.
  *
  * Later, some external event triggers `Resumer::Resume()` (often from a callback).
@@ -53,15 +53,7 @@ template <OpenPipelineTraits Traits>
 using ResumerFactory = std::function<Result<Traits, std::shared_ptr<Resumer>>()>;
 
 template <OpenPipelineTraits Traits>
-using SingleAwaiterFactory =
-    std::function<Result<Traits, std::shared_ptr<Awaiter>>(std::shared_ptr<Resumer>)>;
-
-template <OpenPipelineTraits Traits>
-using AnyAwaiterFactory =
-    std::function<Result<Traits, std::shared_ptr<Awaiter>>(std::vector<std::shared_ptr<Resumer>>)>;
-
-template <OpenPipelineTraits Traits>
-using AllAwaiterFactory =
+using AwaiterFactory =
     std::function<Result<Traits, std::shared_ptr<Awaiter>>(std::vector<std::shared_ptr<Resumer>>)>;
 
 /**
@@ -81,9 +73,7 @@ template <OpenPipelineTraits Traits>
 struct TaskContext {
   const typename Traits::Context* context = nullptr;
   ResumerFactory<Traits> resumer_factory;
-  SingleAwaiterFactory<Traits> single_awaiter_factory;
-  AnyAwaiterFactory<Traits> any_awaiter_factory;
-  AllAwaiterFactory<Traits> all_awaiter_factory;
+  AwaiterFactory<Traits> awaiter_factory;
 };
 
 /**

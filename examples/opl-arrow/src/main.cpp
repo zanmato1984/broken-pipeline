@@ -163,22 +163,11 @@ int main() {
     return opl_arrow::Result<std::shared_ptr<opl::Resumer>>(
         arrow::Status::NotImplemented("resumer_factory not used in demo"));
   };
-  task_ctx.single_awaiter_factory =
-      [](std::shared_ptr<opl::Resumer>) -> opl_arrow::Result<std::shared_ptr<opl::Awaiter>> {
-    return opl_arrow::Result<std::shared_ptr<opl::Awaiter>>(
-        arrow::Status::NotImplemented("single_awaiter_factory not used in demo"));
-  };
-  task_ctx.any_awaiter_factory =
+  task_ctx.awaiter_factory =
       [](std::vector<std::shared_ptr<opl::Resumer>>)
           -> opl_arrow::Result<std::shared_ptr<opl::Awaiter>> {
     return opl_arrow::Result<std::shared_ptr<opl::Awaiter>>(
-        arrow::Status::NotImplemented("any_awaiter_factory not used in demo"));
-  };
-  task_ctx.all_awaiter_factory =
-      [](std::vector<std::shared_ptr<opl::Resumer>>)
-          -> opl_arrow::Result<std::shared_ptr<opl::Awaiter>> {
-    return opl_arrow::Result<std::shared_ptr<opl::Awaiter>>(
-        arrow::Status::NotImplemented("all_awaiter_factory not used in demo"));
+        arrow::Status::NotImplemented("awaiter_factory not used in demo"));
   };
 
   auto st = RunTaskGroups(groups, task_ctx);

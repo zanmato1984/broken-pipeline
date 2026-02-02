@@ -183,17 +183,9 @@ TEST(OplPipelineExecSmokeTest, RunsSingleStagePipeline) {
   task_ctx.resumer_factory = []() -> SmokeTraits::Result<std::shared_ptr<Resumer>> {
     return arrow::Status::NotImplemented("resumer_factory not used in smoke test");
   };
-  task_ctx.single_awaiter_factory =
-      [](std::shared_ptr<Resumer>) -> SmokeTraits::Result<std::shared_ptr<Awaiter>> {
-    return arrow::Status::NotImplemented("single_awaiter_factory not used in smoke test");
-  };
-  task_ctx.any_awaiter_factory =
+  task_ctx.awaiter_factory =
       [](std::vector<std::shared_ptr<Resumer>>) -> SmokeTraits::Result<std::shared_ptr<Awaiter>> {
-    return arrow::Status::NotImplemented("any_awaiter_factory not used in smoke test");
-  };
-  task_ctx.all_awaiter_factory =
-      [](std::vector<std::shared_ptr<Resumer>>) -> SmokeTraits::Result<std::shared_ptr<Awaiter>> {
-    return arrow::Status::NotImplemented("all_awaiter_factory not used in smoke test");
+    return arrow::Status::NotImplemented("awaiter_factory not used in smoke test");
   };
 
   ASSERT_OK(RunTaskGroup(execs[0].PipelineTaskGroup(), task_ctx));

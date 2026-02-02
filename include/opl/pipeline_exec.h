@@ -528,7 +528,7 @@ class PipelineTask {
     }
 
     if (all_unfinished_blocked && !blocked_resumers.empty()) {
-      auto awaiter_r = task_ctx.any_awaiter_factory(std::move(blocked_resumers));
+      auto awaiter_r = task_ctx.awaiter_factory(std::move(blocked_resumers));
       if (!awaiter_r.ok()) {
         cancelled_.store(true);
         return Result<Traits, TaskStatus>(awaiter_r.status());
