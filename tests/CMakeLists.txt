@@ -6,10 +6,8 @@ function(add_broken_pipeline_unit_test TEST_NAME TEST_SRC)
 endfunction()
 
 add_broken_pipeline_unit_test(
-  broken_pipeline_task_test "${CMAKE_CURRENT_SOURCE_DIR}/broken_pipeline_task_test.cpp")
+  broken-pipeline-task-test "${CMAKE_CURRENT_SOURCE_DIR}/task_test.cpp")
 add_broken_pipeline_unit_test(
-  broken_pipeline_pipeline_compile_test
-  "${CMAKE_CURRENT_SOURCE_DIR}/broken_pipeline_pipeline_compile_test.cpp")
+  broken-pipeline-pipeline-compile-test "${CMAKE_CURRENT_SOURCE_DIR}/pipeline_compile_test.cpp")
 add_broken_pipeline_unit_test(
-  broken_pipeline_pipeline_task_test
-  "${CMAKE_CURRENT_SOURCE_DIR}/broken_pipeline_pipeline_task_test.cpp")
+  broken-pipeline-pipeline-task-test "${CMAKE_CURRENT_SOURCE_DIR}/pipeline_task_test.cpp")
