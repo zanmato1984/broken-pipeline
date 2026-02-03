@@ -136,8 +136,11 @@ Blocked is built out of scheduler-owned primitives:
 - Operators return `OpOutput::Blocked(resumer)`.
 - The task groups one or more resumers into a `TaskStatus::Blocked(awaiter)` using
   `TaskContext::awaiter_factory`.
-- The scheduler is responsible for calling `Resumer::Resume()` from an external event and
-  rescheduling the blocked task instance.
+- Some non-scheduler event source calls `Resumer::Resume()` when the awaited condition is
+  satisfied. This is often driven by an operator (for example, a backend task completing IO
+  or emitting a batch that unblocks downstream).
+- The scheduler is responsible for observing resumed resumers and rescheduling the blocked
+  task instance.
 
 Compatibility note:
 - `Resumer` and `Awaiter` are intentionally opaque to Broken Pipeline and can be implemented
@@ -169,22 +172,34 @@ Callback signatures:
 
 Input conventions for Pipe and Sink:
 - input has a value: a new upstream batch
-- input is nullopt: resume the operator (after has-more, after blocked, or after yield)
+- input is nullopt: re-enter the operator callback to continue (after has-more, after a
+  blocked wake-up, or as part of a yield handshake)
+
+Terminology note:
+- Re-entering an operator means the pipeline driver invokes the operator callback again
+  (often with input=nullopt). This is distinct from `Resumer::Resume()`, which is the
+  wake-up mechanism used for `OpOutput::Blocked(resumer)`.
 
 OpOutput codes:
-- `PIPE_SINK_NEEDS_MORE`: the operator consumed input and needs more upstream input.
-- `PIPE_EVEN(batch)`: the operator produced one output batch and does not require immediate resumption.
-- `SOURCE_PIPE_HAS_MORE(batch)`: the operator produced one output batch and must be resumed with nullopt before pulling new input.
-- `BLOCKED(resumer)`: the operator cannot make progress until resumer is resumed.
+- `PIPE_SINK_NEEDS_MORE`: the operator needs more upstream input and did not produce an output batch.
+- `PIPE_EVEN(batch)`: the operator produced one output batch and can accept another upstream input batch immediately.
+- `SOURCE_PIPE_HAS_MORE(batch)`: the operator produced one output batch and requires a follow-up re-entry with input=nullopt to emit more pending output before it can accept another upstream input batch.
+- `BLOCKED(resumer)`: the operator cannot make progress until `Resumer::Resume()` is called on the resumer.
 - `PIPE_YIELD`: yield request from the operator.
-- `PIPE_YIELD_BACK`: resume acknowledgement from a previously yielding operator.
+- `PIPE_YIELD_BACK`: yield-back signal from a previously yielding operator, indicating the
+  yield-required long synchronous step has completed and it should be scheduled back to a
+  CPU-oriented pool.
 - `FINISHED(optional batch)`: end-of-stream; may carry a final output batch.
 - `CANCELLED`: cancellation marker used by the reference runtime.
 
 Typical uses for `PIPE_YIELD`:
-- Operators can use it as a cooperative scheduling point before a long synchronous action.
-  A common example is spilling to disk on the fly. Yield lets a scheduler move the task to
-  a different pool (for example, an IO pool) before continuing.
+- Operators can use `PIPE_YIELD` as a cooperative scheduling point before a long synchronous
+  action, such as spilling to disk on the fly. A scheduler can move the task to an IO pool
+  for that work.
+- On the first re-entry after yielding, the operator returns `PIPE_YIELD_BACK` to indicate
+  the long synchronous step has completed and execution can migrate back to a CPU pool.
+- This yield/yield-back handshake provides a natural two-phase scheduling point: run the
+  yielded step in an IO pool, then schedule subsequent work back on a CPU pool.
 
 Contracts for the reference driver in `include/broken_pipeline/pipeline_exec.h`:
 - `SourceOp::Source()` must return one of:
@@ -197,13 +212,15 @@ Contracts for the reference driver in `include/broken_pipeline/pipeline_exec.h`:
   - `OpOutput::PipeEven(batch)`
   - `OpOutput::SourcePipeHasMore(batch)`
   - `OpOutput::Blocked(resumer)`
-  - `OpOutput::PipeYield()`, then later `OpOutput::PipeYieldBack()` when resumed
+  - `OpOutput::PipeYield()`, then later `OpOutput::PipeYieldBack()` on the next re-entry
+    (input=nullopt)
   - an error Result
 - `PipeOp::Drain()` is called only after the upstream source returned `Finished()`. It must return one of:
   - `OpOutput::SourcePipeHasMore(batch)`
   - `OpOutput::Finished(optional batch)`
   - `OpOutput::Blocked(resumer)`
-  - `OpOutput::PipeYield()`, then later `OpOutput::PipeYieldBack()` when resumed
+  - `OpOutput::PipeYield()`, then later `OpOutput::PipeYieldBack()` on the next re-entry
+    (input=nullopt)
   - an error Result
 - `SinkOp::Sink()` must return one of:
   - `OpOutput::PipeSinkNeedsMore()`
@@ -211,11 +228,16 @@ Contracts for the reference driver in `include/broken_pipeline/pipeline_exec.h`:
   - an error Result
   The sink must not return output batches.
 
-Lifecycle hooks and TaskHint:
-- `SourceOp::Frontend()` and `SinkOp::Frontend()` return a list of task groups that the host
-  can schedule before running the main stage work.
-- `SourceOp::Backend()` and `SinkOp::Backend()` return an optional task group that the host
-  can schedule after running the main stage work.
+### Frontend/Backend task groups and TaskHint
+
+- `SourceOp::Frontend()` returns a list of task groups the host schedules before running the
+  pipelinexe(s) that invoke its `Source()` callback.
+- `SinkOp::Frontend()` returns a list of task groups the host schedules strictly after the
+  pipelinexe(s) feeding the sink have finished.
+- `SourceOp::Backend()` and `SinkOp::Backend()` return an optional task group the host
+  typically schedules before running the main stage work, often to initiate or wait on IO
+  readiness (for example, synchronous IO pulling from a queue, or asynchronous IO waiting on
+  callbacks/signals).
 - `TaskHint` is the scheduler hint that marks tasks as CPU vs IO.
 - A typical orchestration pattern is to use frontend/backend to split work into distinct
   computation stages and use `TaskHint` so a scheduler can route CPU-bound work and IO-bound
@@ -224,9 +246,10 @@ Lifecycle hooks and TaskHint:
   primarily IO-bound, but Broken Pipeline does not enforce this split; it is defined by the
   host scheduler and operator implementations.
 - Examples:
-  - A hash join build can be modeled as a `SinkOp` whose frontend builds the hash table
-    (often in parallel at the pipeline DOP) and whose backend performs IO-heavy finalize work
-    (for example, writing a spill file or emitting statistics).
+  - A hash join build can be modeled as a `SinkOp` whose `Sink()` ingests the build side and
+    whose frontend builds the hash table (often in parallel at the pipeline DOP). Its backend
+    can be used to start or wait on IO-heavy work (for example, preparing spill files or
+    awaiting IO completion).
   - In a right outer join, a hash join probe operator may need a post-probe scan of the build
     side to output unmatched rows. That scan phase can be represented as a pipe-provided
     `ImplicitSource()`, which becomes a new downstream pipelinexe. The implicit source can
@@ -272,11 +295,11 @@ Each Pipelinexe exposes `Pipelinexe::PipeExec().TaskGroup()`, which runs the sta
 Semantics:
 - Each task instance uses TaskId as ThreadId (0..dop-1).
 - Within a task call, the driver performs bounded work and keeps state internally to
-  resume later.
+  continue on a later invocation.
 - If all unfinished channels are blocked, the task returns `TaskStatus::Blocked(awaiter)`
   built from the channels' resumers.
 - If an operator returns `PIPE_YIELD`, the task returns `TaskStatus::Yield()`. On the next
-  invocation, the driver resumes the yielding operator with nullopt and expects
+  invocation, the driver re-enters the yielding operator (input=nullopt) and expects
   `PIPE_YIELD_BACK`.
 - If any operator returns an error Result, the plan is cancelled. The call that observes
   the error returns that error; subsequent calls return `TaskStatus::Cancelled()`.
@@ -290,7 +313,8 @@ Concurrency requirements:
 
 PipelineExec only provides building blocks. A host scheduler/executor is responsible for:
 - Creating a `TaskContext` with `resumer_factory` and `awaiter_factory`.
-- Choosing an ordering for `SourceOp` and `SinkOp` Frontend/Backend task groups.
+- Scheduling frontend/backend task groups (source frontend before pipelinexes, sink frontend
+  after pipelinexes, and backends as IO-readiness tasks typically scheduled ahead).
 - Executing each Pipelinexe PipeExec task group with the desired scheduling policy.
 
 The Arrow example in `examples/broken_pipeline_arrow` demonstrates one possible single-threaded
