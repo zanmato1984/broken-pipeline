@@ -139,6 +139,11 @@ Blocked is built out of scheduler-owned primitives:
 - The scheduler is responsible for calling `Resumer::Resume()` from an external event and
   rescheduling the blocked task instance.
 
+Compatibility note:
+- `Resumer` and `Awaiter` are intentionally opaque to Broken Pipeline and can be implemented
+  with synchronous primitives (for example, condition variables), asynchronous primitives
+  (for example, promise/future style), or coroutines.
+
 ## Operator protocol
 
 The operator interfaces and OpOutput are defined in `include/broken_pipeline/operator.h`:
@@ -176,6 +181,11 @@ OpOutput codes:
 - `FINISHED(optional batch)`: end-of-stream; may carry a final output batch.
 - `CANCELLED`: cancellation marker used by the reference runtime.
 
+Typical uses for `PIPE_YIELD`:
+- Operators can use it as a cooperative scheduling point before a long synchronous action.
+  A common example is spilling to disk on the fly. Yield lets a scheduler move the task to
+  a different pool (for example, an IO pool) before continuing.
+
 Contracts for the reference driver in `include/broken_pipeline/pipeline_exec.h`:
 - `SourceOp::Source()` must return one of:
   - `OpOutput::SourcePipeHasMore(batch)`
@@ -201,6 +211,30 @@ Contracts for the reference driver in `include/broken_pipeline/pipeline_exec.h`:
   - an error Result
   The sink must not return output batches.
 
+Lifecycle hooks and TaskHint:
+- `SourceOp::Frontend()` and `SinkOp::Frontend()` return a list of task groups that the host
+  can schedule before running the main stage work.
+- `SourceOp::Backend()` and `SinkOp::Backend()` return an optional task group that the host
+  can schedule after running the main stage work.
+- `TaskHint` is the scheduler hint that marks tasks as CPU vs IO.
+- A typical orchestration pattern is to use frontend/backend to split work into distinct
+  computation stages and use `TaskHint` so a scheduler can route CPU-bound work and IO-bound
+  work to different pools.
+- A common convention is to treat frontend work as primarily CPU-bound and backend work as
+  primarily IO-bound, but Broken Pipeline does not enforce this split; it is defined by the
+  host scheduler and operator implementations.
+- Examples:
+  - A hash join build can be modeled as a `SinkOp` whose frontend builds the hash table
+    (often in parallel at the pipeline DOP) and whose backend performs IO-heavy finalize work
+    (for example, writing a spill file or emitting statistics).
+  - In a right outer join, a hash join probe operator may need a post-probe scan of the build
+    side to output unmatched rows. That scan phase can be represented as a pipe-provided
+    `ImplicitSource()`, which becomes a new downstream pipelinexe. The implicit source can
+    also expose a frontend for preparatory work such as partitioning the hash table, distinct
+    from its per-lane scanning work implemented in `Source()`.
+  - File reads/writes and network RPCs are typically IO-bound and are good candidates for
+    tasks with `TaskHint::Type::IO`.
+
 ## Pipelines and compilation
 
 Pipeline graph type:
@@ -210,6 +244,11 @@ A Pipeline contains:
 - name
 - channels: each channel has a SourceOp pointer and a vector of PipeOp pointers
 - a single shared SinkOp pointer
+
+Multiple channels in one pipelinexe:
+- A single pipeline stage can have multiple channels feeding the same sink. This is useful
+  for union-all-like fan-in operators where either child can produce output into the same
+  downstream sink.
 
 Compilation:
 - `bp::Compile(pipeline, dop)` in `include/broken_pipeline/pipeline_exec.h` produces
