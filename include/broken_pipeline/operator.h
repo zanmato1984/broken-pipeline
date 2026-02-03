@@ -11,7 +11,7 @@
 
 #include <broken_pipeline/concepts.h>
 
-namespace broken_pipeline {
+namespace bp {
 
 class Resumer;
 
@@ -301,4 +301,4 @@ class SinkOp {
   std::string name_;
 };
 
-}  // namespace broken_pipeline
+}  // namespace bp

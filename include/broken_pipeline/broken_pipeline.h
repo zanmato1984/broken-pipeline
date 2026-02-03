@@ -31,8 +31,8 @@
  * - Pipeline graph: `Pipeline`
  *
  * Helper:
- * - `#include <broken_pipeline/pipeline_exec.h>` provides `broken_pipeline::Compile(pipeline, dop)`
- *   and the compiled plan `broken_pipeline::PipelineExec` (with `PipelineExecSegment` / `PipeExec`).
+ * - `#include <broken_pipeline/pipeline_exec.h>` provides `bp::Compile(pipeline, dop)`
+ *   and the compiled plan `bp::PipelineExec` (with `PipelineExecSegment` / `PipeExec`).
  */
 
 #include <broken_pipeline/concepts.h>

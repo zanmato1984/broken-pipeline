@@ -15,7 +15,7 @@ namespace {
 
 std::vector<broken_pipeline_arrow::TaskGroup> CompileTaskGroups(
     const broken_pipeline_arrow::Pipeline& pipeline, std::size_t dop) {
-  auto exec = broken_pipeline::Compile(pipeline, dop);
+  auto exec = bp::Compile(pipeline, dop);
 
   std::vector<broken_pipeline_arrow::TaskGroup> task_groups;
   task_groups.reserve(exec.Segments().size() * 2 + 3);
@@ -151,14 +151,14 @@ int main() {
   broken_pipeline_arrow::TaskContext task_ctx;
   task_ctx.context = &context;
   task_ctx.resumer_factory =
-      []() -> broken_pipeline_arrow::Result<std::shared_ptr<broken_pipeline::Resumer>> {
-    return broken_pipeline_arrow::Result<std::shared_ptr<broken_pipeline::Resumer>>(
+      []() -> broken_pipeline_arrow::Result<std::shared_ptr<bp::Resumer>> {
+    return broken_pipeline_arrow::Result<std::shared_ptr<bp::Resumer>>(
         arrow::Status::NotImplemented("resumer_factory not used in example"));
   };
   task_ctx.awaiter_factory =
-      [](std::vector<std::shared_ptr<broken_pipeline::Resumer>>)
-          -> broken_pipeline_arrow::Result<std::shared_ptr<broken_pipeline::Awaiter>> {
-    return broken_pipeline_arrow::Result<std::shared_ptr<broken_pipeline::Awaiter>>(
+      [](std::vector<std::shared_ptr<bp::Resumer>>)
+          -> broken_pipeline_arrow::Result<std::shared_ptr<bp::Awaiter>> {
+    return broken_pipeline_arrow::Result<std::shared_ptr<bp::Awaiter>>(
         arrow::Status::NotImplemented("awaiter_factory not used in example"));
   };
 

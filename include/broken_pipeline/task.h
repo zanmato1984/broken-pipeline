@@ -11,7 +11,7 @@
 
 #include <broken_pipeline/concepts.h>
 
-namespace broken_pipeline {
+namespace bp {
 
 /**
  * @brief A scheduler-owned "waker" that transitions a previously blocked task back to
@@ -270,4 +270,4 @@ class TaskGroup {
   std::optional<Continuation<Traits>> cont_;
 };
 
-}  // namespace broken_pipeline
+}  // namespace bp

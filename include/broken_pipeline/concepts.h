@@ -5,7 +5,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace broken_pipeline {
+namespace bp {
 
 /**
  * @brief Task instance id within a `TaskGroup`.
@@ -101,4 +101,4 @@ concept BrokenPipelineTraits =
       { std::move(result).ValueOrDie() } -> std::convertible_to<int>;
     };
 
-}  // namespace broken_pipeline
+}  // namespace bp

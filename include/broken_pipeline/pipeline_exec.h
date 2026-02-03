@@ -17,7 +17,7 @@
 #include <broken_pipeline/pipeline.h>
 #include <broken_pipeline/task.h>
 
-namespace broken_pipeline {
+namespace bp {
 
 template <BrokenPipelineTraits Traits>
 struct SourceExec {
@@ -40,12 +40,12 @@ class PipelineExecSegment;
 template <BrokenPipelineTraits Traits>
 class PipeExec {
  public:
-  broken_pipeline::TaskGroup<Traits> TaskGroup() const {
+  bp::TaskGroup<Traits> TaskGroup() const {
     Task<Traits> task(std::string{},
                       [exec = exec_](const TaskContext<Traits>& ctx, TaskId task_id) {
                         return (*exec)(ctx, task_id);
                       });
-    return broken_pipeline::TaskGroup<Traits>(std::string{}, std::move(task), dop_);
+    return bp::TaskGroup<Traits>(std::string{}, std::move(task), dop_);
   }
 
  private:
@@ -413,8 +413,8 @@ class PipelineExecSegment {
     return source_execs;
   }
 
-  broken_pipeline::PipeExec<Traits> PipeExec() const {
-    return broken_pipeline::PipeExec<Traits>(channels_, sink_op_, dop_);
+  bp::PipeExec<Traits> PipeExec() const {
+    return bp::PipeExec<Traits>(channels_, sink_op_, dop_);
   }
 
  private:
@@ -603,4 +603,4 @@ PipelineExec<Traits> Compile(const Pipeline<Traits>& pipeline, std::size_t dop) 
   return detail::PipelineCompiler<Traits>(pipeline, dop).Compile();
 }
 
-}  // namespace broken_pipeline
+}  // namespace bp

@@ -30,7 +30,7 @@ What this project intentionally does **not** provide:
 
 broken-pipeline deliberately separates concerns:
 
-All public types live directly in `namespace broken_pipeline` (no sub-namespaces); headers are
+All public types live directly in `namespace bp` (no sub-namespaces); headers are
 organized as a small set of top-level files:
 
 1) **Operator protocol** (`include/broken_pipeline/operator.h`)
@@ -98,7 +98,7 @@ Required surface:
 - `result.ok()`, `result.status()`, and `result.ValueOrDie()` (lvalue/const/rvalue)
 - `Result<T>(T)` for success and `Result<T>(Status)` for error
 
-broken-pipeline defines `broken_pipeline::TaskId` and `broken_pipeline::ThreadId` as `std::size_t`,
+broken-pipeline defines `bp::TaskId` and `bp::ThreadId` as `std::size_t`,
 so you do not provide id types in your `Traits`.
 
 Then include:
@@ -154,7 +154,7 @@ struct Traits {
 
 ## Operator Skeleton
 
-All operator interfaces live in `namespace broken_pipeline` (defined in `include/broken_pipeline/operator.h`):
+All operator interfaces live in `namespace bp` (defined in `include/broken_pipeline/operator.h`):
 - `SourceOp<Traits>` → `Source()`, `Frontend()`, `Backend()`
 - `PipeOp<Traits>` → `Pipe()`, `Drain()`, `ImplicitSource()`
 - `SinkOp<Traits>` → `Sink()`, `Frontend()`, `Backend()`, `ImplicitSource()`
@@ -172,8 +172,8 @@ broken-pipeline ships a small reference "compiler" that splits a `Pipeline` into
 the host is still responsible for orchestration and scheduling.
 
 Reference implementations live in:
-- `include/broken_pipeline/pipeline_exec.h`: `broken_pipeline::Compile(pipeline, dop)` compiles a
-  `Pipeline` into a single `broken_pipeline::PipelineExec` (with an ordered list of
+- `include/broken_pipeline/pipeline_exec.h`: `bp::Compile(pipeline, dop)` compiles a
+  `Pipeline` into a single `bp::PipelineExec` (with an ordered list of
   `PipelineExecSegment`s)
 - `include/broken_pipeline/pipeline_exec.h`: `PipelineExecSegment` / `PipeExec` small-step runtime for each segment
 

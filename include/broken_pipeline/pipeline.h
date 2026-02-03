@@ -6,7 +6,7 @@
 
 #include <broken_pipeline/concepts.h>
 
-namespace broken_pipeline {
+namespace bp {
 
 template <BrokenPipelineTraits Traits>
 class SourceOp;
@@ -52,4 +52,4 @@ class Pipeline {
   SinkOp<Traits>* sink_op_;
 };
 
-}  // namespace broken_pipeline
+}  // namespace bp

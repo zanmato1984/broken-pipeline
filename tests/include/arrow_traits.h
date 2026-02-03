@@ -43,30 +43,30 @@ using Status = Traits::Status;
 template <class T>
 using Result = Traits::template Result<T>;
 
-using TaskContext = broken_pipeline::TaskContext<Traits>;
-using TaskGroup = broken_pipeline::TaskGroup<Traits>;
+using TaskContext = bp::TaskContext<Traits>;
+using TaskGroup = bp::TaskGroup<Traits>;
 
-using Task = broken_pipeline::Task<Traits>;
-using Continuation = broken_pipeline::Continuation<Traits>;
-using TaskId = broken_pipeline::TaskId;
-using ThreadId = broken_pipeline::ThreadId;
-using TaskStatus = broken_pipeline::TaskStatus;
-using TaskHint = broken_pipeline::TaskHint;
-using Resumer = broken_pipeline::Resumer;
-using Awaiter = broken_pipeline::Awaiter;
+using Task = bp::Task<Traits>;
+using Continuation = bp::Continuation<Traits>;
+using TaskId = bp::TaskId;
+using ThreadId = bp::ThreadId;
+using TaskStatus = bp::TaskStatus;
+using TaskHint = bp::TaskHint;
+using Resumer = bp::Resumer;
+using Awaiter = bp::Awaiter;
 
-using OpOutput = broken_pipeline::OpOutput<Traits>;
-using OpResult = broken_pipeline::OpResult<Traits>;
-using PipelineSource = broken_pipeline::PipelineSource<Traits>;
-using PipelineDrain = broken_pipeline::PipelineDrain<Traits>;
-using PipelinePipe = broken_pipeline::PipelinePipe<Traits>;
-using PipelineSink = broken_pipeline::PipelineSink<Traits>;
+using OpOutput = bp::OpOutput<Traits>;
+using OpResult = bp::OpResult<Traits>;
+using PipelineSource = bp::PipelineSource<Traits>;
+using PipelineDrain = bp::PipelineDrain<Traits>;
+using PipelinePipe = bp::PipelinePipe<Traits>;
+using PipelineSink = bp::PipelineSink<Traits>;
 
-using SourceOp = broken_pipeline::SourceOp<Traits>;
-using PipeOp = broken_pipeline::PipeOp<Traits>;
-using SinkOp = broken_pipeline::SinkOp<Traits>;
+using SourceOp = bp::SourceOp<Traits>;
+using PipeOp = bp::PipeOp<Traits>;
+using SinkOp = bp::SinkOp<Traits>;
 
-using Pipeline = broken_pipeline::Pipeline<Traits>;
+using Pipeline = bp::Pipeline<Traits>;
 using PipelineChannel = Pipeline::Channel;
 
 }  // namespace broken_pipeline_test
