@@ -26,7 +26,7 @@
 /// `Traits::Status` / `Traits::Result<T>` transport.
 ///
 /// The core execution model is:
-/// - Operator callbacks are small-step and re-entrant; the reference driver (`PipeExec`)
+/// - Operator callbacks are small-step and re-entrant; the reference runtime (`PipeExec`)
 ///   runs them as an explicit state machine (no blocking waits inside the library).
 /// - Operators integrate with a host scheduler via `OpOutput`:
 ///   - `OpOutput::Blocked(resumer)` for event-driven waiting (async IO / backpressure)

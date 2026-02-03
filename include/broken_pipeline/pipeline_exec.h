@@ -82,11 +82,11 @@ class Pipelinexe;
 /// - Each invocation performs bounded work and can be invoked repeatedly by a scheduler.
 /// - Operator callbacks are invoked in a push-style path (source produces, pipes
 /// transform,
-///   sink consumes). Source output is requested by the driver via `Source()`.
+///   sink consumes). Source output is obtained by the runtime via `Source()`.
 ///
 /// Control propagation:
 /// - `TaskStatus::Yield()` is returned when an operator returns `OpOutput::PipeYield()`.
-///   On the next invocation after a yield, the driver re-enters the yielding operator
+///   On the next invocation after a yield, the runtime re-enters the yielding operator
 ///   (input=nullopt) and expects `OpOutput::PipeYieldBack()` as the yield-back handshake.
 ///   This yield/yield-back handshake provides a natural two-phase scheduling point: run
 ///   the yielded step in an IO-oriented pool, then schedule subsequent work back on a CPU

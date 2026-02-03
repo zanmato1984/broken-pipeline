@@ -144,7 +144,7 @@ class PassThroughPipe final : public PipeOp {
 };
 
 // A pipe that uses Drain() to flush the last buffered batch at end-of-stream.
-// This shows the "tail output" interface: the pipeline driver calls Drain() only
+// This shows the "tail output" interface: the pipeline runtime calls Drain() only
 // after observing Finished() from the upstream source.
 class DelayLastBatchPipe final : public PipeOp {
  public:

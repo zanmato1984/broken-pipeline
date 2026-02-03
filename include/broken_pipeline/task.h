@@ -217,7 +217,7 @@ class Continuation {
   /// finish.
   ///
   /// A `TaskGroup` may have an optional `Continuation` that is guaranteed to run exactly
-  /// once *after* all parallel task instances have successfully finished.
+  /// once after all parallel task instances have successfully finished.
   ///
   /// This is the canonical place for barrier work: merging thread-local state, finalizing
   /// shared structures, etc.

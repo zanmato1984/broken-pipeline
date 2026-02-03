@@ -11,7 +11,7 @@ This repository contains:
 
 ## Goals
 
-- Provide minimal interfaces between operators, a pipeline driver, and a scheduler.
+- Provide minimal interfaces between operators, a pipeline runtime, and a scheduler.
 - Make operator execution small-step and resumable.
 - Avoid coupling to any particular data structure library or async runtime.
 
@@ -176,7 +176,7 @@ Input conventions for Pipe and Sink:
   blocked wake-up, or as part of a yield handshake)
 
 Terminology note:
-- Re-entering an operator means the pipeline driver invokes the operator callback again
+- Re-entering an operator means the pipeline runtime invokes the operator callback again
   (often with input=nullopt). This is distinct from `Resumer::Resume()`, which is the
   wake-up mechanism used for `OpOutput::Blocked(resumer)`.
 
@@ -201,7 +201,7 @@ Typical uses for `PIPE_YIELD`:
 - This yield/yield-back handshake provides a natural two-phase scheduling point: run the
   yielded step in an IO pool, then schedule subsequent work back on a CPU pool.
 
-Contracts for the reference driver in `include/broken_pipeline/pipeline_exec.h`:
+Contracts for the reference runtime in `include/broken_pipeline/pipeline_exec.h`:
 - `SourceOp::Source()` must return one of:
   - `OpOutput::SourcePipeHasMore(batch)`
   - `OpOutput::Finished(optional batch)`
@@ -298,12 +298,12 @@ Each Pipelinexe exposes `Pipelinexe::PipeExec().TaskGroup()`, which runs the sta
 
 Semantics:
 - Each task instance uses TaskId as ThreadId (0..dop-1).
-- Within a task call, the driver performs bounded work and keeps state internally to
+- Within a task call, the runtime performs bounded work and keeps state internally to
   continue on a later invocation.
 - If all unfinished channels are blocked, the task returns `TaskStatus::Blocked(awaiter)`
   built from the channels' resumers.
 - If an operator returns `PIPE_YIELD`, the task returns `TaskStatus::Yield()`. On the next
-  invocation, the driver re-enters the yielding operator (input=nullopt) and expects
+  invocation, the runtime re-enters the yielding operator (input=nullopt) and expects
   `PIPE_YIELD_BACK`.
 - If any operator returns an error Result, the plan is cancelled. The call that observes
   the error returns that error; subsequent calls return `TaskStatus::Cancelled()`.
@@ -322,7 +322,7 @@ PipelineExec only provides building blocks. A host scheduler/executor is respons
 - Executing each Pipelinexe PipeExec task group with the desired scheduling policy.
 
 The Arrow example in `examples/broken-pipeline-arrow` demonstrates one possible single-threaded
-driver and shows how to map Traits to Arrow's Status and Result types.
+execution loop and shows how to map Traits to Arrow's Status and Result types.
 
 ## Build
 

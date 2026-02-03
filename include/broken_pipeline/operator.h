@@ -38,7 +38,7 @@ class TaskGroup;
 /// @brief Output/control signal returned by operator callbacks to the pipeline runtime.
 ///
 /// `OpOutput` is the small protocol between operator implementations and a pipeline
-/// driver (e.g., `PipeExec`).
+/// runtime (e.g., `PipeExec`).
 ///
 /// It mixes two kinds of information:
 /// - flow control ("needs more input", "produced output", "has more pending output")
@@ -48,11 +48,11 @@ class TaskGroup;
 /// - A `Pipe` or `Sink` callback is invoked with an upstream `input` batch (or `nullopt`
 /// for
 ///   re-entry).
-/// - A `Source` callback is invoked by the driver to produce a batch.
+/// - A `Source` callback is invoked by the runtime to produce a batch.
 ///
 /// Two key flow-control codes are:
 /// - `PIPE_SINK_NEEDS_MORE`: the operator consumed input (or advanced internal state) and
-///   did not produce an output batch. The driver may continue by providing more upstream
+///   did not produce an output batch. The runtime may continue by providing more upstream
 ///   input when available.
 /// - `SOURCE_PIPE_HAS_MORE(batch)`: the operator produced one output batch and requires a
 ///   follow-up re-entry (typically with `input=nullopt`) to emit more pending output
@@ -72,7 +72,7 @@ class OpOutput {
     /// another
     /// upstream batch (for example, by invoking the upstream source or upstream pipe in
     /// the
-    /// driver's state machine).
+    /// runtime's state machine).
     /// For a `Sink`, this is the "normal" successful consume result.
     PIPE_SINK_NEEDS_MORE,
     /// @brief Produced one output batch and does not require a follow-up re-entry.
@@ -81,14 +81,14 @@ class OpOutput {
     PIPE_EVEN,
     /// @brief Produced one output batch and has more output pending internally.
     ///
-    /// The driver should re-enter the same operator (input=nullopt) before providing it
+    /// The runtime should re-enter the same operator (input=nullopt) before providing it
     /// another upstream input batch.
     SOURCE_PIPE_HAS_MORE,
     /// @brief Cannot make progress until `Resumer::Resume()` is triggered.
     BLOCKED,
     /// @brief Yield to the scheduler before continuing.
     ///
-    /// A driver may propagate this as `TaskStatus::Yield()` to let the scheduler
+    /// A runtime may propagate this as `TaskStatus::Yield()` to let the scheduler
     /// migrate execution to another pool or priority class.
     PIPE_YIELD,
     /// @brief Yield-back handshake signal for a previously yielded operator.
@@ -195,7 +195,7 @@ using OpResult = Result<Traits, OpOutput<Traits>>;
 
 /// @brief Source callback signature.
 ///
-/// The pipeline driver repeatedly calls `Source(ctx, thread_id)` to obtain output
+/// The pipeline runtime repeatedly calls `Source(ctx, thread_id)` to obtain output
 /// batches.
 ///
 /// A source typically returns:
@@ -212,7 +212,7 @@ using PipelineSource =
 ///
 /// The `input` parameter is `std::optional<Batch>`:
 /// - When `input` has a value, it is a new upstream batch.
-/// - When `input` is `std::nullopt`, the driver is re-entering the operator to continue
+/// - When `input` is `std::nullopt`, the runtime is re-entering the operator to continue
 ///   from internal state (for example, after `SOURCE_PIPE_HAS_MORE`, after a blocked wait
 ///   completes, or as part of a yield handshake).
 ///
