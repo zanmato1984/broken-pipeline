@@ -21,33 +21,36 @@
 /// Broken Pipeline is a header-only C++20 library that defines protocols for building
 /// batch-at-a-time execution pipelines that can be driven without blocking threads.
 ///
-/// The library is traits-based: you provide a `Traits` type (see `bp::BrokenPipelineTraits`)
-/// that defines `Traits::Batch` and an Arrow-like `Traits::Status` / `Traits::Result<T>`
-/// transport.
+/// The library is traits-based: you provide a `Traits` type (see
+/// `bp::BrokenPipelineTraits`) that defines `Traits::Batch` and an Arrow-like
+/// `Traits::Status` / `Traits::Result<T>` transport.
 ///
 /// The core execution model is:
 /// - Operator callbacks are small-step and re-entrant; the reference driver (`PipeExec`)
 ///   runs them as an explicit state machine (no blocking waits inside the library).
 /// - Operators integrate with a host scheduler via `OpOutput`:
 ///   - `OpOutput::Blocked(resumer)` for event-driven waiting (async IO / backpressure)
-///   - `OpOutput::PipeYield()` / `OpOutput::PipeYieldBack()` as a two-phase scheduling point
+///   - `OpOutput::PipeYield()` / `OpOutput::PipeYieldBack()` as a two-phase scheduling
+///   point
 ///     around long synchronous work (often IO-heavy, such as spilling)
-/// - Tasks return `TaskStatus` and use scheduler-provided `Resumer`/`Awaiter` primitives to
+/// - Tasks return `TaskStatus` and use scheduler-provided `Resumer`/`Awaiter` primitives
+/// to
 ///   represent blocked waiting. These primitives can be implemented with synchronous
 ///   primitives (for example, condition variables), asynchronous primitives (for example,
 ///   future/promise style), or coroutines.
 ///
 /// Additional staging:
 /// - `SourceOp::Frontend()` / `SourceOp::Backend()` and `SinkOp::Frontend()` /
-///   `SinkOp::Backend()` allow a host to split operator work into separate task groups and
-///   route them using `TaskHint` (for example, CPU vs IO pools).
+///   `SinkOp::Backend()` allow a host to split operator work into separate task groups
+///   and route them using `TaskHint` (for example, CPU vs IO pools).
 ///
 /// Broken Pipeline provides:
 /// - Task protocol: `Task`, `TaskGroup`, `Continuation`, `TaskStatus`, `TaskContext`,
 ///   `Resumer`/`Awaiter`
 /// - Operator protocol: `SourceOp` / `PipeOp` / `SinkOp` and `OpOutput`
 /// - Pipeline graph: `Pipeline`
-/// - Reference compilation/runtime: `Compile(pipeline, dop)`, `PipelineExec`, `Pipelinexe`,
+/// - Reference compilation/runtime: `Compile(pipeline, dop)`, `PipelineExec`,
+/// `Pipelinexe`,
 ///   `PipeExec`
 ///
 /// Broken Pipeline does not provide:
@@ -57,7 +60,8 @@
 ///
 /// Notes:
 /// - All public symbols live in namespace `bp`.
-/// - `Compile` splits pipelines only on `PipeOp::ImplicitSource()`. `SinkOp::ImplicitSource()`
+/// - `Compile` splits pipelines only on `PipeOp::ImplicitSource()`.
+/// `SinkOp::ImplicitSource()`
 ///   is provided for host orchestration and is not used by `Compile`.
 
 #include <broken_pipeline/concepts.h>

@@ -465,8 +465,8 @@ TEST(BrokenPipelinePipeExecTest, EmptySourceNotReady) {
 TEST(BrokenPipelinePipeExecTest, TwoSourceOneNotReady) {
   std::vector<Trace> traces;
 
-  ScriptedSource source1("Source1",
-                         {{BlockedStep(), OutputStep(OpOutput::Finished())}}, &traces);
+  ScriptedSource source1("Source1", {{BlockedStep(), OutputStep(OpOutput::Finished())}},
+                         &traces);
   ScriptedSource source2("Source2", {{OutputStep(OpOutput::Finished())}}, &traces);
   ScriptedSink sink("Sink", {{}}, &traces);
 
@@ -569,14 +569,13 @@ TEST(BrokenPipelinePipeExecTest, OnePassWithPipe) {
                           OutputStep(OpOutput::Finished())}},
                         &traces);
 
-  ScriptedPipe pipe("Pipe", {{OutputStep(OpOutput::PipeEven(/*batch=*/10),
-                                         ExpectInput(Batch{1}))}},
-                    /*drain_steps=*/{}, &traces);
+  ScriptedPipe pipe(
+      "Pipe", {{OutputStep(OpOutput::PipeEven(/*batch=*/10), ExpectInput(Batch{1}))}},
+      /*drain_steps=*/{}, &traces);
 
-  ScriptedSink sink(
-      "Sink",
-      {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{10}))}},
-      &traces);
+  ScriptedSink sink("Sink",
+                    {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{10}))}},
+                    &traces);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
@@ -860,33 +859,30 @@ TEST(BrokenPipelinePipeExecTest, DrainProducesTailOutput) {
 TEST(BrokenPipelinePipeExecTest, Drain) {
   std::vector<Trace> traces;
 
-  ScriptedSource source(
-      "Source",
-      {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/1)),
-        OutputStep(OpOutput::Finished(std::optional<Batch>(2)))}},
-      &traces);
+  ScriptedSource source("Source",
+                        {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/1)),
+                          OutputStep(OpOutput::Finished(std::optional<Batch>(2)))}},
+                        &traces);
 
   ScriptedPipe pipe(
       "Pipe",
-      /*pipe_steps=*/{{OutputStep(OpOutput::PipeEven(/*batch=*/10), ExpectInput(Batch{1})),
-                      OutputStep(OpOutput::PipeEven(/*batch=*/20), ExpectInput(Batch{2}))}},
+      /*pipe_steps=*/
+      {{OutputStep(OpOutput::PipeEven(/*batch=*/10), ExpectInput(Batch{1})),
+        OutputStep(OpOutput::PipeEven(/*batch=*/20), ExpectInput(Batch{2}))}},
       /*drain_steps=*/
       {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/30)),
-        OutputStep(OpOutput::PipeYield()),
-        OutputStep(OpOutput::PipeYieldBack()),
-        OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/31)),
-        BlockedStep(),
+        OutputStep(OpOutput::PipeYield()), OutputStep(OpOutput::PipeYieldBack()),
+        OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/31)), BlockedStep(),
         OutputStep(OpOutput::Finished(std::optional<Batch>(32)))}},
       &traces);
 
-  ScriptedSink sink(
-      "Sink",
-      {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{10})),
-        OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{20})),
-        OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{30})),
-        OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{31})),
-        OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{32}))}},
-      &traces);
+  ScriptedSink sink("Sink",
+                    {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{10})),
+                      OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{20})),
+                      OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{30})),
+                      OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{31})),
+                      OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{32}))}},
+                    &traces);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
@@ -932,15 +928,14 @@ TEST(BrokenPipelinePipeExecTest, ImplicitSource) {
   ScriptedSource source(
       "Source", {{OutputStep(OpOutput::Finished(std::optional<Batch>(1)))}}, &traces);
 
-  ScriptedPipe pipe("Pipe", {{OutputStep(OpOutput::PipeEven(/*batch=*/10),
-                                         ExpectInput(Batch{1}))}},
-                    /*drain_steps=*/{}, &traces, std::move(implicit_source_up));
+  ScriptedPipe pipe(
+      "Pipe", {{OutputStep(OpOutput::PipeEven(/*batch=*/10), ExpectInput(Batch{1}))}},
+      /*drain_steps=*/{}, &traces, std::move(implicit_source_up));
 
-  ScriptedSink sink(
-      "Sink",
-      {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{10})),
-        OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{2}))}},
-      &traces);
+  ScriptedSink sink("Sink",
+                    {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{10})),
+                      OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{2}))}},
+                    &traces);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
@@ -963,22 +958,21 @@ TEST(BrokenPipelinePipeExecTest, ImplicitSource) {
 TEST(BrokenPipelinePipeExecTest, Backpressure) {
   std::vector<Trace> traces;
 
-  ScriptedSource source(
-      "Source",
-      {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/1)),
-        OutputStep(OpOutput::Finished(std::optional<Batch>(2)))}},
-      &traces);
+  ScriptedSource source("Source",
+                        {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/1)),
+                          OutputStep(OpOutput::Finished(std::optional<Batch>(2)))}},
+                        &traces);
 
   ScriptedPipe pipe(
       "Pipe",
-      /*pipe_steps=*/{{OutputStep(OpOutput::PipeEven(/*batch=*/10), ExpectInput(Batch{1})),
-                      OutputStep(OpOutput::PipeEven(/*batch=*/20), ExpectInput(Batch{2}))}},
+      /*pipe_steps=*/
+      {{OutputStep(OpOutput::PipeEven(/*batch=*/10), ExpectInput(Batch{1})),
+        OutputStep(OpOutput::PipeEven(/*batch=*/20), ExpectInput(Batch{2}))}},
       /*drain_steps=*/{}, &traces);
 
   ScriptedSink sink(
       "Sink",
-      {{BlockedStep(ExpectInput(Batch{10})),
-        BlockedStep(ExpectInput(std::nullopt)),
+      {{BlockedStep(ExpectInput(Batch{10})), BlockedStep(ExpectInput(std::nullopt)),
         OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(std::nullopt)),
         OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{20}))}},
       &traces);
@@ -1004,12 +998,11 @@ TEST(BrokenPipelinePipeExecTest, Backpressure) {
 TEST(BrokenPipelinePipeExecTest, MultiPipe) {
   std::vector<Trace> traces;
 
-  ScriptedSource source(
-      "Source",
-      {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/1)),
-        OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/2)),
-        OutputStep(OpOutput::Finished(std::optional<Batch>(3)))}},
-      &traces);
+  ScriptedSource source("Source",
+                        {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/1)),
+                          OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/2)),
+                          OutputStep(OpOutput::Finished(std::optional<Batch>(3)))}},
+                        &traces);
 
   ScriptedPipe pipe1(
       "Pipe1",
@@ -1074,12 +1067,11 @@ TEST(BrokenPipelinePipeExecTest, MultiDrain) {
 
   ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces);
 
-  ScriptedPipe pipe1(
-      "Pipe1", /*pipe_steps=*/{{}},
-      /*drain_steps=*/
-      {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/1)),
-        OutputStep(OpOutput::Finished())}},
-      &traces);
+  ScriptedPipe pipe1("Pipe1", /*pipe_steps=*/{{}},
+                     /*drain_steps=*/
+                     {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/1)),
+                       OutputStep(OpOutput::Finished())}},
+                     &traces);
 
   ScriptedPipe pipe2(
       "Pipe2",
@@ -1091,11 +1083,10 @@ TEST(BrokenPipelinePipeExecTest, MultiDrain) {
       {{BlockedStep(), OutputStep(OpOutput::Finished(std::optional<Batch>(2)))}},
       &traces);
 
-  ScriptedSink sink(
-      "Sink",
-      {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{10})),
-        OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{2}))}},
-      &traces);
+  ScriptedSink sink("Sink",
+                    {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{10})),
+                      OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{2}))}},
+                    &traces);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe1, &pipe2}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
@@ -1128,9 +1119,9 @@ TEST(BrokenPipelinePipeExecTest, MultiChannel) {
       {{BlockedStep(), OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/1)),
         OutputStep(OpOutput::Finished())}},
       &traces);
-  ScriptedPipe pipe1("Pipe1", {{OutputStep(OpOutput::PipeEven(/*batch=*/10),
-                                           ExpectInput(Batch{1}))}},
-                     /*drain_steps=*/{}, &traces);
+  ScriptedPipe pipe1(
+      "Pipe1", {{OutputStep(OpOutput::PipeEven(/*batch=*/10), ExpectInput(Batch{1}))}},
+      /*drain_steps=*/{}, &traces);
 
   ScriptedSource source2(
       "Source2",
@@ -1143,17 +1134,15 @@ TEST(BrokenPipelinePipeExecTest, MultiChannel) {
         OutputStep(OpOutput::PipeEven(/*batch=*/21), ExpectInput(std::nullopt))}},
       /*drain_steps=*/{}, &traces);
 
-  ScriptedSink sink(
-      "Sink",
-      {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{10})),
-        OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{20})),
-        OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{21}))}},
-      &traces);
+  ScriptedSink sink("Sink",
+                    {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{10})),
+                      OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{20})),
+                      OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{21}))}},
+                    &traces);
 
-  Pipeline pipeline("P",
-                    {PipelineChannel{&source1, {&pipe1}},
-                     PipelineChannel{&source2, {&pipe2}}},
-                    &sink);
+  Pipeline pipeline(
+      "P", {PipelineChannel{&source1, {&pipe1}}, PipelineChannel{&source2, {&pipe2}}},
+      &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
@@ -1194,11 +1183,13 @@ TEST(BrokenPipelinePipeExecTest, MultiChannel) {
   ASSERT_EQ(traces.size(), 12);
   EXPECT_EQ(traces[0], (Trace{"Source1", "Source", std::nullopt, "BLOCKED"}));
   EXPECT_EQ(traces[1], (Trace{"Source2", "Source", std::nullopt, "BLOCKED"}));
-  EXPECT_EQ(traces[2], (Trace{"Source1", "Source", std::nullopt, "SOURCE_PIPE_HAS_MORE"}));
+  EXPECT_EQ(traces[2],
+            (Trace{"Source1", "Source", std::nullopt, "SOURCE_PIPE_HAS_MORE"}));
   EXPECT_EQ(traces[3], (Trace{"Pipe1", "Pipe", Batch{1}, "PIPE_EVEN"}));
   EXPECT_EQ(traces[4], (Trace{"Sink", "Sink", Batch{10}, "PIPE_SINK_NEEDS_MORE"}));
   EXPECT_EQ(traces[5], (Trace{"Source1", "Source", std::nullopt, "FINISHED"}));
-  EXPECT_EQ(traces[6], (Trace{"Source2", "Source", std::nullopt, "SOURCE_PIPE_HAS_MORE"}));
+  EXPECT_EQ(traces[6],
+            (Trace{"Source2", "Source", std::nullopt, "SOURCE_PIPE_HAS_MORE"}));
   EXPECT_EQ(traces[7], (Trace{"Pipe2", "Pipe", Batch{2}, "SOURCE_PIPE_HAS_MORE"}));
   EXPECT_EQ(traces[8], (Trace{"Sink", "Sink", Batch{20}, "PIPE_SINK_NEEDS_MORE"}));
   EXPECT_EQ(traces[9], (Trace{"Pipe2", "Pipe", std::nullopt, "PIPE_EVEN"}));
@@ -1273,9 +1264,8 @@ TEST(BrokenPipelinePipeExecTest, DirectSourceError) {
 TEST(BrokenPipelinePipeExecTest, SourceErrorAfterBlocked) {
   std::vector<Trace> traces;
 
-  ScriptedSource source("Source",
-                        {{BlockedStep(), ErrorStep(Status::UnknownError("42"))}},
-                        &traces);
+  ScriptedSource source(
+      "Source", {{BlockedStep(), ErrorStep(Status::UnknownError("42"))}}, &traces);
   ScriptedPipe pipe("Pipe", {{}} /*unused*/, /*drain_steps=*/{}, &traces);
   ScriptedSink sink("Sink", {{}}, &traces);
 
@@ -1297,16 +1287,14 @@ TEST(BrokenPipelinePipeExecTest, SourceErrorAfterBlocked) {
 TEST(BrokenPipelinePipeExecTest, SourceError) {
   std::vector<Trace> traces;
 
-  ScriptedSource source(
-      "Source",
-      {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/1)),
-        ErrorStep(Status::UnknownError("42"))}},
-      &traces);
+  ScriptedSource source("Source",
+                        {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/1)),
+                          ErrorStep(Status::UnknownError("42"))}},
+                        &traces);
 
-  ScriptedSink sink(
-      "Sink",
-      {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{1}))}},
-      &traces);
+  ScriptedSink sink("Sink",
+                    {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{1}))}},
+                    &traces);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
@@ -1329,9 +1317,9 @@ TEST(BrokenPipelinePipeExecTest, PipeError) {
   ScriptedSource source(
       "Source", {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/1))}}, &traces);
 
-  ScriptedPipe pipe(
-      "Pipe", {{ErrorStep(Status::UnknownError("42"), ExpectInput(Batch{1}))}},
-      /*drain_steps=*/{}, &traces);
+  ScriptedPipe pipe("Pipe",
+                    {{ErrorStep(Status::UnknownError("42"), ExpectInput(Batch{1}))}},
+                    /*drain_steps=*/{}, &traces);
 
   ScriptedSink sink("Sink", {{}} /*unused*/, &traces);
 
@@ -1353,22 +1341,19 @@ TEST(BrokenPipelinePipeExecTest, PipeError) {
 TEST(BrokenPipelinePipeExecTest, PipeErrorAfterEven) {
   std::vector<Trace> traces;
 
-  ScriptedSource source(
-      "Source",
-      {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/1)),
-        OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/2))}},
-      &traces);
+  ScriptedSource source("Source",
+                        {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/1)),
+                          OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/2))}},
+                        &traces);
 
-  ScriptedPipe pipe(
-      "Pipe",
-      {{OutputStep(OpOutput::PipeEven(/*batch=*/10), ExpectInput(Batch{1})),
-        ErrorStep(Status::UnknownError("42"), ExpectInput(Batch{2}))}},
-      /*drain_steps=*/{}, &traces);
+  ScriptedPipe pipe("Pipe",
+                    {{OutputStep(OpOutput::PipeEven(/*batch=*/10), ExpectInput(Batch{1})),
+                      ErrorStep(Status::UnknownError("42"), ExpectInput(Batch{2}))}},
+                    /*drain_steps=*/{}, &traces);
 
-  ScriptedSink sink(
-      "Sink",
-      {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{10}))}},
-      &traces);
+  ScriptedSink sink("Sink",
+                    {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{10}))}},
+                    &traces);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
@@ -1388,17 +1373,15 @@ TEST(BrokenPipelinePipeExecTest, PipeErrorAfterEven) {
 TEST(BrokenPipelinePipeExecTest, PipeErrorAfterNeedsMore) {
   std::vector<Trace> traces;
 
-  ScriptedSource source(
-      "Source",
-      {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/1)),
-        OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/2))}},
-      &traces);
+  ScriptedSource source("Source",
+                        {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/1)),
+                          OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/2))}},
+                        &traces);
 
-  ScriptedPipe pipe(
-      "Pipe",
-      {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{1})),
-        ErrorStep(Status::UnknownError("42"), ExpectInput(Batch{2}))}},
-      /*drain_steps=*/{}, &traces);
+  ScriptedPipe pipe("Pipe",
+                    {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{1})),
+                      ErrorStep(Status::UnknownError("42"), ExpectInput(Batch{2}))}},
+                    /*drain_steps=*/{}, &traces);
 
   ScriptedSink sink("Sink", {{}} /*unused*/, &traces);
 
@@ -1429,10 +1412,9 @@ TEST(BrokenPipelinePipeExecTest, PipeErrorAfterHasMore) {
         ErrorStep(Status::UnknownError("42"), ExpectInput(std::nullopt))}},
       /*drain_steps=*/{}, &traces);
 
-  ScriptedSink sink(
-      "Sink",
-      {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{10}))}},
-      &traces);
+  ScriptedSink sink("Sink",
+                    {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{10}))}},
+                    &traces);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
@@ -1455,12 +1437,11 @@ TEST(BrokenPipelinePipeExecTest, PipeErrorAfterYieldBack) {
   ScriptedSource source(
       "Source", {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/1))}}, &traces);
 
-  ScriptedPipe pipe(
-      "Pipe",
-      {{OutputStep(OpOutput::PipeYield(), ExpectInput(Batch{1})),
-        OutputStep(OpOutput::PipeYieldBack(), ExpectInput(std::nullopt)),
-        ErrorStep(Status::UnknownError("42"), ExpectInput(std::nullopt))}},
-      /*drain_steps=*/{}, &traces);
+  ScriptedPipe pipe("Pipe",
+                    {{OutputStep(OpOutput::PipeYield(), ExpectInput(Batch{1})),
+                      OutputStep(OpOutput::PipeYieldBack(), ExpectInput(std::nullopt)),
+                      ErrorStep(Status::UnknownError("42"), ExpectInput(std::nullopt))}},
+                    /*drain_steps=*/{}, &traces);
 
   ScriptedSink sink("Sink", {{}} /*unused*/, &traces);
 
@@ -1485,11 +1466,10 @@ TEST(BrokenPipelinePipeExecTest, PipeErrorAfterBlocked) {
   ScriptedSource source(
       "Source", {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/1))}}, &traces);
 
-  ScriptedPipe pipe(
-      "Pipe",
-      {{BlockedStep(ExpectInput(Batch{1})),
-        ErrorStep(Status::UnknownError("42"), ExpectInput(std::nullopt))}},
-      /*drain_steps=*/{}, &traces);
+  ScriptedPipe pipe("Pipe",
+                    {{BlockedStep(ExpectInput(Batch{1})),
+                      ErrorStep(Status::UnknownError("42"), ExpectInput(std::nullopt))}},
+                    /*drain_steps=*/{}, &traces);
 
   ScriptedSink sink("Sink", {{}} /*unused*/, &traces);
 
@@ -1538,16 +1518,14 @@ TEST(BrokenPipelinePipeExecTest, DrainErrorAfterHasMore) {
 
   ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces);
 
-  ScriptedPipe pipe(
-      "Pipe", /*pipe_steps=*/{{}},
-      {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/1)),
-        ErrorStep(Status::UnknownError("42"))}},
-      &traces);
+  ScriptedPipe pipe("Pipe", /*pipe_steps=*/{{}},
+                    {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/1)),
+                      ErrorStep(Status::UnknownError("42"))}},
+                    &traces);
 
-  ScriptedSink sink(
-      "Sink",
-      {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{1}))}},
-      &traces);
+  ScriptedSink sink("Sink",
+                    {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{1}))}},
+                    &traces);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
@@ -1597,9 +1575,8 @@ TEST(BrokenPipelinePipeExecTest, DrainErrorAfterBlocked) {
 
   ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces);
 
-  ScriptedPipe pipe(
-      "Pipe", /*pipe_steps=*/{{}},
-      {{BlockedStep(), ErrorStep(Status::UnknownError("42"))}}, &traces);
+  ScriptedPipe pipe("Pipe", /*pipe_steps=*/{{}},
+                    {{BlockedStep(), ErrorStep(Status::UnknownError("42"))}}, &traces);
 
   ScriptedSink sink("Sink", {{}} /*unused*/, &traces);
 
@@ -1627,8 +1604,7 @@ TEST(BrokenPipelinePipeExecTest, SinkError) {
       "Pipe", {{OutputStep(OpOutput::PipeEven(/*batch=*/10), ExpectInput(Batch{1}))}},
       /*drain_steps=*/{}, &traces);
   ScriptedSink sink(
-      "Sink", {{ErrorStep(Status::UnknownError("42"), ExpectInput(Batch{10}))}},
-      &traces);
+      "Sink", {{ErrorStep(Status::UnknownError("42"), ExpectInput(Batch{10}))}}, &traces);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
@@ -1648,21 +1624,19 @@ TEST(BrokenPipelinePipeExecTest, SinkError) {
 TEST(BrokenPipelinePipeExecTest, SinkErrorAfterNeedsMore) {
   std::vector<Trace> traces;
 
-  ScriptedSource source(
-      "Source",
-      {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/1)),
-        OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/2))}},
-      &traces);
+  ScriptedSource source("Source",
+                        {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/1)),
+                          OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/2))}},
+                        &traces);
   ScriptedPipe pipe(
       "Pipe",
       {{OutputStep(OpOutput::PipeEven(/*batch=*/10), ExpectInput(Batch{1})),
         OutputStep(OpOutput::PipeEven(/*batch=*/20), ExpectInput(Batch{2}))}},
       /*drain_steps=*/{}, &traces);
-  ScriptedSink sink(
-      "Sink",
-      {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{10})),
-        ErrorStep(Status::UnknownError("42"), ExpectInput(Batch{20}))}},
-      &traces);
+  ScriptedSink sink("Sink",
+                    {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(Batch{10})),
+                      ErrorStep(Status::UnknownError("42"), ExpectInput(Batch{20}))}},
+                    &traces);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
@@ -1687,11 +1661,10 @@ TEST(BrokenPipelinePipeExecTest, SinkErrorAfterBlocked) {
   ScriptedPipe pipe(
       "Pipe", {{OutputStep(OpOutput::PipeEven(/*batch=*/10), ExpectInput(Batch{1}))}},
       /*drain_steps=*/{}, &traces);
-  ScriptedSink sink(
-      "Sink",
-      {{BlockedStep(ExpectInput(Batch{10})),
-        ErrorStep(Status::UnknownError("42"), ExpectInput(std::nullopt))}},
-      &traces);
+  ScriptedSink sink("Sink",
+                    {{BlockedStep(ExpectInput(Batch{10})),
+                      ErrorStep(Status::UnknownError("42"), ExpectInput(std::nullopt))}},
+                    &traces);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);

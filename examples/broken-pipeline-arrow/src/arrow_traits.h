@@ -18,8 +18,8 @@
 ///
 /// @brief Example Broken Pipeline Traits implementation backed by Apache Arrow.
 ///
-/// Broken Pipeline does not define its own Status/Result type. All Broken Pipeline APIs are
-/// parameterized by `Traits::Status` and `Traits::Result<T>`.
+/// Broken Pipeline does not define its own Status/Result type. All Broken Pipeline APIs
+/// are parameterized by `Traits::Status` and `Traits::Result<T>`.
 ///
 /// In this example:
 /// - `Status` maps to `arrow::Status`

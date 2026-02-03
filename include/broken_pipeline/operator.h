@@ -45,7 +45,8 @@ class TaskGroup;
 /// - execution control ("blocked", "yield", "finished", "cancelled")
 ///
 /// Flow control is defined in terms of the push-style callbacks:
-/// - A `Pipe` or `Sink` callback is invoked with an upstream `input` batch (or `nullopt` for
+/// - A `Pipe` or `Sink` callback is invoked with an upstream `input` batch (or `nullopt`
+/// for
 ///   re-entry).
 /// - A `Source` callback is invoked by the driver to produce a batch.
 ///
@@ -54,8 +55,8 @@ class TaskGroup;
 ///   did not produce an output batch. The driver may continue by providing more upstream
 ///   input when available.
 /// - `SOURCE_PIPE_HAS_MORE(batch)`: the operator produced one output batch and requires a
-///   follow-up re-entry (typically with `input=nullopt`) to emit more pending output before
-///   it can accept another upstream input batch.
+///   follow-up re-entry (typically with `input=nullopt`) to emit more pending output
+///   before it can accept another upstream input batch.
 ///
 /// Terminology note:
 /// - Re-entering an operator (invoking it again, often with `input=nullopt`) is distinct
@@ -67,8 +68,10 @@ class OpOutput {
   enum class Code {
     /// @brief Downstream needs more input; no output was produced.
     ///
-    /// For a `Pipe`, this means: stop pushing downstream and continue by obtaining another
-    /// upstream batch (for example, by invoking the upstream source or upstream pipe in the
+    /// For a `Pipe`, this means: stop pushing downstream and continue by obtaining
+    /// another
+    /// upstream batch (for example, by invoking the upstream source or upstream pipe in
+    /// the
     /// driver's state machine).
     /// For a `Sink`, this is the "normal" successful consume result.
     PIPE_SINK_NEEDS_MORE,
@@ -90,7 +93,8 @@ class OpOutput {
     PIPE_YIELD,
     /// @brief Yield-back handshake signal for a previously yielded operator.
     ///
-    /// A common interpretation is: the yield-required long synchronous step (often IO-heavy,
+    /// A common interpretation is: the yield-required long synchronous step (often
+    /// IO-heavy,
     /// such as spilling) has completed, and subsequent work should be scheduled back to a
     /// CPU-oriented pool.
     PIPE_YIELD_BACK,
@@ -191,13 +195,15 @@ using OpResult = Result<Traits, OpOutput<Traits>>;
 
 /// @brief Source callback signature.
 ///
-/// The pipeline driver repeatedly calls `Source(ctx, thread_id)` to obtain output batches.
+/// The pipeline driver repeatedly calls `Source(ctx, thread_id)` to obtain output
+/// batches.
 ///
 /// A source typically returns:
 /// - `SourcePipeHasMore(batch)` to produce one batch
 /// - `Finished()` when it has no more data
 /// - `Finished(batch)` to signal end-of-stream while also producing a final batch
-/// - `Blocked(resumer)` if it needs to wait for an external event (async IO / backpressure)
+/// - `Blocked(resumer)` if it needs to wait for an external event (async IO /
+/// backpressure)
 template <BrokenPipelineTraits Traits>
 using PipelineSource =
     std::function<OpResult<Traits>(const TaskContext<Traits>&, ThreadId)>;
@@ -243,8 +249,8 @@ using PipelineSink = PipelinePipe<Traits>;
 /// (for example, CPU-heavy preparation in frontend vs IO-heavy readiness in backend) and
 /// route them using `TaskHint`.
 ///
-/// Broken Pipeline does not impose a specific scheduler or ordering for these task groups;
-/// the host orchestration decides.
+/// Broken Pipeline does not impose a specific scheduler or ordering for these task
+/// groups; the host orchestration decides.
 template <BrokenPipelineTraits Traits>
 class SourceOp {
  public:
@@ -274,9 +280,10 @@ class SourceOp {
 ///   implicit source"
 ///
 /// Example:
-/// - A right outer join hash probe may need a post-probe scan phase of the build-side hash
-///   table to emit unmatched rows. Representing that scan phase as an implicit source makes
-///   it a separate downstream pipelinexe.
+/// - A right outer join hash probe may need a post-probe scan phase of the build-side
+/// hash
+///   table to emit unmatched rows. Representing that scan phase as an implicit source
+///   makes it a separate downstream pipelinexe.
 template <BrokenPipelineTraits Traits>
 class PipeOp {
  public:

@@ -80,17 +80,20 @@ class Pipelinexe;
 /// - Each task instance represents one execution lane (the reference runtime uses
 ///   `ThreadId = TaskId`).
 /// - Each invocation performs bounded work and can be invoked repeatedly by a scheduler.
-/// - Operator callbacks are invoked in a push-style path (source produces, pipes transform,
+/// - Operator callbacks are invoked in a push-style path (source produces, pipes
+/// transform,
 ///   sink consumes). Source output is requested by the driver via `Source()`.
 ///
 /// Control propagation:
 /// - `TaskStatus::Yield()` is returned when an operator returns `OpOutput::PipeYield()`.
 ///   On the next invocation after a yield, the driver re-enters the yielding operator
 ///   (input=nullopt) and expects `OpOutput::PipeYieldBack()` as the yield-back handshake.
-///   This yield/yield-back handshake provides a natural two-phase scheduling point: run the
-///   yielded step in an IO-oriented pool, then schedule subsequent work back on a CPU pool.
+///   This yield/yield-back handshake provides a natural two-phase scheduling point: run
+///   the yielded step in an IO-oriented pool, then schedule subsequent work back on a CPU
+///   pool.
 /// - `TaskStatus::Blocked(awaiter)` is returned when all unfinished channels are blocked;
-///   the awaiter is created by `TaskContext::awaiter_factory` from the channels' resumers.
+///   the awaiter is created by `TaskContext::awaiter_factory` from the channels'
+///   resumers.
 /// - `TaskStatus::Finished()` is returned when all channels are finished.
 /// - After an error, subsequent calls return `TaskStatus::Cancelled()`.
 template <BrokenPipelineTraits Traits>
@@ -442,7 +445,8 @@ class PipelineCompiler;
 /// Notes:
 /// - A pipelinexe may contain multiple channels feeding the same sink. This is useful for
 ///   union-all-like fan-in operators.
-/// - A pipelinexe keeps implicit sources returned from `PipeOp::ImplicitSource()` alive for
+/// - A pipelinexe keeps implicit sources returned from `PipeOp::ImplicitSource()` alive
+/// for
 ///   the duration of the compiled plan.
 ///
 /// Pipelinexes are executed in sequence order by the host.
@@ -482,10 +486,9 @@ class Pipelinexe {
   }
 
  private:
-  Pipelinexe(
-      std::string name, std::vector<typename Pipeline<Traits>::Channel> channels,
-      std::vector<std::unique_ptr<SourceOp<Traits>>> implicit_sources_keepalive,
-      SinkOp<Traits>* sink_op, std::size_t dop)
+  Pipelinexe(std::string name, std::vector<typename Pipeline<Traits>::Channel> channels,
+             std::vector<std::unique_ptr<SourceOp<Traits>>> implicit_sources_keepalive,
+             SinkOp<Traits>* sink_op, std::size_t dop)
       : name_(std::move(name)),
         channels_(std::move(channels)),
         implicit_sources_keepalive_(std::move(implicit_sources_keepalive)),
@@ -544,14 +547,15 @@ namespace detail {
 /// Pipelinexes (`Pipelinexe`).
 ///
 /// Splitting rule (current):
-/// - Only pipe implicit sources (`PipeOp::ImplicitSource()`) create pipelinexe boundaries.
+/// - Only pipe implicit sources (`PipeOp::ImplicitSource()`) create pipelinexe
+/// boundaries.
 /// - When a pipe provides an implicit source, the downstream pipe chain becomes a new
 ///   channel rooted at that implicit source in a later pipelinexe.
 ///
 /// Note:
 /// - `SinkOp::ImplicitSource()` is intentionally not used by this compiler. It is a
-///   host-orchestration hook for chaining a sink's output into a subsequent pipeline stage
-///   (for example, an aggregation sink emitting group-by results).
+///   host-orchestration hook for chaining a sink's output into a subsequent pipeline
+///   stage (for example, an aggregation sink emitting group-by results).
 template <BrokenPipelineTraits Traits>
 class PipelineCompiler {
  public:
@@ -637,11 +641,10 @@ class PipelineCompiler {
       auto implicit_sources = std::move(pipelinexe_info.first);
       auto pipeline_channels = std::move(pipelinexe_info.second);
 
-      auto name =
-          "pipelinexe" + std::to_string(id) + "(" + pipeline_.Name() + ")";
-      pipelinexes.push_back(Pipelinexe<Traits>(
-          std::move(name), std::move(pipeline_channels), std::move(implicit_sources),
-          pipeline_.Sink(), dop_));
+      auto name = "pipelinexe" + std::to_string(id) + "(" + pipeline_.Name() + ")";
+      pipelinexes.push_back(
+          Pipelinexe<Traits>(std::move(name), std::move(pipeline_channels),
+                             std::move(implicit_sources), pipeline_.Sink(), dop_));
     }
 
     return pipelinexes;
@@ -668,7 +671,8 @@ class PipelineCompiler {
 ///
 /// The compiled plan:
 /// - collects source and sink frontend/backend task groups (as opaque units for the host)
-/// - splits the pipeline into an ordered list of pipelinexes on `PipeOp::ImplicitSource()`
+/// - splits the pipeline into an ordered list of pipelinexes on
+/// `PipeOp::ImplicitSource()`
 /// - owns implicit sources returned from `PipeOp::ImplicitSource()` to keep them alive
 ///
 /// This function does not call `SinkOp::ImplicitSource()`.
