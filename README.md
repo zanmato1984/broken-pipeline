@@ -50,7 +50,7 @@ Include everything:
 - ThreadId: execution lane id passed to operators (`std::size_t`); the reference runtime uses `ThreadId = TaskId`
 - Channel: one source plus a linear chain of pipes feeding a shared sink
 - Pipelinexe: one compiled executable stage (a set of channels sharing a sink)
-- Implicit source: a SourceOp created by a pipe to start a downstream stage
+- Implicit source: a SourceOp created by a pipe or sink to start a downstream stage
 - Drain: a tail-output callback invoked after the upstream source is exhausted
 
 ## Traits
@@ -279,13 +279,17 @@ Compilation:
 - Compilation splits a pipeline into an ordered list of Pipelinexes when a pipe returns a
   non-null `PipeOp::ImplicitSource()`.
 - Only `PipeOp::ImplicitSource()` creates stage boundaries today. `SinkOp::ImplicitSource()`
-  exists for host-level orchestration but is not used by `bp::Compile`.
+  exists for host-level orchestration but is not used by `bp::Compile`. One example is an
+  aggregation implemented as a sink that uses `SinkOp::ImplicitSource()` to provide a source
+  for emitting group-by results into a subsequent pipeline stage.
 
 Lifetime:
 - Pipeline stores raw pointers. Operator instances must outlive the compiled plan and any
   tasks created from it.
 - Implicit sources returned from PipeOp::ImplicitSource() are owned by the compiled plan and
   kept alive by each Pipelinexe.
+- Implicit sources returned from `SinkOp::ImplicitSource()` are owned by the host orchestration
+  that calls it.
 
 ## PipeExec: reference small-step runtime
 
