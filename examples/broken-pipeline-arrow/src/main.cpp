@@ -73,7 +73,7 @@ Status RunTaskGroup(const TaskGroup& group, const TaskContext& task_ctx) {
         continue;
       }
 
-      auto status_r = group.GetTask()(task_ctx, task_id);
+      auto status_r = group.Task()(task_ctx, task_id);
       if (!status_r.ok()) {
         return status_r.status();
       }
@@ -94,8 +94,8 @@ Status RunTaskGroup(const TaskGroup& group, const TaskContext& task_ctx) {
     }
   }
 
-  if (group.GetContinuation().has_value()) {
-    auto cont = *group.GetContinuation();
+  if (group.Continuation().has_value()) {
+    auto cont = *group.Continuation();
     for (;;) {
       auto cont_r = cont(task_ctx);
       if (!cont_r.ok()) {

@@ -248,8 +248,8 @@ class TaskGroup {
   ///
   /// Broken Pipeline does not provide a scheduler, so the exact ordering/thread of
   /// `cont` is scheduler-defined.
-  TaskGroup(std::string name, Task<Traits> task, std::size_t num_tasks,
-            std::optional<Continuation<Traits>> cont = std::nullopt)
+  TaskGroup(std::string name, bp::Task<Traits> task, std::size_t num_tasks,
+            std::optional<bp::Continuation<Traits>> cont = std::nullopt)
       : name_(std::move(name)),
         task_(std::move(task)),
         num_tasks_(num_tasks),
@@ -257,17 +257,17 @@ class TaskGroup {
 
   const std::string& Name() const noexcept { return name_; }
 
-  const Task<Traits>& GetTask() const noexcept { return task_; }
+  const bp::Task<Traits>& Task() const noexcept { return task_; }
   std::size_t NumTasks() const noexcept { return num_tasks_; }
-  const std::optional<Continuation<Traits>>& GetContinuation() const noexcept {
+  const std::optional<bp::Continuation<Traits>>& Continuation() const noexcept {
     return cont_;
   }
 
  private:
   std::string name_;
-  Task<Traits> task_;
+  bp::Task<Traits> task_;
   std::size_t num_tasks_;
-  std::optional<Continuation<Traits>> cont_;
+  std::optional<bp::Continuation<Traits>> cont_;
 };
 
 }  // namespace bp

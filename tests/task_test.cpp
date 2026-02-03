@@ -76,9 +76,9 @@ TEST(BrokenPipelineTaskTest, BasicTaskGroup) {
   TaskGroup tg("G", task, /*num_tasks=*/1, cont);
   ASSERT_EQ(tg.Name(), "G");
   ASSERT_EQ(tg.NumTasks(), 1);
-  ASSERT_TRUE(tg.GetContinuation().has_value());
-  ASSERT_EQ(tg.GetTask().Name(), "T");
-  ASSERT_EQ(tg.GetContinuation()->Name(), "C");
+  ASSERT_TRUE(tg.Continuation().has_value());
+  ASSERT_EQ(tg.Task().Name(), "T");
+  ASSERT_EQ(tg.Continuation()->Name(), "C");
 }
 
 TEST(BrokenPipelineTaskTest, TaskHintDefaultsToCpu) {

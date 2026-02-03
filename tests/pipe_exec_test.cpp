@@ -366,7 +366,7 @@ Status RunSingleTaskToDone(const TaskGroup& group, const TaskContext& task_ctx,
       return Status::Invalid("RunSingleTaskToDone exceeded step limit");
     }
 
-    auto status_r = group.GetTask()(task_ctx, /*task_id=*/0);
+    auto status_r = group.Task()(task_ctx, /*task_id=*/0);
     if (!status_r.ok()) {
       return status_r.status();
     }
@@ -439,14 +439,14 @@ TEST(BrokenPipelinePipeExecTest, EmptySourceNotReady) {
   auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
-  auto status_r = group.GetTask()(task_ctx, 0);
+  auto status_r = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r.ok());
   ASSERT_TRUE(status_r->IsBlocked());
   ASSERT_EQ(traces.size(), 1);
   EXPECT_EQ(traces[0], (Trace{"Source", "Source", std::nullopt, "BLOCKED"}));
 
   // Calling again without resuming stays blocked and does not re-invoke Source().
-  auto status_r2 = group.GetTask()(task_ctx, 0);
+  auto status_r2 = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsBlocked());
   ASSERT_EQ(traces.size(), 1);
@@ -479,7 +479,7 @@ TEST(BrokenPipelinePipeExecTest, TwoSourceOneNotReady) {
   auto task_ctx = MakeTaskContext();
 
   // First run can make progress on channel 2 even if channel 1 is blocked.
-  auto status_r = group.GetTask()(task_ctx, 0);
+  auto status_r = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r.ok());
   ASSERT_TRUE(status_r->IsContinue());
 
@@ -488,7 +488,7 @@ TEST(BrokenPipelinePipeExecTest, TwoSourceOneNotReady) {
   EXPECT_EQ(traces[1], (Trace{"Source2", "Source", std::nullopt, "FINISHED"}));
 
   // Now only channel 1 is unfinished and blocked -> task blocks.
-  auto status_r2 = group.GetTask()(task_ctx, 0);
+  auto status_r2 = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsBlocked());
 
@@ -691,7 +691,7 @@ TEST(BrokenPipelinePipeExecTest, PipeYieldHandshake) {
   auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
-  auto status_r = group.GetTask()(task_ctx, 0);
+  auto status_r = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r.ok());
   ASSERT_TRUE(status_r->IsYield());
 
@@ -757,12 +757,12 @@ TEST(BrokenPipelinePipeExecTest, PipeBlockedResumesWithNullInput) {
   auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
-  auto status_r = group.GetTask()(task_ctx, 0);
+  auto status_r = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r.ok());
   ASSERT_TRUE(status_r->IsBlocked());
 
   // Calling again without resuming stays blocked and does not re-invoke Pipe().
-  auto status_r2 = group.GetTask()(task_ctx, 0);
+  auto status_r2 = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsBlocked());
 
@@ -801,7 +801,7 @@ TEST(BrokenPipelinePipeExecTest, SinkBackpressureResumesWithNullInput) {
   auto task_ctx = MakeTaskContext();
 
   // First call blocks in sink.
-  auto status_r = group.GetTask()(task_ctx, 0);
+  auto status_r = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r.ok());
   ASSERT_TRUE(status_r->IsBlocked());
 
@@ -1148,7 +1148,7 @@ TEST(BrokenPipelinePipeExecTest, MultiChannel) {
   auto task_ctx = MakeTaskContext();
 
   // Both channels start blocked.
-  auto status_r = group.GetTask()(task_ctx, 0);
+  auto status_r = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r.ok());
   ASSERT_TRUE(status_r->IsBlocked());
 
@@ -1160,17 +1160,17 @@ TEST(BrokenPipelinePipeExecTest, MultiChannel) {
   awaiter->Resumers()[0]->Resume();
 
   // Channel 0 can now run and reach sink.
-  auto status_r2 = group.GetTask()(task_ctx, 0);
+  auto status_r2 = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsContinue());
 
   // Finish channel 0; task still continues because channel 1 is blocked.
-  auto status_r3 = group.GetTask()(task_ctx, 0);
+  auto status_r3 = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r3.ok());
   ASSERT_TRUE(status_r3->IsContinue());
 
   // Now the only unfinished channel is blocked -> task blocks with a single resumer.
-  auto status_r4 = group.GetTask()(task_ctx, 0);
+  auto status_r4 = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r4.ok());
   ASSERT_TRUE(status_r4->IsBlocked());
   auto* awaiter2 = dynamic_cast<TestAwaiter*>(status_r4->GetAwaiter().get());
@@ -1210,7 +1210,7 @@ TEST(BrokenPipelinePipeExecTest, MultiChannelAllBlockedReturnsTaskBlocked) {
   auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
-  auto status_r = group.GetTask()(task_ctx, 0);
+  auto status_r = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r.ok());
   ASSERT_TRUE(status_r->IsBlocked());
 
@@ -1230,11 +1230,11 @@ TEST(BrokenPipelinePipeExecTest, ErrorCancelsSubsequentCalls) {
   auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
-  auto status_r = group.GetTask()(task_ctx, 0);
+  auto status_r = group.Task()(task_ctx, 0);
   ASSERT_FALSE(status_r.ok());
   ASSERT_EQ(status_r.status().message(), "boom");
 
-  auto status_r2 = group.GetTask()(task_ctx, 0);
+  auto status_r2 = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1256,7 +1256,7 @@ TEST(BrokenPipelinePipeExecTest, DirectSourceError) {
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.GetTask()(task_ctx, 0);
+  auto status_r2 = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1279,7 +1279,7 @@ TEST(BrokenPipelinePipeExecTest, SourceErrorAfterBlocked) {
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.GetTask()(task_ctx, 0);
+  auto status_r2 = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1306,7 +1306,7 @@ TEST(BrokenPipelinePipeExecTest, SourceError) {
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.GetTask()(task_ctx, 0);
+  auto status_r2 = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1333,7 +1333,7 @@ TEST(BrokenPipelinePipeExecTest, PipeError) {
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.GetTask()(task_ctx, 0);
+  auto status_r2 = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1365,7 +1365,7 @@ TEST(BrokenPipelinePipeExecTest, PipeErrorAfterEven) {
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.GetTask()(task_ctx, 0);
+  auto status_r2 = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1395,7 +1395,7 @@ TEST(BrokenPipelinePipeExecTest, PipeErrorAfterNeedsMore) {
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.GetTask()(task_ctx, 0);
+  auto status_r2 = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1426,7 +1426,7 @@ TEST(BrokenPipelinePipeExecTest, PipeErrorAfterHasMore) {
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.GetTask()(task_ctx, 0);
+  auto status_r2 = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1455,7 +1455,7 @@ TEST(BrokenPipelinePipeExecTest, PipeErrorAfterYieldBack) {
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.GetTask()(task_ctx, 0);
+  auto status_r2 = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1483,7 +1483,7 @@ TEST(BrokenPipelinePipeExecTest, PipeErrorAfterBlocked) {
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.GetTask()(task_ctx, 0);
+  auto status_r2 = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1508,7 +1508,7 @@ TEST(BrokenPipelinePipeExecTest, DrainError) {
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.GetTask()(task_ctx, 0);
+  auto status_r2 = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1537,7 +1537,7 @@ TEST(BrokenPipelinePipeExecTest, DrainErrorAfterHasMore) {
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.GetTask()(task_ctx, 0);
+  auto status_r2 = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1565,7 +1565,7 @@ TEST(BrokenPipelinePipeExecTest, DrainErrorAfterYieldBack) {
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.GetTask()(task_ctx, 0);
+  auto status_r2 = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1590,7 +1590,7 @@ TEST(BrokenPipelinePipeExecTest, DrainErrorAfterBlocked) {
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.GetTask()(task_ctx, 0);
+  auto status_r2 = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1616,7 +1616,7 @@ TEST(BrokenPipelinePipeExecTest, SinkError) {
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.GetTask()(task_ctx, 0);
+  auto status_r2 = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1648,7 +1648,7 @@ TEST(BrokenPipelinePipeExecTest, SinkErrorAfterNeedsMore) {
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.GetTask()(task_ctx, 0);
+  auto status_r2 = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1676,7 +1676,7 @@ TEST(BrokenPipelinePipeExecTest, SinkErrorAfterBlocked) {
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.GetTask()(task_ctx, 0);
+  auto status_r2 = group.Task()(task_ctx, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
