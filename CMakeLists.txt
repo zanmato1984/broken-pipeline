@@ -29,3 +29,42 @@ if(BROKEN_PIPELINE_BUILD_TESTS)
   include(cmake/testing/testing.cmake)
   add_subdirectory(tests)
 endif()
+
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
+install(
+  TARGETS broken_pipeline
+  EXPORT broken_pipelineTargets
+)
+
+install(
+  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/"
+  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+)
+
+install(
+  EXPORT broken_pipelineTargets
+  FILE broken_pipelineTargets.cmake
+  NAMESPACE broken_pipeline::
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/broken_pipeline"
+)
+
+configure_package_config_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/cmake/broken_pipelineConfig.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/broken_pipelineConfig.cmake"
+  INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/broken_pipeline"
+)
+
+write_basic_package_version_file(
+  "${CMAKE_CURRENT_BINARY_DIR}/broken_pipelineConfigVersion.cmake"
+  VERSION "${PROJECT_VERSION}"
+  COMPATIBILITY SameMajorVersion
+)
+
+install(
+  FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/broken_pipelineConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/broken_pipelineConfigVersion.cmake"
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/broken_pipeline"
+)
