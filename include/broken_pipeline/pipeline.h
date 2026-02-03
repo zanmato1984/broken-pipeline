@@ -37,11 +37,15 @@ class SinkOp;
 /// - `Channel`: a `SourceOp` plus a linear chain of `PipeOp`s
 /// - A single shared `SinkOp`
 ///
+/// Multiple channels feeding the same sink are useful for union-all-like fan-in operators
+/// where either child can produce output into the same downstream sink.
+///
 /// Notes:
 /// - The pipeline stores raw pointers to operators. Operator lifetime is owned by you and
 ///   must outlive any compilation/execution that uses the pipeline.
 /// - A pipeline may be split into multiple stages if any `PipeOp` returns a
-///   non-null `ImplicitSource()`.
+///   non-null `ImplicitSource()`. In that case, the downstream pipe chain becomes a new
+///   channel rooted at the implicit source in a later pipelinexe.
 template <BrokenPipelineTraits Traits>
 class Pipeline {
  public:

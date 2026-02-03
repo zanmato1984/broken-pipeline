@@ -662,7 +662,7 @@ TEST(BrokenPipelinePipeExecTest, PipeHasMoreResumesPipeBeforeSource) {
   EXPECT_EQ(traces[1], (Trace{"Pipe", "Pipe", Batch{1}, "SOURCE_PIPE_HAS_MORE"}));
   EXPECT_EQ(traces[2], (Trace{"Sink", "Sink", Batch{10}, "PIPE_SINK_NEEDS_MORE"}));
 
-  // Pipe resumes (input=null) before source finishes.
+  // Pipe is re-entered (input=nullopt) before source finishes.
   EXPECT_EQ(traces[3], (Trace{"Pipe", "Pipe", std::nullopt, "PIPE_EVEN"}));
   EXPECT_EQ(traces[4], (Trace{"Sink", "Sink", Batch{11}, "PIPE_SINK_NEEDS_MORE"}));
   EXPECT_EQ(traces[5], (Trace{"Source", "Source", std::nullopt, "FINISHED"}));
@@ -696,7 +696,7 @@ TEST(BrokenPipelinePipeExecTest, PipeYieldHandshake) {
   ASSERT_TRUE(status_r.ok());
   ASSERT_TRUE(status_r->IsYield());
 
-  // Resume after yield: yield back + continue running.
+  // Re-enter after yield: yield-back + continue running.
   std::vector<TaskStatus> statuses;
   ASSERT_OK(RunSingleTaskToDone(group, task_ctx, &statuses));
 
@@ -818,7 +818,7 @@ TEST(BrokenPipelinePipeExecTest, SinkBackpressureResumesWithNullInput) {
   EXPECT_EQ(traces[0], (Trace{"Source", "Source", std::nullopt, "SOURCE_PIPE_HAS_MORE"}));
   EXPECT_EQ(traces[1], (Trace{"Sink", "Sink", Batch{1}, "BLOCKED"}));
 
-  // Sink resumes with input=null (backpressure resume path).
+  // Sink is re-entered with input=nullopt (backpressure re-entry path).
   ASSERT_GE(traces.size(), 3u);
   EXPECT_EQ(traces[2], (Trace{"Sink", "Sink", std::nullopt, "BLOCKED"}));
 }

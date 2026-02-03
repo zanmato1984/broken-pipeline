@@ -16,36 +16,49 @@
 
 /// @file broken_pipeline.h
 ///
-/// @brief Public umbrella header for the core broken_pipeline protocol.
+/// @brief Umbrella header for Broken Pipeline.
 ///
-/// broken_pipeline is a **header-only, purely generic (traits-based)** set of interfaces and
-/// small protocol data structures for building a query/execution engine in the style of
-/// Ara:
+/// Broken Pipeline is a header-only C++20 library that defines protocols for building
+/// batch-at-a-time execution pipelines that can be driven without blocking threads.
 ///
-/// - Operators expose a small-step, re-entrant, batch-at-a-time interface.
-/// - Pipelines are driven as explicit state machines (not via blocking threads).
-/// - Execution is expressed in terms of `Task` / `TaskGroup` and a small `TaskStatus`
-///   protocol (Continue/Blocked/Yield/Finished/Cancelled).
+/// The library is traits-based: you provide a `Traits` type (see `bp::BrokenPipelineTraits`)
+/// that defines `Traits::Batch` and an Arrow-like `Traits::Status` / `Traits::Result<T>`
+/// transport.
 ///
-/// What broken_pipeline **does not** provide:
-/// - No concrete operators.
-/// - No scheduler/executor implementation.
-/// - No async/future library dependency.
-/// - No dependency on Arrow (or any other data structure library).
+/// The core execution model is:
+/// - Operator callbacks are small-step and re-entrant; the reference driver (`PipeExec`)
+///   runs them as an explicit state machine (no blocking waits inside the library).
+/// - Operators integrate with a host scheduler via `OpOutput`:
+///   - `OpOutput::Blocked(resumer)` for event-driven waiting (async IO / backpressure)
+///   - `OpOutput::PipeYield()` / `OpOutput::PipeYieldBack()` as a two-phase scheduling point
+///     around long synchronous work (often IO-heavy, such as spilling)
+/// - Tasks return `TaskStatus` and use scheduler-provided `Resumer`/`Awaiter` primitives to
+///   represent blocked waiting. These primitives can be implemented with synchronous
+///   primitives (for example, condition variables), asynchronous primitives (for example,
+///   future/promise style), or coroutines.
 ///
-/// The design goal is to let you plug in your own:
-/// - batch type (your `Traits::Batch`)
-/// - status/result types (your `Traits::Status` and `Traits::Result<T>`)
-/// - scheduler primitives (your `Resumer`/`Awaiter` implementations + factories)
+/// Additional staging:
+/// - `SourceOp::Frontend()` / `SourceOp::Backend()` and `SinkOp::Frontend()` /
+///   `SinkOp::Backend()` allow a host to split operator work into separate task groups and
+///   route them using `TaskHint` (for example, CPU vs IO pools).
 ///
-/// Public surface (via this umbrella header):
-/// - Task protocol: `Task`, `TaskGroup`, `TaskStatus`, `Resumer`/`Awaiter`, `TaskContext`
+/// Broken Pipeline provides:
+/// - Task protocol: `Task`, `TaskGroup`, `Continuation`, `TaskStatus`, `TaskContext`,
+///   `Resumer`/`Awaiter`
 /// - Operator protocol: `SourceOp` / `PipeOp` / `SinkOp` and `OpOutput`
 /// - Pipeline graph: `Pipeline`
+/// - Reference compilation/runtime: `Compile(pipeline, dop)`, `PipelineExec`, `Pipelinexe`,
+///   `PipeExec`
 ///
-/// Helper:
-/// - `#include <broken_pipeline/pipeline_exec.h>` provides `bp::Compile(pipeline, dop)`
-///   and the compiled plan `bp::PipelineExec` (with `Pipelinexe` / `PipeExec`).
+/// Broken Pipeline does not provide:
+/// - A scheduler/executor implementation or thread pool
+/// - Concrete operators or concrete data types
+/// - An async runtime dependency
+///
+/// Notes:
+/// - All public symbols live in namespace `bp`.
+/// - `Compile` splits pipelines only on `PipeOp::ImplicitSource()`. `SinkOp::ImplicitSource()`
+///   is provided for host orchestration and is not used by `Compile`.
 
 #include <broken_pipeline/concepts.h>
 

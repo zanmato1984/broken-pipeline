@@ -236,8 +236,8 @@ Contracts for the reference driver in `include/broken_pipeline/pipeline_exec.h`:
   pipelinexe(s) feeding the sink have finished.
 - `SourceOp::Backend()` and `SinkOp::Backend()` return an optional task group the host
   typically schedules before running the main stage work, often to initiate or wait on IO
-  readiness (for example, synchronous IO pulling from a queue, or asynchronous IO waiting on
-  callbacks/signals).
+  readiness (for example, synchronous IO reading/dequeueing from a queue, or asynchronous
+  IO waiting on callbacks/signals).
 - `TaskHint` is the scheduler hint that marks tasks as CPU vs IO.
 - A typical orchestration pattern is to use frontend/backend to split work into distinct
   computation stages and use `TaskHint` so a scheduler can route CPU-bound work and IO-bound

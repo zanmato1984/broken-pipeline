@@ -16,10 +16,10 @@
 
 /// @file arrow_traits.h
 ///
-/// @brief `broken_pipeline` Traits for unit tests (Arrow Status/Result).
+/// @brief Broken Pipeline Traits for unit tests (Arrow Status/Result).
 ///
-/// broken_pipeline does not define its own Status/Result type. Instead, all broken_pipeline APIs
-/// are parameterized by `Traits::Status` and `Traits::Result<T>`.
+/// Broken Pipeline does not define its own Status/Result type. All Broken Pipeline APIs are
+/// parameterized by `Traits::Status` and `Traits::Result<T>`.
 ///
 /// In this test Traits:
 /// - `Status` maps to `arrow::Status`

@@ -23,8 +23,10 @@ namespace bp {
 
 /// @brief Task instance id within a `TaskGroup`.
 ///
-/// broken_pipeline intentionally keeps ids simple and uniform: task instances are indexed
+/// Broken Pipeline intentionally keeps ids simple and uniform: task instances are indexed
 /// 0..N-1 within their group.
+///
+/// Type: `std::size_t`.
 using TaskId = std::size_t;
 
 /// @brief Execution lane id.
@@ -32,11 +34,13 @@ using TaskId = std::size_t;
 /// Many operator implementations keep per-lane state indexed by `ThreadId`. In the
 /// reference runtime (`PipeExec`), a task instance typically uses
 /// `TaskId` as its `ThreadId`.
+///
+/// Type: `std::size_t`.
 using ThreadId = std::size_t;
 
 /// @brief Alias helper for `Traits::Result<T>`.
 ///
-/// broken_pipeline never assumes a particular error type or transport. Instead, all APIs
+/// Broken Pipeline never assumes a particular error type or transport. Instead, all APIs
 /// return `Traits::Result<T>` and rely on an Arrow-like result surface:
 /// - `result.ok()`
 /// - `result.status()`
@@ -44,20 +48,20 @@ using ThreadId = std::size_t;
 template <class Traits, class T>
 using Result = typename Traits::template Result<T>;
 
-/// @brief Status type (success-or-error) used by broken_pipeline.
+/// @brief Status type (success-or-error) used by Broken Pipeline.
 ///
 /// This is `Traits::Status` (Arrow-style, separate from `Result<T>`).
 template <class Traits>
 using Status = typename Traits::Status;
 
-/// @brief Concept defining the required "Traits" surface for broken_pipeline.
+/// @brief Concept defining the required "Traits" surface for Broken Pipeline.
 ///
-/// You provide a `Traits` type to parametrize broken_pipeline over:
+/// You provide a `Traits` type to parametrize Broken Pipeline over:
 /// - The batch type (`Batch`)
 /// - An optional query-level context type (`Context`)
 /// - Your error/result transport (`Status` + `Result<T>`)
 ///
-/// broken_pipeline expects an Arrow-like API (zero-overhead when using Arrow directly):
+/// Broken Pipeline expects an Arrow-like API (zero-overhead when using Arrow directly):
 ///
 /// - `Traits::Status`:
 ///   - `static Status OK()`
@@ -71,7 +75,7 @@ using Status = typename Traits::Status;
 ///   - constructible from `T` (success)
 ///   - constructible from `Status` (error)
 ///
-/// This is still "Option B": broken_pipeline does not define its own Status/Result type.
+/// Broken Pipeline does not define its own Status/Result type.
 ///
 /// Typical mapping to Apache Arrow:
 /// - `Status` = `arrow::Status`

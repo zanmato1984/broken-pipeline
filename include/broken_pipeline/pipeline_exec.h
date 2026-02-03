@@ -34,21 +34,65 @@
 namespace bp {
 
 template <BrokenPipelineTraits Traits>
+/// @brief Source-provided task groups collected during compilation.
+///
+/// Contains the task groups returned by `SourceOp::Frontend()` and `SourceOp::Backend()`.
+/// The host decides scheduling order. A common pattern is:
+/// - schedule `frontend` before running the pipelinexe(s) that invoke `Source()`
+/// - schedule `backend` ahead as an IO-readiness task (if present)
+///
+/// These task groups are opaque to Broken Pipeline core. A scheduler may route them using
+/// `TaskHint` (for example, CPU vs IO pools).
 struct SourceExec {
+  /// @brief Source frontend task groups.
   std::vector<TaskGroup<Traits>> frontend;
+
+  /// @brief Optional source backend task group.
   std::optional<TaskGroup<Traits>> backend;
 };
 
 template <BrokenPipelineTraits Traits>
+/// @brief Sink-provided task groups collected during compilation.
+///
+/// Contains the task groups returned by `SinkOp::Frontend()` and `SinkOp::Backend()`.
+/// The host decides scheduling order. A common pattern is:
+/// - schedule `backend` ahead as an IO-readiness task (if present)
+/// - schedule `frontend` strictly after all pipelinexes feeding the sink have finished
+///
+/// These task groups are opaque to Broken Pipeline core. A scheduler may route them using
+/// `TaskHint` (for example, CPU vs IO pools).
 struct SinkExec {
+  /// @brief Sink frontend task groups.
   std::vector<TaskGroup<Traits>> frontend;
+
+  /// @brief Optional sink backend task group.
   std::optional<TaskGroup<Traits>> backend;
 };
 
 template <BrokenPipelineTraits Traits>
 class Pipelinexe;
 
-/// @brief Encapsulation of the task group that runs a pipelinexe.
+/// @brief Reference small-step runtime for a pipelinexe.
+///
+/// `PipeExec::TaskGroup()` returns a `TaskGroup` with `dop` task instances.
+///
+/// Execution model:
+/// - Each task instance represents one execution lane (the reference runtime uses
+///   `ThreadId = TaskId`).
+/// - Each invocation performs bounded work and can be invoked repeatedly by a scheduler.
+/// - Operator callbacks are invoked in a push-style path (source produces, pipes transform,
+///   sink consumes). Source output is requested by the driver via `Source()`.
+///
+/// Control propagation:
+/// - `TaskStatus::Yield()` is returned when an operator returns `OpOutput::PipeYield()`.
+///   On the next invocation after a yield, the driver re-enters the yielding operator
+///   (input=nullopt) and expects `OpOutput::PipeYieldBack()` as the yield-back handshake.
+///   This yield/yield-back handshake provides a natural two-phase scheduling point: run the
+///   yielded step in an IO-oriented pool, then schedule subsequent work back on a CPU pool.
+/// - `TaskStatus::Blocked(awaiter)` is returned when all unfinished channels are blocked;
+///   the awaiter is created by `TaskContext::awaiter_factory` from the channels' resumers.
+/// - `TaskStatus::Finished()` is returned when all channels are finished.
+/// - After an error, subsequent calls return `TaskStatus::Cancelled()`.
 template <BrokenPipelineTraits Traits>
 class PipeExec {
  public:
@@ -390,11 +434,18 @@ template <BrokenPipelineTraits Traits>
 class PipelineCompiler;
 }  // namespace detail
 
-/// @brief A compiled Pipelinexe.
+/// @brief A compiled pipelinexe (one executable stage).
 ///
 /// A `Pipelinexe` ("pipelinexe") is a small-step, multiplexed runtime over one or more
-/// channels (sources feeding the shared sink). Pipelinexes are executed in sequence order by
-/// the host.
+/// channels (sources feeding the shared sink).
+///
+/// Notes:
+/// - A pipelinexe may contain multiple channels feeding the same sink. This is useful for
+///   union-all-like fan-in operators.
+/// - A pipelinexe keeps implicit sources returned from `PipeOp::ImplicitSource()` alive for
+///   the duration of the compiled plan.
+///
+/// Pipelinexes are executed in sequence order by the host.
 template <BrokenPipelineTraits Traits>
 class Pipelinexe {
  public:
@@ -411,6 +462,7 @@ class Pipelinexe {
     return implicit_sources_keepalive_.size();
   }
 
+  /// @brief Returns source-provided frontend/backend task groups for each channel source.
   std::vector<SourceExec<Traits>> SourceExecs() const {
     std::vector<SourceExec<Traits>> source_execs;
     source_execs.reserve(channels_.size());
@@ -424,6 +476,7 @@ class Pipelinexe {
     return source_execs;
   }
 
+  /// @brief Returns the reference runtime that runs this pipelinexe.
   bp::PipeExec<Traits> PipeExec() const {
     return bp::PipeExec<Traits>(channels_, sink_op_, dop_);
   }
@@ -451,11 +504,11 @@ class Pipelinexe {
 /// @brief A compiled pipeline execution plan.
 ///
 /// A `PipelineExec` contains:
-/// - one `SinkExec` (lifecycle task groups for the sink)
+/// - one `SinkExec` (sink frontend/backend task groups)
 /// - an ordered sequence of Pipelinexes (`Pipelinexe`)
 ///
-/// The host is responsible for orchestrating ordering between pipelinexe/source/sink task
-/// groups.
+/// The host is responsible for orchestrating ordering between pipelinexes and the
+/// source/sink frontend/backend task groups.
 template <BrokenPipelineTraits Traits>
 class PipelineExec {
  public:
@@ -494,6 +547,11 @@ namespace detail {
 /// - Only pipe implicit sources (`PipeOp::ImplicitSource()`) create pipelinexe boundaries.
 /// - When a pipe provides an implicit source, the downstream pipe chain becomes a new
 ///   channel rooted at that implicit source in a later pipelinexe.
+///
+/// Note:
+/// - `SinkOp::ImplicitSource()` is intentionally not used by this compiler. It is a
+///   host-orchestration hook for chaining a sink's output into a subsequent pipeline stage
+///   (for example, an aggregation sink emitting group-by results).
 template <BrokenPipelineTraits Traits>
 class PipelineCompiler {
  public:
@@ -606,6 +664,14 @@ class PipelineCompiler {
 
 }  // namespace detail
 
+/// @brief Compile a `Pipeline` into a `PipelineExec` plan.
+///
+/// The compiled plan:
+/// - collects source and sink frontend/backend task groups (as opaque units for the host)
+/// - splits the pipeline into an ordered list of pipelinexes on `PipeOp::ImplicitSource()`
+/// - owns implicit sources returned from `PipeOp::ImplicitSource()` to keep them alive
+///
+/// This function does not call `SinkOp::ImplicitSource()`.
 template <BrokenPipelineTraits Traits>
 PipelineExec<Traits> Compile(const Pipeline<Traits>& pipeline, std::size_t dop) {
   return detail::PipelineCompiler<Traits>(pipeline, dop).Compile();

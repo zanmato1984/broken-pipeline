@@ -30,10 +30,23 @@ std::vector<TaskGroup> CompileTaskGroups(const Pipeline& pipeline, std::size_t d
   auto exec = Compile(pipeline, dop);
 
   std::vector<TaskGroup> task_groups;
-  task_groups.reserve(exec.Pipelinexes().size() * 2 + 3);
+  task_groups.reserve(exec.Pipelinexes().size() * 3 + 3);
+
+  // A typical orchestration schedules backend (IO-readiness) tasks ahead, then runs the
+  // streaming pipelinexes, then runs sink frontend (post-stream) tasks.
+  if (exec.Sink().backend.has_value()) {
+    task_groups.push_back(*exec.Sink().backend);
+  }
 
   for (const auto& pipelinexe : exec.Pipelinexes()) {
     const auto source_execs = pipelinexe.SourceExecs();
+
+    for (const auto& source : source_execs) {
+      if (source.backend.has_value()) {
+        task_groups.push_back(*source.backend);
+      }
+    }
+
     for (const auto& source : source_execs) {
       for (const auto& tg : source.frontend) {
         task_groups.push_back(tg);
@@ -45,19 +58,6 @@ std::vector<TaskGroup> CompileTaskGroups(const Pipeline& pipeline, std::size_t d
 
   for (const auto& tg : exec.Sink().frontend) {
     task_groups.push_back(tg);
-  }
-
-  for (const auto& pipelinexe : exec.Pipelinexes()) {
-    const auto source_execs = pipelinexe.SourceExecs();
-    for (const auto& source : source_execs) {
-      if (source.backend.has_value()) {
-        task_groups.push_back(*source.backend);
-      }
-    }
-  }
-
-  if (exec.Sink().backend.has_value()) {
-    task_groups.push_back(*exec.Sink().backend);
   }
 
   return task_groups;

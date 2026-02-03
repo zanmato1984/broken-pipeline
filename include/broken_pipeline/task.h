@@ -27,18 +27,19 @@
 
 namespace bp {
 
-/// @brief A scheduler-owned "waker" that transitions a previously blocked task back to
-/// runnable.
+/// @brief Scheduler-owned wake-up primitive for blocked tasks.
 ///
-/// broken_pipeline operators never block threads directly. Instead, when an operator cannot
-/// make progress (e.g., waiting on IO or downstream backpressure), it returns
+/// Broken Pipeline operators never block threads directly. When an operator cannot make
+/// progress (for example, due to IO or downstream backpressure), it returns
 /// `OpOutput::Blocked(resumer)`.
 ///
-/// A scheduler turns one or more `Resumer` objects into an `Awaiter`
-/// and returns `TaskStatus::Blocked(awaiter)` from the task.
+/// A task aggregates one or more resumers into an awaiter using
+/// `TaskContext::awaiter_factory` and returns `TaskStatus::Blocked(awaiter)`.
 ///
-/// Later, some external event triggers `Resumer::Resume()` (often from a callback).
-/// The scheduler observes that and re-schedules the blocked task.
+/// When the awaited condition becomes true, some non-scheduler event source calls
+/// `Resumer::Resume()` (for example, an IO callback or an operator-owned background
+/// task). The scheduler observes resumed resumers and re-schedules the blocked task
+/// instance.
 class Resumer {
  public:
   virtual ~Resumer() = default;
@@ -46,15 +47,18 @@ class Resumer {
   virtual bool IsResumed() const = 0;
 };
 
-/// @brief A scheduler-owned wait handle for one or more resumers.
+/// @brief Scheduler-owned wait handle for one or more resumers.
 ///
-/// `Awaiter` is intentionally opaque to broken_pipeline core. The scheduler decides how
-/// to block (or suspend) until a resumer (or group of resumers) is resumed.
+/// `Awaiter` is intentionally opaque to Broken Pipeline core. The scheduler decides how
+/// to wait until one or more resumers are resumed.
 ///
-/// For example, a synchronous scheduler may implement an awaiter using condition
-/// variables, while an async scheduler may implement it using futures/coroutines.
+/// Examples:
+/// - Synchronous scheduler: condition variables or other blocking primitives.
+/// - Asynchronous scheduler: future/promise style or event-loop integration.
+/// - Coroutine scheduler: a coroutine-friendly awaitable implementation.
 ///
-/// broken_pipeline only stores `std::shared_ptr<Awaiter>` inside `TaskStatus::Blocked(...)`.
+/// Broken Pipeline only stores `std::shared_ptr<Awaiter>` inside
+/// `TaskStatus::Blocked(...)`.
 class Awaiter {
  public:
   virtual ~Awaiter() = default;
@@ -70,14 +74,14 @@ using AwaiterFactory = std::function<Result<Traits, std::shared_ptr<Awaiter>>(
 /// @brief Per-task immutable context + scheduler factory hooks.
 ///
 /// A scheduler is expected to create one `TaskContext` and pass it to all task instances
-/// in a `TaskGroup`. broken_pipeline itself does not construct these.
+/// in a `TaskGroup`. Broken Pipeline does not construct these.
 ///
 /// - `context` is an optional user-defined pointer to query-level state (can be null).
-/// - The factories provide scheduler-specific primitives for blocking and resumption.
+/// - The factories provide scheduler-specific primitives for blocked waiting and wake-up.
 ///
 /// When a task returns `TaskStatus::Blocked(awaiter)`, the scheduler is responsible for:
 /// - waiting/suspending using the awaiter
-/// - rescheduling the task when resumed
+/// - re-scheduling the task instance after one or more resumers are resumed
 template <BrokenPipelineTraits Traits>
 struct TaskContext {
   const typename Traits::Context* context = nullptr;
@@ -87,13 +91,14 @@ struct TaskContext {
 
 /// @brief The control protocol between a Task and a Scheduler.
 ///
-/// broken_pipeline tasks are **small-step and repeatable**: a scheduler repeatedly invokes
+/// Broken Pipeline tasks are small-step and repeatable: a scheduler repeatedly invokes
 /// a task until it returns `Finished`/`Cancelled` or an error.
 ///
 /// - `Continue`: still running; scheduler may invoke again immediately or later.
 /// - `Blocked(awaiter)`: cannot make progress; scheduler must wait/suspend on `awaiter`.
-/// - `Yield`: task is about to do a long synchronous operation and requests yielding.
-///   A scheduler may migrate it to another pool/priority class.
+/// - `Yield`: task requests a yield point before continuing, typically before a long
+///   synchronous step (often IO-heavy, such as spilling). A scheduler may migrate it to
+///   another pool/priority class.
 /// - `Finished`: completed successfully.
 /// - `Cancelled`: cancelled due to external reasons (often sibling failure).
 class TaskStatus {
@@ -158,8 +163,8 @@ class TaskStatus {
 
 /// @brief Scheduling hint for a task instance.
 ///
-/// broken_pipeline core does not ship a scheduler, but some schedulers may use this hint to
-/// choose between CPU vs IO pools or adjust priorities.
+/// Broken Pipeline core does not ship a scheduler, but some schedulers may use this hint
+/// to choose between CPU vs IO pools or adjust priorities.
 struct TaskHint {
   enum class Type {
     CPU,
@@ -168,14 +173,13 @@ struct TaskHint {
   Type type = Type::CPU;
 };
 
-/// @brief Task instance id within a group.
-///
-/// broken_pipeline uses a uniform `std::size_t` task id. It is typically interpreted as a
-/// lane index for operators.
-
 template <BrokenPipelineTraits Traits>
 using TaskResult = Result<Traits, TaskStatus>;
 
+/// @brief Task instance id within a group.
+///
+/// Broken Pipeline uses a uniform `std::size_t` task id. It is typically interpreted as a
+/// lane index for operators.
 template <BrokenPipelineTraits Traits>
 class Task {
  public:
@@ -186,7 +190,7 @@ class Task {
   ///   `Finished/Cancelled` or an error.
   /// - `task_id` is the 0-based index of this task instance within its `TaskGroup`.
   /// - The function must be re-entrant: it should do bounded work per call and use
-  ///   internal state (often indexed by `task_id`) to resume across calls.
+  ///   internal state (often indexed by `task_id`) to continue across calls.
   using Fn = std::function<TaskResult<Traits>(const TaskContext<Traits>&, TaskId)>;
 
   Task(std::string name, Fn fn, TaskHint hint = {})
@@ -209,7 +213,8 @@ class Task {
 template <BrokenPipelineTraits Traits>
 class Continuation {
  public:
-  /// @brief Continuation entrypoint executed after all task instances in the group finish.
+  /// @brief Continuation entrypoint executed after all task instances in the group
+  /// finish.
   ///
   /// A `TaskGroup` may have an optional `Continuation` that is guaranteed to run exactly
   /// once *after* all parallel task instances have successfully finished.
@@ -238,9 +243,10 @@ class TaskGroup {
   /// @brief A conceptual group of N parallel instances of the same task.
   ///
   /// - `num_tasks` defines the group parallelism (often equals pipeline DOP).
-  /// - If provided, `cont` runs exactly once after all task instances finish successfully.
+  /// - If provided, `cont` runs exactly once after all task instances finish
+  /// successfully.
   ///
-  /// broken_pipeline does not provide a scheduler, so the exact ordering/thread of
+  /// Broken Pipeline does not provide a scheduler, so the exact ordering/thread of
   /// `cont` is scheduler-defined.
   TaskGroup(std::string name, Task<Traits> task, std::size_t num_tasks,
             std::optional<Continuation<Traits>> cont = std::nullopt)

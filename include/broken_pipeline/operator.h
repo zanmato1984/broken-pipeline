@@ -41,30 +41,45 @@ class TaskGroup;
 /// driver (e.g., `PipeExec`).
 ///
 /// It mixes two kinds of information:
-/// - flow control ("need more input", "have more internal output")
+/// - flow control ("needs more input", "produced output", "has more pending output")
 /// - execution control ("blocked", "yield", "finished", "cancelled")
 ///
-/// The most important distinction is:
-/// - `PIPE_SINK_NEEDS_MORE`: the operator needs more *upstream input* before it can
-///   produce more output.
-/// - `SOURCE_PIPE_HAS_MORE(batch)`: the operator produced a batch but still has more
-///   *internal output pending*, so the driver should resume the same operator again
-///   (typically by calling it with `std::nullopt` input).
+/// Flow control is defined in terms of the push-style callbacks:
+/// - A `Pipe` or `Sink` callback is invoked with an upstream `input` batch (or `nullopt` for
+///   re-entry).
+/// - A `Source` callback is invoked by the driver to produce a batch.
+///
+/// Two key flow-control codes are:
+/// - `PIPE_SINK_NEEDS_MORE`: the operator consumed input (or advanced internal state) and
+///   did not produce an output batch. The driver may continue by providing more upstream
+///   input when available.
+/// - `SOURCE_PIPE_HAS_MORE(batch)`: the operator produced one output batch and requires a
+///   follow-up re-entry (typically with `input=nullopt`) to emit more pending output before
+///   it can accept another upstream input batch.
+///
+/// Terminology note:
+/// - Re-entering an operator (invoking it again, often with `input=nullopt`) is distinct
+///   from `Resumer::Resume()`, which is the wake-up mechanism used only for
+///   `OpOutput::Blocked(resumer)`.
 template <BrokenPipelineTraits Traits>
 class OpOutput {
  public:
   enum class Code {
     /// @brief Downstream needs more input; no output was produced.
     ///
-    /// For a `Pipe`, this means: stop pushing forward and go back to the source to
-    /// fetch more input.
+    /// For a `Pipe`, this means: stop pushing downstream and continue by obtaining another
+    /// upstream batch (for example, by invoking the upstream source or upstream pipe in the
+    /// driver's state machine).
     /// For a `Sink`, this is the "normal" successful consume result.
     PIPE_SINK_NEEDS_MORE,
-    /// @brief Produced exactly one output batch and does not require immediate resumption.
+    /// @brief Produced one output batch and does not require a follow-up re-entry.
+    ///
+    /// The operator can accept another upstream input batch immediately.
     PIPE_EVEN,
     /// @brief Produced one output batch and has more output pending internally.
     ///
-    /// The driver should resume the same operator before pulling a new input batch.
+    /// The driver should re-enter the same operator (input=nullopt) before providing it
+    /// another upstream input batch.
     SOURCE_PIPE_HAS_MORE,
     /// @brief Cannot make progress until `Resumer::Resume()` is triggered.
     BLOCKED,
@@ -73,7 +88,11 @@ class OpOutput {
     /// A driver may propagate this as `TaskStatus::Yield()` to let the scheduler
     /// migrate execution to another pool or priority class.
     PIPE_YIELD,
-    /// @brief Resume handshake for a previously yielded operator.
+    /// @brief Yield-back handshake signal for a previously yielded operator.
+    ///
+    /// A common interpretation is: the yield-required long synchronous step (often IO-heavy,
+    /// such as spilling) has completed, and subsequent work should be scheduled back to a
+    /// CPU-oriented pool.
     PIPE_YIELD_BACK,
     /// @brief Stream finished; may carry a final output batch.
     FINISHED,
@@ -172,13 +191,13 @@ using OpResult = Result<Traits, OpOutput<Traits>>;
 
 /// @brief Source callback signature.
 ///
-/// The pipeline driver repeatedly calls `Source(ctx, thread_id)` to pull batches.
+/// The pipeline driver repeatedly calls `Source(ctx, thread_id)` to obtain output batches.
 ///
 /// A source typically returns:
+/// - `SourcePipeHasMore(batch)` to produce one batch
 /// - `Finished()` when it has no more data
-/// - `SourcePipeHasMore(batch)` for more data
-/// - `Blocked(resumer)` if it needs to wait for an external event (async IO /
-/// backpressure)
+/// - `Finished(batch)` to signal end-of-stream while also producing a final batch
+/// - `Blocked(resumer)` if it needs to wait for an external event (async IO / backpressure)
 template <BrokenPipelineTraits Traits>
 using PipelineSource =
     std::function<OpResult<Traits>(const TaskContext<Traits>&, ThreadId)>;
@@ -187,9 +206,13 @@ using PipelineSource =
 ///
 /// The `input` parameter is `std::optional<Batch>`:
 /// - When `input` has a value, it is a new upstream batch.
-/// - When `input` is `std::nullopt`, the driver is resuming the operator to emit more
-///   output from internal state (e.g., after `SOURCE_PIPE_HAS_MORE`, after Blocked, or
-///   after Yield).
+/// - When `input` is `std::nullopt`, the driver is re-entering the operator to continue
+///   from internal state (for example, after `SOURCE_PIPE_HAS_MORE`, after a blocked wait
+///   completes, or as part of a yield handshake).
+///
+/// Terminology note:
+/// - Re-entering an operator is distinct from `Resumer::Resume()`, which is the wake-up
+///   mechanism used only for `OpOutput::Blocked(resumer)`.
 template <BrokenPipelineTraits Traits>
 using PipelinePipe = std::function<OpResult<Traits>(
     const TaskContext<Traits>&, ThreadId, std::optional<typename Traits::Batch>)>;
@@ -209,12 +232,19 @@ using PipelineSink = PipelinePipe<Traits>;
 
 /// @brief Source operator interface.
 ///
-/// Lifecycle hooks:
-/// - `Frontend()`: stage work before the source is run (e.g., start scan, open files).
-/// - `Backend()`: optional extra stage work after the pipeline stage is done.
+/// Frontend/Backend task groups:
+/// - `Frontend()` returns a list of task groups the host schedules before running the
+///   pipelinexe(s) that invoke `Source()`.
+/// - `Backend()` returns an optional task group the host typically schedules ahead as an
+///   IO-readiness task (for example, synchronous IO reading/dequeueing from a queue, or
+///   asynchronous IO waiting on callbacks/signals).
 ///
-/// broken_pipeline does not impose a specific driver/scheduler for these hooks; the host
-/// orchestration decides ordering.
+/// These task groups allow a host to split a source into multiple computation stages
+/// (for example, CPU-heavy preparation in frontend vs IO-heavy readiness in backend) and
+/// route them using `TaskHint`.
+///
+/// Broken Pipeline does not impose a specific scheduler or ordering for these task groups;
+/// the host orchestration decides.
 template <BrokenPipelineTraits Traits>
 class SourceOp {
  public:
@@ -237,11 +267,16 @@ class SourceOp {
 /// `Drain()` for tail output, and may optionally introduce a new stage via
 /// `ImplicitSource()`.
 ///
-/// `ImplicitSource()` is the hook used to split a pipeline into multiple sub-pipeline
-/// stages (via host orchestration):
+/// `ImplicitSource()` is the hook used by `bp::Compile` to split a pipeline into multiple
+/// pipelinexes (stages):
 /// - returning `nullptr` means "no split here"
-/// - returning a source means "downstream operators become a new sub-pipeline stage rooted
-/// at this implicit source"
+/// - returning a source means "downstream operators become a new stage rooted at this
+///   implicit source"
+///
+/// Example:
+/// - A right outer join hash probe may need a post-probe scan phase of the build-side hash
+///   table to emit unmatched rows. Representing that scan phase as an implicit source makes
+///   it a separate downstream pipelinexe.
 template <BrokenPipelineTraits Traits>
 class PipeOp {
  public:
@@ -263,9 +298,23 @@ class PipeOp {
 /// The sink consumes the output stream. Most sinks return `PIPE_SINK_NEEDS_MORE` after
 /// successfully consuming a batch, and may return `BLOCKED(resumer)` for backpressure.
 ///
-/// Like pipes, sinks also expose lifecycle hooks (`Frontend/Backend`) and an optional
-/// `ImplicitSource()` hook which can be used by higher-level orchestration to chain a sink
-/// output into a subsequent pipeline.
+/// Frontend/Backend task groups:
+/// - `Frontend()` returns a list of task groups the host schedules strictly after the
+///   pipelinexe(s) feeding this sink have finished.
+/// - `Backend()` returns an optional task group the host typically schedules ahead as an
+///   IO-readiness task (for example, synchronous IO reading/dequeueing from a queue, or
+///   asynchronous IO waiting on callbacks/signals).
+///
+/// These task groups allow a host to split a sink into multiple computation stages (for
+/// example, IO-heavy readiness in backend, the main streaming consumption in `Sink()`,
+/// and post-stream CPU-heavy finalization in frontend) and route them using `TaskHint`.
+///
+/// `ImplicitSource()` is a host-orchestration hook for chaining a sink's output into a
+/// subsequent pipeline stage. `bp::Compile` does not use sink implicit sources.
+///
+/// Example:
+/// - An aggregation implemented as a sink can use `ImplicitSource()` to provide a source
+///   that emits group-by results into a subsequent pipeline stage.
 template <BrokenPipelineTraits Traits>
 class SinkOp {
  public:
