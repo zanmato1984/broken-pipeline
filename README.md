@@ -7,7 +7,7 @@ traits-based: you provide the batch type and your status/result transport.
 This repository contains:
 - Core headers under `include/broken_pipeline/`
 - Unit tests under `tests/` (require Apache Arrow and GoogleTest)
-- An Arrow adoption example under `examples/broken_pipeline_arrow/`
+- An Arrow adoption example under `examples/broken-pipeline-arrow/`
 
 ## Goals
 
@@ -317,7 +317,7 @@ PipelineExec only provides building blocks. A host scheduler/executor is respons
   after pipelinexes, and backends as IO-readiness tasks typically scheduled ahead).
 - Executing each Pipelinexe PipeExec task group with the desired scheduling policy.
 
-The Arrow example in `examples/broken_pipeline_arrow` demonstrates one possible single-threaded
+The Arrow example in `examples/broken-pipeline-arrow` demonstrates one possible single-threaded
 driver and shows how to map Traits to Arrow's Status and Result types.
 
 ## Build
@@ -345,7 +345,7 @@ ctest --test-dir build
 
 ## Examples
 
-- `examples/broken_pipeline_arrow`: Apache Arrow adoption example (requires Arrow C++ CMake package)
+- `examples/broken-pipeline-arrow`: Apache Arrow adoption example (requires Arrow C++ CMake package)
 
 ## License
 
