@@ -25,13 +25,13 @@
 #include "arrow_op.h"
 #include "arrow_traits.h"
 
+namespace bp_arrow {
 namespace {
 
-std::vector<broken_pipeline_arrow::TaskGroup> CompileTaskGroups(
-    const broken_pipeline_arrow::Pipeline& pipeline, std::size_t dop) {
-  auto exec = bp::Compile(pipeline, dop);
+std::vector<TaskGroup> CompileTaskGroups(const Pipeline& pipeline, std::size_t dop) {
+  auto exec = Compile(pipeline, dop);
 
-  std::vector<broken_pipeline_arrow::TaskGroup> task_groups;
+  std::vector<TaskGroup> task_groups;
   task_groups.reserve(exec.Pipelinexes().size() * 2 + 3);
 
   for (const auto& pipelinexe : exec.Pipelinexes()) {
@@ -65,13 +65,12 @@ std::vector<broken_pipeline_arrow::TaskGroup> CompileTaskGroups(
   return task_groups;
 }
 
-broken_pipeline_arrow::Status RunTaskGroup(const broken_pipeline_arrow::TaskGroup& group,
-                                           const broken_pipeline_arrow::TaskContext& task_ctx) {
+Status RunTaskGroup(const TaskGroup& group, const TaskContext& task_ctx) {
   std::vector<bool> done(group.NumTasks(), false);
   std::size_t done_count = 0;
 
   while (done_count < done.size()) {
-    for (broken_pipeline_arrow::TaskId task_id = 0; task_id < done.size(); ++task_id) {
+    for (TaskId task_id = 0; task_id < done.size(); ++task_id) {
       if (done[task_id]) {
         continue;
       }
@@ -87,7 +86,7 @@ broken_pipeline_arrow::Status RunTaskGroup(const broken_pipeline_arrow::TaskGrou
       }
 
       if (ts.IsBlocked()) {
-        return arrow::Status::NotImplemented("Example scheduler does not support Blocked()");
+        return Status::NotImplemented("Example scheduler does not support Blocked()");
       }
 
       if (ts.IsFinished() || ts.IsCancelled()) {
@@ -109,7 +108,7 @@ broken_pipeline_arrow::Status RunTaskGroup(const broken_pipeline_arrow::TaskGrou
         continue;
       }
       if (ts.IsBlocked()) {
-        return arrow::Status::NotImplemented("Example scheduler does not support Blocked()");
+        return Status::NotImplemented("Example scheduler does not support Blocked()");
       }
       if (ts.IsFinished() || ts.IsCancelled()) {
         break;
@@ -117,32 +116,32 @@ broken_pipeline_arrow::Status RunTaskGroup(const broken_pipeline_arrow::TaskGrou
     }
   }
 
-  return broken_pipeline_arrow::Status::OK();
+  return Status::OK();
 }
 
-broken_pipeline_arrow::Status RunTaskGroups(
-    const std::vector<broken_pipeline_arrow::TaskGroup>& groups,
-    const broken_pipeline_arrow::TaskContext& task_ctx) {
+Status RunTaskGroups(const std::vector<TaskGroup>& groups, const TaskContext& task_ctx) {
   for (const auto& group : groups) {
     auto st = RunTaskGroup(group, task_ctx);
     if (!st.ok()) {
       return st;
     }
   }
-  return broken_pipeline_arrow::Status::OK();
+  return Status::OK();
 }
 
 }  // namespace
+}  // namespace bp_arrow
 
 int main() {
+  using namespace bp_arrow;
+
   constexpr std::size_t dop = 2;
 
   auto schema = arrow::schema({arrow::field("x", arrow::int32())});
 
   std::vector<std::shared_ptr<arrow::RecordBatch>> batches;
   for (int i = 0; i < 3; ++i) {
-    auto rb_r =
-        broken_pipeline_arrow::MakeInt32Batch(schema, /*start=*/i * 10, /*length=*/5);
+    auto rb_r = MakeInt32Batch(schema, /*start=*/i * 10, /*length=*/5);
     if (!rb_r.ok()) {
       std::cerr << "MakeInt32Batch failed: " << rb_r.status().ToString() << "\n";
       return 1;
@@ -150,30 +149,26 @@ int main() {
     batches.push_back(*rb_r);
   }
 
-  broken_pipeline_arrow::BatchesSource source(std::move(batches));
-  broken_pipeline_arrow::PassThroughPipe pipe;
-  broken_pipeline_arrow::DelayLastBatchPipe drain_pipe(dop);
-  broken_pipeline_arrow::RowCountSink sink;
+  BatchesSource source(std::move(batches));
+  PassThroughPipe pipe;
+  DelayLastBatchPipe drain_pipe(dop);
+  RowCountSink sink;
 
-  broken_pipeline_arrow::Pipeline pipeline(
-      "P", {broken_pipeline_arrow::PipelineChannel{&source, {&pipe, &drain_pipe}}},
-      &sink);
+  Pipeline pipeline("P", {PipelineChannel{&source, {&pipe, &drain_pipe}}}, &sink);
 
   auto groups = CompileTaskGroups(pipeline, dop);
 
-  broken_pipeline_arrow::Context context;
-  broken_pipeline_arrow::TaskContext task_ctx;
+  Context context;
+  TaskContext task_ctx;
   task_ctx.context = &context;
-  task_ctx.resumer_factory =
-      []() -> broken_pipeline_arrow::Result<std::shared_ptr<bp::Resumer>> {
-    return broken_pipeline_arrow::Result<std::shared_ptr<bp::Resumer>>(
-        arrow::Status::NotImplemented("resumer_factory not used in example"));
+  task_ctx.resumer_factory = []() -> Result<std::shared_ptr<Resumer>> {
+    return Result<std::shared_ptr<Resumer>>(
+        Status::NotImplemented("resumer_factory not used in example"));
   };
   task_ctx.awaiter_factory =
-      [](std::vector<std::shared_ptr<bp::Resumer>>)
-          -> broken_pipeline_arrow::Result<std::shared_ptr<bp::Awaiter>> {
-    return broken_pipeline_arrow::Result<std::shared_ptr<bp::Awaiter>>(
-        arrow::Status::NotImplemented("awaiter_factory not used in example"));
+      [](std::vector<std::shared_ptr<Resumer>>) -> Result<std::shared_ptr<Awaiter>> {
+    return Result<std::shared_ptr<Awaiter>>(
+        Status::NotImplemented("awaiter_factory not used in example"));
   };
 
   auto st = RunTaskGroups(groups, task_ctx);

@@ -34,7 +34,7 @@
 
 #include <broken_pipeline/broken_pipeline.h>
 
-namespace broken_pipeline_arrow {
+namespace bp_arrow {
 
 struct Context {
   const char* query_name = "broken-pipeline-arrow";
@@ -42,7 +42,7 @@ struct Context {
 
 struct Traits {
   using Batch = std::shared_ptr<arrow::RecordBatch>;
-  using Context = broken_pipeline_arrow::Context;
+  using Context = bp_arrow::Context;
   using Status = arrow::Status;
 
   template <class T>
@@ -60,10 +60,13 @@ using TaskContext = bp::TaskContext<Traits>;
 using TaskGroup = bp::TaskGroup<Traits>;
 
 using Task = bp::Task<Traits>;
+using Continuation = bp::Continuation<Traits>;
 using TaskId = bp::TaskId;
 using ThreadId = bp::ThreadId;
 using TaskStatus = bp::TaskStatus;
 using TaskHint = bp::TaskHint;
+using Resumer = bp::Resumer;
+using Awaiter = bp::Awaiter;
 
 using OpOutput = bp::OpOutput<Traits>;
 using OpResult = bp::OpResult<Traits>;
@@ -79,4 +82,6 @@ using SinkOp = bp::SinkOp<Traits>;
 using Pipeline = bp::Pipeline<Traits>;
 using PipelineChannel = Pipeline::Channel;
 
-}  // namespace broken_pipeline_arrow
+using bp::Compile;
+
+}  // namespace bp_arrow

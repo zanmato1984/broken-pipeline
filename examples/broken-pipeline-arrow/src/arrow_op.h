@@ -31,7 +31,7 @@
 
 #include "arrow_traits.h"
 
-namespace broken_pipeline_arrow {
+namespace bp_arrow {
 
 inline Result<Batch> MakeInt32Batch(const std::shared_ptr<arrow::Schema>& schema,
                                     std::int32_t start, std::int32_t length) {
@@ -257,4 +257,4 @@ class RowCountSink final : public SinkOp {
   std::atomic_bool backend_finished_{false};
 };
 
-}  // namespace broken_pipeline_arrow
+}  // namespace bp_arrow
