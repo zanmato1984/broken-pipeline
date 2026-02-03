@@ -81,4 +81,6 @@ using SinkOp = bp::SinkOp<Traits>;
 using Pipeline = bp::Pipeline<Traits>;
 using PipelineChannel = Pipeline::Channel;
 
+using bp::Compile;
+
 }  // namespace bp_test
