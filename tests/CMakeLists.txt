@@ -10,4 +10,4 @@ add_broken_pipeline_unit_test(
 add_broken_pipeline_unit_test(
   broken-pipeline-pipeline-compile-test "${CMAKE_CURRENT_SOURCE_DIR}/pipeline_compile_test.cpp")
 add_broken_pipeline_unit_test(
-  broken-pipeline-pipeline-task-test "${CMAKE_CURRENT_SOURCE_DIR}/pipeline_task_test.cpp")
+  broken-pipeline-pipe-exec-test "${CMAKE_CURRENT_SOURCE_DIR}/pipe_exec_test.cpp")
