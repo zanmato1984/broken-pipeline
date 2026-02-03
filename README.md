@@ -196,3 +196,7 @@ cmake --build build
 ## Examples
 
 - `examples/broken_pipeline_arrow`: Apache Arrow based adoption example (requires Arrow C++ CMake package).
+
+## License
+
+Licensed under the Apache License, Version 2.0. See `LICENSE`.
