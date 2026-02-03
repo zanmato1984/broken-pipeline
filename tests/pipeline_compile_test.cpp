@@ -218,7 +218,7 @@ TEST(BrokenPipelinePipelineCompileTest, TripplePhysicalPipeline) {
   ASSERT_TRUE(seg2.Channels()[0].pipe_ops.empty());
 }
 
-TEST(OplPipelineCompileTest, OddQuadroStagePipeline) {
+TEST(BrokenPipelinePipelineCompileTest, OddQuadroStagePipeline) {
   FooSource source1, source2, source3, source4;
 
   auto implicit_source1_up = std::make_unique<FooSource>("ImplicitSource1");
