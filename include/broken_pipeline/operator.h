@@ -21,67 +21,49 @@ struct TaskContext;
 template <BrokenPipelineTraits Traits>
 class TaskGroup;
 
-/**
- * @brief Output/control signal returned by operator callbacks to the pipeline runtime.
- *
- * `OpOutput` is the small protocol between operator implementations and a pipeline
- * driver (e.g., `PipeExec`).
- *
- * It mixes two kinds of information:
- * - flow control ("need more input", "have more internal output")
- * - execution control ("blocked", "yield", "finished", "cancelled")
- *
- * The most important distinction is:
- * - `PIPE_SINK_NEEDS_MORE`: the operator needs more *upstream input* before it can
- *   produce more output.
- * - `SOURCE_PIPE_HAS_MORE(batch)`: the operator produced a batch but still has more
- *   *internal output pending*, so the driver should resume the same operator again
- *   (typically by calling it with `std::nullopt` input).
- */
+/// @brief Output/control signal returned by operator callbacks to the pipeline runtime.
+///
+/// `OpOutput` is the small protocol between operator implementations and a pipeline
+/// driver (e.g., `PipeExec`).
+///
+/// It mixes two kinds of information:
+/// - flow control ("need more input", "have more internal output")
+/// - execution control ("blocked", "yield", "finished", "cancelled")
+///
+/// The most important distinction is:
+/// - `PIPE_SINK_NEEDS_MORE`: the operator needs more *upstream input* before it can
+///   produce more output.
+/// - `SOURCE_PIPE_HAS_MORE(batch)`: the operator produced a batch but still has more
+///   *internal output pending*, so the driver should resume the same operator again
+///   (typically by calling it with `std::nullopt` input).
 template <BrokenPipelineTraits Traits>
 class OpOutput {
  public:
   enum class Code {
-    /**
-     * @brief Downstream needs more input; no output was produced.
-     *
-     * For a `Pipe`, this means: stop pushing forward and go back to the source to
-     * fetch more input.
-     * For a `Sink`, this is the "normal" successful consume result.
-     */
+    /// @brief Downstream needs more input; no output was produced.
+    ///
+    /// For a `Pipe`, this means: stop pushing forward and go back to the source to
+    /// fetch more input.
+    /// For a `Sink`, this is the "normal" successful consume result.
     PIPE_SINK_NEEDS_MORE,
-    /**
-     * @brief Produced exactly one output batch and does not require immediate resumption.
-     */
+    /// @brief Produced exactly one output batch and does not require immediate resumption.
     PIPE_EVEN,
-    /**
-     * @brief Produced one output batch and has more output pending internally.
-     *
-     * The driver should resume the same operator before pulling a new input batch.
-     */
+    /// @brief Produced one output batch and has more output pending internally.
+    ///
+    /// The driver should resume the same operator before pulling a new input batch.
     SOURCE_PIPE_HAS_MORE,
-    /**
-     * @brief Cannot make progress until `Resumer::Resume()` is triggered.
-     */
+    /// @brief Cannot make progress until `Resumer::Resume()` is triggered.
     BLOCKED,
-    /**
-     * @brief Yield to the scheduler before continuing.
-     *
-     * A driver may propagate this as `TaskStatus::Yield()` to let the scheduler
-     * migrate execution to another pool or priority class.
-     */
+    /// @brief Yield to the scheduler before continuing.
+    ///
+    /// A driver may propagate this as `TaskStatus::Yield()` to let the scheduler
+    /// migrate execution to another pool or priority class.
     PIPE_YIELD,
-    /**
-     * @brief Resume handshake for a previously yielded operator.
-     */
+    /// @brief Resume handshake for a previously yielded operator.
     PIPE_YIELD_BACK,
-    /**
-     * @brief Stream finished; may carry a final output batch.
-     */
+    /// @brief Stream finished; may carry a final output batch.
     FINISHED,
-    /**
-     * @brief Cancelled (usually due to error in a sibling task).
-     */
+    /// @brief Cancelled (usually due to error in a sibling task).
     CANCELLED,
   };
 
@@ -168,50 +150,42 @@ class OpOutput {
   std::variant<std::shared_ptr<Resumer>, std::optional<typename Traits::Batch>> payload_;
 };
 
-/**
- * @brief Result type for operator callbacks.
- *
- * Operators return `Traits::Result<OpOutput<Traits>>`.
- */
+/// @brief Result type for operator callbacks.
+///
+/// Operators return `Traits::Result<OpOutput<Traits>>`.
 template <BrokenPipelineTraits Traits>
 using OpResult = Result<Traits, OpOutput<Traits>>;
 
-/**
- * @brief Source callback signature.
- *
- * The pipeline driver repeatedly calls `Source(ctx, thread_id)` to pull batches.
- *
- * A source typically returns:
- * - `Finished()` when it has no more data
- * - `SourcePipeHasMore(batch)` for more data
- * - `Blocked(resumer)` if it needs to wait for an external event (async IO /
- * backpressure)
- */
+/// @brief Source callback signature.
+///
+/// The pipeline driver repeatedly calls `Source(ctx, thread_id)` to pull batches.
+///
+/// A source typically returns:
+/// - `Finished()` when it has no more data
+/// - `SourcePipeHasMore(batch)` for more data
+/// - `Blocked(resumer)` if it needs to wait for an external event (async IO /
+/// backpressure)
 template <BrokenPipelineTraits Traits>
 using PipelineSource =
     std::function<OpResult<Traits>(const TaskContext<Traits>&, ThreadId)>;
 
-/**
- * @brief Pipe/Sink callback signature.
- *
- * The `input` parameter is `std::optional<Batch>`:
- * - When `input` has a value, it is a new upstream batch.
- * - When `input` is `std::nullopt`, the driver is resuming the operator to emit more
- *   output from internal state (e.g., after `SOURCE_PIPE_HAS_MORE`, after Blocked, or
- *   after Yield).
- */
+/// @brief Pipe/Sink callback signature.
+///
+/// The `input` parameter is `std::optional<Batch>`:
+/// - When `input` has a value, it is a new upstream batch.
+/// - When `input` is `std::nullopt`, the driver is resuming the operator to emit more
+///   output from internal state (e.g., after `SOURCE_PIPE_HAS_MORE`, after Blocked, or
+///   after Yield).
 template <BrokenPipelineTraits Traits>
 using PipelinePipe = std::function<OpResult<Traits>(
     const TaskContext<Traits>&, ThreadId, std::optional<typename Traits::Batch>)>;
 
-/**
- * @brief Drain callback signature.
- *
- * Drains are called only after the upstream source is exhausted (`Finished()` observed).
- * They allow operators to flush tail output that can only be produced at end-of-stream.
- *
- * An operator that does not need draining should return an empty `std::function{}`.
- */
+/// @brief Drain callback signature.
+///
+/// Drains are called only after the upstream source is exhausted (`Finished()` observed).
+/// They allow operators to flush tail output that can only be produced at end-of-stream.
+///
+/// An operator that does not need draining should return an empty `std::function{}`.
 template <BrokenPipelineTraits Traits>
 using PipelineDrain =
     std::function<OpResult<Traits>(const TaskContext<Traits>&, ThreadId)>;
@@ -219,16 +193,14 @@ using PipelineDrain =
 template <BrokenPipelineTraits Traits>
 using PipelineSink = PipelinePipe<Traits>;
 
-/**
- * @brief Source operator interface.
- *
- * Lifecycle hooks:
- * - `Frontend()`: stage work before the source is run (e.g., start scan, open files).
- * - `Backend()`: optional extra stage work after the pipeline stage is done.
- *
- * broken_pipeline does not impose a specific driver/scheduler for these hooks; the host
- * orchestration decides ordering.
- */
+/// @brief Source operator interface.
+///
+/// Lifecycle hooks:
+/// - `Frontend()`: stage work before the source is run (e.g., start scan, open files).
+/// - `Backend()`: optional extra stage work after the pipeline stage is done.
+///
+/// broken_pipeline does not impose a specific driver/scheduler for these hooks; the host
+/// orchestration decides ordering.
 template <BrokenPipelineTraits Traits>
 class SourceOp {
  public:
@@ -245,19 +217,17 @@ class SourceOp {
   std::string name_;
 };
 
-/**
- * @brief Pipe operator interface (transform operator).
- *
- * A pipe participates in the main streaming path via `Pipe()`, may optionally implement
- * `Drain()` for tail output, and may optionally introduce a new stage via
- * `ImplicitSource()`.
- *
- * `ImplicitSource()` is the hook used to split a pipeline into multiple sub-pipeline
- * stages (via host orchestration):
- * - returning `nullptr` means "no split here"
- * - returning a source means "downstream operators become a new sub-pipeline stage rooted
- * at this implicit source"
- */
+/// @brief Pipe operator interface (transform operator).
+///
+/// A pipe participates in the main streaming path via `Pipe()`, may optionally implement
+/// `Drain()` for tail output, and may optionally introduce a new stage via
+/// `ImplicitSource()`.
+///
+/// `ImplicitSource()` is the hook used to split a pipeline into multiple sub-pipeline
+/// stages (via host orchestration):
+/// - returning `nullptr` means "no split here"
+/// - returning a source means "downstream operators become a new sub-pipeline stage rooted
+/// at this implicit source"
 template <BrokenPipelineTraits Traits>
 class PipeOp {
  public:
@@ -274,16 +244,14 @@ class PipeOp {
   std::string name_;
 };
 
-/**
- * @brief Sink operator interface.
- *
- * The sink consumes the output stream. Most sinks return `PIPE_SINK_NEEDS_MORE` after
- * successfully consuming a batch, and may return `BLOCKED(resumer)` for backpressure.
- *
- * Like pipes, sinks also expose lifecycle hooks (`Frontend/Backend`) and an optional
- * `ImplicitSource()` hook which can be used by higher-level orchestration to chain a sink
- * output into a subsequent pipeline.
- */
+/// @brief Sink operator interface.
+///
+/// The sink consumes the output stream. Most sinks return `PIPE_SINK_NEEDS_MORE` after
+/// successfully consuming a batch, and may return `BLOCKED(resumer)` for backpressure.
+///
+/// Like pipes, sinks also expose lifecycle hooks (`Frontend/Backend`) and an optional
+/// `ImplicitSource()` hook which can be used by higher-level orchestration to chain a sink
+/// output into a subsequent pipeline.
 template <BrokenPipelineTraits Traits>
 class SinkOp {
  public:

@@ -34,9 +34,7 @@ struct SinkExec {
 template <BrokenPipelineTraits Traits>
 class Pipelinexe;
 
- /**
-  * @brief Encapsulation of the task group that runs a pipelinexe.
-  */
+/// @brief Encapsulation of the task group that runs a pipelinexe.
 template <BrokenPipelineTraits Traits>
 class PipeExec {
  public:
@@ -378,13 +376,11 @@ template <BrokenPipelineTraits Traits>
 class PipelineCompiler;
 }  // namespace detail
 
-/**
- * @brief A compiled Pipelinexe.
- *
- * A `Pipelinexe` ("pipelinexe") is a small-step, multiplexed runtime over one or more
- * channels (sources feeding the shared sink). Pipelinexes are executed in sequence order by
- * the host.
- */
+/// @brief A compiled Pipelinexe.
+///
+/// A `Pipelinexe` ("pipelinexe") is a small-step, multiplexed runtime over one or more
+/// channels (sources feeding the shared sink). Pipelinexes are executed in sequence order by
+/// the host.
 template <BrokenPipelineTraits Traits>
 class Pipelinexe {
  public:
@@ -438,16 +434,14 @@ class Pipelinexe {
   std::size_t dop_;
 };
 
-/**
- * @brief A compiled pipeline execution plan.
- *
- * A `PipelineExec` contains:
- * - one `SinkExec` (lifecycle task groups for the sink)
- * - an ordered sequence of Pipelinexes (`Pipelinexe`)
- *
- * The host is responsible for orchestrating ordering between pipelinexe/source/sink task
- * groups.
- */
+/// @brief A compiled pipeline execution plan.
+///
+/// A `PipelineExec` contains:
+/// - one `SinkExec` (lifecycle task groups for the sink)
+/// - an ordered sequence of Pipelinexes (`Pipelinexe`)
+///
+/// The host is responsible for orchestrating ordering between pipelinexe/source/sink task
+/// groups.
 template <BrokenPipelineTraits Traits>
 class PipelineExec {
  public:
@@ -479,15 +473,13 @@ class PipelineExec {
 
 namespace detail {
 
-/**
- * @brief Internal compiler that splits a `Pipeline` into an ordered list of
- * Pipelinexes (`Pipelinexe`).
- *
- * Splitting rule (current):
- * - Only pipe implicit sources (`PipeOp::ImplicitSource()`) create pipelinexe boundaries.
- * - When a pipe provides an implicit source, the downstream pipe chain becomes a new
- *   channel rooted at that implicit source in a later pipelinexe.
- */
+/// @brief Internal compiler that splits a `Pipeline` into an ordered list of
+/// Pipelinexes (`Pipelinexe`).
+///
+/// Splitting rule (current):
+/// - Only pipe implicit sources (`PipeOp::ImplicitSource()`) create pipelinexe boundaries.
+/// - When a pipe provides an implicit source, the downstream pipe chain becomes a new
+///   channel rooted at that implicit source in a later pipelinexe.
 template <BrokenPipelineTraits Traits>
 class PipelineCompiler {
  public:

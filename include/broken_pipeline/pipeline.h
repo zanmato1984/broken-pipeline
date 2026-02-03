@@ -17,19 +17,17 @@ class PipeOp;
 template <BrokenPipelineTraits Traits>
 class SinkOp;
 
-/**
- * @brief A pipeline graph: (one or more channels) -> (shared sink).
- *
- * A pipeline contains:
- * - `Channel`: a `SourceOp` plus a linear chain of `PipeOp`s
- * - A single shared `SinkOp`
- *
- * Notes:
- * - The pipeline stores raw pointers to operators. Operator lifetime is owned by you and
- *   must outlive any compilation/execution that uses the pipeline.
- * - A pipeline may be split into multiple stages if any `PipeOp` returns a
- *   non-null `ImplicitSource()`.
- */
+/// @brief A pipeline graph: (one or more channels) -> (shared sink).
+///
+/// A pipeline contains:
+/// - `Channel`: a `SourceOp` plus a linear chain of `PipeOp`s
+/// - A single shared `SinkOp`
+///
+/// Notes:
+/// - The pipeline stores raw pointers to operators. Operator lifetime is owned by you and
+///   must outlive any compilation/execution that uses the pipeline.
+/// - A pipeline may be split into multiple stages if any `PipeOp` returns a
+///   non-null `ImplicitSource()`.
 template <BrokenPipelineTraits Traits>
 class Pipeline {
  public:

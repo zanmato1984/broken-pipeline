@@ -7,74 +7,64 @@
 
 namespace bp {
 
-/**
- * @brief Task instance id within a `TaskGroup`.
- *
- * broken_pipeline intentionally keeps ids simple and uniform: task instances are indexed
- * 0..N-1 within their group.
- */
+/// @brief Task instance id within a `TaskGroup`.
+///
+/// broken_pipeline intentionally keeps ids simple and uniform: task instances are indexed
+/// 0..N-1 within their group.
 using TaskId = std::size_t;
 
-/**
- * @brief Execution lane id.
- *
- * Many operator implementations keep per-lane state indexed by `ThreadId`. In the
- * reference runtime (`PipeExec`), a task instance typically uses
- * `TaskId` as its `ThreadId`.
- */
+/// @brief Execution lane id.
+///
+/// Many operator implementations keep per-lane state indexed by `ThreadId`. In the
+/// reference runtime (`PipeExec`), a task instance typically uses
+/// `TaskId` as its `ThreadId`.
 using ThreadId = std::size_t;
 
-/**
- * @brief Alias helper for `Traits::Result<T>`.
- *
- * broken_pipeline never assumes a particular error type or transport. Instead, all APIs
- * return `Traits::Result<T>` and rely on an Arrow-like result surface:
- * - `result.ok()`
- * - `result.status()`
- * - `result.ValueOrDie()`
- */
+/// @brief Alias helper for `Traits::Result<T>`.
+///
+/// broken_pipeline never assumes a particular error type or transport. Instead, all APIs
+/// return `Traits::Result<T>` and rely on an Arrow-like result surface:
+/// - `result.ok()`
+/// - `result.status()`
+/// - `result.ValueOrDie()`
 template <class Traits, class T>
 using Result = typename Traits::template Result<T>;
 
-/**
- * @brief Status type (success-or-error) used by broken_pipeline.
- *
- * This is `Traits::Status` (Arrow-style, separate from `Result<T>`).
- */
+/// @brief Status type (success-or-error) used by broken_pipeline.
+///
+/// This is `Traits::Status` (Arrow-style, separate from `Result<T>`).
 template <class Traits>
 using Status = typename Traits::Status;
 
-/**
- * @brief Concept defining the required "Traits" surface for broken_pipeline.
- *
- * You provide a `Traits` type to parametrize broken_pipeline over:
- * - The batch type (`Batch`)
- * - An optional query-level context type (`Context`)
- * - Your error/result transport (`Status` + `Result<T>`)
- *
- * broken_pipeline expects an Arrow-like API (zero-overhead when using Arrow directly):
- *
- * - `Traits::Status`:
- *   - `static Status OK()`
- *   - `bool ok() const`
- * - `Traits::Result<T>`:
- *   - `bool ok() const`
- *   - `Status status() const`
- *   - `T& ValueOrDie() &`
- *   - `const T& ValueOrDie() const &`
- *   - `T ValueOrDie() &&`
- *   - constructible from `T` (success)
- *   - constructible from `Status` (error)
- *
- * This is still "Option B": broken_pipeline does not define its own Status/Result type.
- *
- * Typical mapping to Apache Arrow:
- * - `Status` = `arrow::Status`
- * - `Result<T>` = `arrow::Result<T>`
- *
- * For other transports (e.g. `std::expected`), provide a thin wrapper type that exposes
- * an equivalent surface (`OK()/ok()/status()/ValueOrDie()`).
- */
+/// @brief Concept defining the required "Traits" surface for broken_pipeline.
+///
+/// You provide a `Traits` type to parametrize broken_pipeline over:
+/// - The batch type (`Batch`)
+/// - An optional query-level context type (`Context`)
+/// - Your error/result transport (`Status` + `Result<T>`)
+///
+/// broken_pipeline expects an Arrow-like API (zero-overhead when using Arrow directly):
+///
+/// - `Traits::Status`:
+///   - `static Status OK()`
+///   - `bool ok() const`
+/// - `Traits::Result<T>`:
+///   - `bool ok() const`
+///   - `Status status() const`
+///   - `T& ValueOrDie() &`
+///   - `const T& ValueOrDie() const &`
+///   - `T ValueOrDie() &&`
+///   - constructible from `T` (success)
+///   - constructible from `Status` (error)
+///
+/// This is still "Option B": broken_pipeline does not define its own Status/Result type.
+///
+/// Typical mapping to Apache Arrow:
+/// - `Status` = `arrow::Status`
+/// - `Result<T>` = `arrow::Result<T>`
+///
+/// For other transports (e.g. `std::expected`), provide a thin wrapper type that exposes
+/// an equivalent surface (`OK()/ok()/status()/ValueOrDie()`).
 template <class Traits>
 concept BrokenPipelineTraits =
     requires {
