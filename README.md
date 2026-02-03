@@ -1,118 +1,78 @@
-# broken-pipeline
+# Broken Pipeline
 
-Header-only protocol/interfaces extracted from Ara’s execution model.
+Broken Pipeline is a header-only C++20 library that defines protocols for building
+batch-at-a-time execution pipelines that can be driven without blocking threads. It is
+traits-based: you provide the batch type and your status/result transport.
 
-broken-pipeline is a **C++20**, **traits-based**, **data-structure-agnostic** set of building
-blocks for implementing a batch-at-a-time execution engine:
+This repository contains:
+- Core headers under `include/broken_pipeline/`
+- Unit tests under `tests/` (require Apache Arrow and GoogleTest)
+- An Arrow adoption example under `examples/broken_pipeline_arrow/`
 
-- Operators expose small-step, re-entrant callbacks that a pipeline driver can resume.
-- Pipelines are driven as explicit state machines (instead of blocking threads).
-- Execution is expressed as `Task` / `TaskGroup`, with `TaskStatus` as the contract to a
-  scheduler.
+## Goals
 
-What this project provides:
-- Generic `Task` / `TaskGroup` protocol (`Continue/Blocked/Yield/Finished/Cancelled`)
-- Generic `Resumer` / `Awaiter` interfaces and factories (scheduler-owned)
-- Generic operator interfaces (`SourceOp` / `PipeOp` / `SinkOp`) and `OpOutput`
-- `Pipeline`
+- Provide minimal interfaces between operators, a pipeline driver, and a scheduler.
+- Make operator execution small-step and resumable.
+- Avoid coupling to any particular data structure library or async runtime.
 
-What this project intentionally does **not** provide:
-- No scheduler implementations (sync/async), no thread pools, no futures library dependency
-- No concrete operators (no Arrow, no joins/aggregates, etc.)
-- No “engine loop” that runs task groups; you plug in your own scheduler/executor
+## Non-goals
 
-## Requirements
+- Scheduler, thread pool, or async runtime implementation
+- Concrete operators
+- A ready-to-run engine loop that orchestrates task groups
 
-- C++20
-- CMake >= 3.20
+## Public API and layout
 
-## The Layered Model (Operator → Pipeline → Task → Scheduler)
+All public symbols are in namespace bp (no sub-namespaces).
 
-broken-pipeline deliberately separates concerns:
+Headers:
+- `include/broken_pipeline/broken_pipeline.h` (umbrella header)
+- `include/broken_pipeline/concepts.h`
+- `include/broken_pipeline/task.h`
+- `include/broken_pipeline/operator.h`
+- `include/broken_pipeline/pipeline.h`
+- `include/broken_pipeline/pipeline_exec.h`
 
-All public types live directly in `namespace bp` (no sub-namespaces); headers are
-organized as a small set of top-level files:
+CMake target:
+- `broken_pipeline` (INTERFACE)
 
-1) **Operator protocol** (`include/broken_pipeline/operator.h`)
-- “How do I transform/consume/produce batches?”
-- Exposes a small set of flow-control signals (`OpOutput`).
-
-2) **Pipeline driver** (`include/broken_pipeline/pipeline.h` + `include/broken_pipeline/pipeline_exec.h`)
-- “How do I wire Source/Pipe/Sink together and resume them correctly?”
-- Encodes “drain after upstream finished”, “resume an operator that has more internal
-  output”, “propagate blocked/yield” as a state machine.
-
-3) **Task protocol** (`include/broken_pipeline/task.h`)
-- “How do I package execution into schedulable units?”
-- Exposes `TaskStatus` (`Continue/Blocked/Yield/Finished/Cancelled`) for scheduler control.
-
-4) **Scheduler (yours)**
-- “Where/when do tasks run? How do we wait? How do we handle Yield?”
-- broken-pipeline provides the semantic hooks (`Resumer`/`Awaiter`) but does not implement
-  any scheduling policy or concurrency runtime.
-
-This architecture is what lets broken-pipeline be both:
-- highly generic (no Arrow / no Folly / no concrete data types)
-- scheduler-agnostic (sync or async, cooperative or preemptive)
-
-## Key Protocols
-
-### TaskStatus (Task → Scheduler)
-
-Defined in `include/broken_pipeline/task.h`:
-
-- `Continue`: task is still running; scheduler may invoke again.
-- `Blocked(awaiter)`: task cannot proceed until awaited condition is resumed.
-- `Yield`: task requests yielding before a long synchronous operation.
-- `Finished`: task is done successfully.
-- `Cancelled`: task is cancelled (often due to sibling error).
-
-### OpOutput (Operator → Pipeline driver)
-
-Defined in `include/broken_pipeline/operator.h`:
-
-The most important distinction:
-- `PIPE_SINK_NEEDS_MORE`: operator needs more upstream input.
-- `SOURCE_PIPE_HAS_MORE(batch)`: operator produced a batch but still has more internal
-  output; pipeline driver should resume the same operator again (usually with `nullopt`).
-
-Other notable signals:
-- `BLOCKED(resumer)`: cannot progress (IO/backpressure/resource). A scheduler turns
-  resumers into an awaiter and returns `TaskStatus::Blocked(...)`.
-- `PIPE_YIELD` / `PIPE_YIELD_BACK`: explicit yield handshake to enable schedulers to
-  migrate execution.
-- `FINISHED(optional<batch>)`: end-of-stream with optional final batch.
-
-## Usage
-
-broken-pipeline is fully generic via a user-defined `Traits` type (checked by C++20 concepts).
-
-Your `Traits` must define:
-- `using Batch = ...;` (movable)
-- `using Context = ...;` (any type, can be `std::monostate`)
-- `using Status = ...;` (Arrow-style status type)
-- `template<class T> using Result = ...;` (Arrow-style result type)
-
-Required surface:
-- `Status::OK()` and `status.ok()`
-- `result.ok()`, `result.status()`, and `result.ValueOrDie()` (lvalue/const/rvalue)
-- `Result<T>(T)` for success and `Result<T>(Status)` for error
-
-broken-pipeline defines `bp::TaskId` and `bp::ThreadId` as `std::size_t`,
-so you do not provide id types in your `Traits`.
-
-Then include:
+Include everything:
 
 ```cpp
 #include <broken_pipeline/broken_pipeline.h>
 ```
 
-## Minimal Traits Example (no dependencies)
+## Terminology
 
-Below is a small Arrow-shaped `Status`/`Result<T>` built on `std::variant` just to satisfy
-the concept.
+- Batch: `Traits::Batch`
+- DOP: degree of parallelism, used as the number of task instances in a stage
+- TaskId: 0..dop-1 index within a `TaskGroup` (`std::size_t`)
+- ThreadId: execution lane id passed to operators (`std::size_t`); the reference runtime uses `ThreadId = TaskId`
+- Channel: one source plus a linear chain of pipes feeding a shared sink
+- Pipelinexe: one compiled executable stage (a set of channels sharing a sink)
+- Implicit source: a SourceOp created by a pipe to start a downstream stage
+- Drain: a tail-output callback invoked after the upstream source is exhausted
+
+## Traits
+
+Broken Pipeline is parameterized by a Traits type that satisfies `bp::BrokenPipelineTraits`
+(`include/broken_pipeline/concepts.h`).
+
+Your Traits must provide:
+- `using Batch = ...;` (movable)
+- `using Context = ...;` (an object type; can be `std::monostate`)
+- `using Status = ...;` with `Status::OK()` and `status.ok()`
+- `template<class T> using Result = ...;` with an Arrow-like surface:
+  - `result.ok()`, `result.status()`, `result.ValueOrDie()`
+  - constructible from `T` (success) and `Status` (error)
+
+Minimal example (no dependencies):
 
 ```cpp
+#include <string>
+#include <utility>
+#include <variant>
+
 struct Status {
   static Status OK() { return Status(); }
   Status() = default;
@@ -152,50 +112,240 @@ struct Traits {
 };
 ```
 
-## Operator Skeleton
+## Task protocol
 
-All operator interfaces live in `namespace bp` (defined in `include/broken_pipeline/operator.h`):
-- `SourceOp<Traits>` → `Source()`, `Frontend()`, `Backend()`
-- `PipeOp<Traits>` → `Pipe()`, `Drain()`, `ImplicitSource()`
-- `SinkOp<Traits>` → `Sink()`, `Frontend()`, `Backend()`, `ImplicitSource()`
+The core task types are defined in `include/broken_pipeline/task.h`:
+- `bp::TaskStatus`
+- `bp::Task<Traits>`
+- `bp::TaskGroup<Traits>`
+- `bp::Continuation<Traits>`
+- `bp::Resumer`, `bp::Awaiter`
+- `bp::TaskContext<Traits>`
 
-Key conventions:
-- Operators are re-entrant and may be called repeatedly.
-- `ThreadId` is a “lane id”; operators usually keep per-lane state indexed by thread id.
-- `Pipe/Sink` take `std::optional<Batch>`:
-  - `Batch` means “new upstream input”
-  - `nullopt` means “resume internal output / continue after blocked/yield”
+Task and continuation entrypoints return `bp::TaskResult<Traits>`, which is an alias of
+`Traits::Result<bp::TaskStatus>`.
 
-## Driving a Pipeline
+TaskStatus codes:
+- Continue: the task is runnable and should be invoked again.
+- Blocked(awaiter): the task cannot make progress; the scheduler must wait/suspend on awaiter.
+- Yield: the task requests a yield point before continuing.
+- Finished: the task completed successfully.
+- Cancelled: the task was cancelled (typically due to a sibling error).
 
-broken-pipeline ships a small reference "compiler" that splits a `Pipeline` into executable stages, but
-the host is still responsible for orchestration and scheduling.
+Blocked is built out of scheduler-owned primitives:
+- Operators return `OpOutput::Blocked(resumer)`.
+- The task groups one or more resumers into a `TaskStatus::Blocked(awaiter)` using
+  `TaskContext::awaiter_factory`.
+- Some non-scheduler event source calls `Resumer::Resume()` when the awaited condition is
+  satisfied. This is often driven by an operator (for example, a backend task completing IO
+  or emitting a batch that unblocks downstream).
+- The scheduler is responsible for observing resumed resumers and rescheduling the blocked
+  task instance.
 
-Reference implementations live in:
-- `include/broken_pipeline/pipeline_exec.h`: `bp::Compile(pipeline, dop)` compiles a
-  `Pipeline` into a single `bp::PipelineExec` (with an ordered list of
-  Pipelinexes (`Pipelinexe`, "pipelinexe"))
-- `include/broken_pipeline/pipeline_exec.h`: `Pipelinexe` / `PipeExec` small-step runtime for each pipelinexe
+Compatibility note:
+- `Resumer` and `Awaiter` are intentionally opaque to Broken Pipeline and can be implemented
+  with synchronous primitives (for example, condition variables), asynchronous primitives
+  (for example, promise/future style), or coroutines.
 
-## Notes on Lifetime and Threading
+## Operator protocol
 
-- `Pipeline` stores raw pointers to operators; you own the operator lifetimes.
-- A scheduler must not execute the same task instance concurrently.
-- Different `TaskId` instances within a `TaskGroup` may run concurrently (that is the
-  point of `dop`).
+The operator interfaces and OpOutput are defined in `include/broken_pipeline/operator.h`:
+- `bp::SourceOp<Traits>`
+- `bp::PipeOp<Traits>`
+- `bp::SinkOp<Traits>`
+- `bp::OpOutput<Traits>`
+
+Operator callbacks return `bp::OpResult<Traits>`, which is an alias of
+`Traits::Result<bp::OpOutput<Traits>>`.
+
+Notation:
+- `TaskContext` means `bp::TaskContext<Traits>`
+- `ThreadId` means `bp::ThreadId`
+- `Batch` means `typename Traits::Batch`
+- `OpResult` means `bp::OpResult<Traits>`
+
+Callback signatures:
+- Source: `OpResult(const TaskContext&, ThreadId)`
+- Pipe: `OpResult(const TaskContext&, ThreadId, std::optional<Batch>)`
+- Drain: `OpResult(const TaskContext&, ThreadId)`
+- Sink: `OpResult(const TaskContext&, ThreadId, std::optional<Batch>)`
+
+Input conventions for Pipe and Sink:
+- input has a value: a new upstream batch
+- input is nullopt: re-enter the operator callback to continue (after has-more, after a
+  blocked wake-up, or as part of a yield handshake)
+
+Terminology note:
+- Re-entering an operator means the pipeline driver invokes the operator callback again
+  (often with input=nullopt). This is distinct from `Resumer::Resume()`, which is the
+  wake-up mechanism used for `OpOutput::Blocked(resumer)`.
+
+OpOutput codes:
+- `PIPE_SINK_NEEDS_MORE`: the operator needs more upstream input and did not produce an output batch.
+- `PIPE_EVEN(batch)`: the operator produced one output batch and can accept another upstream input batch immediately.
+- `SOURCE_PIPE_HAS_MORE(batch)`: the operator produced one output batch and requires a follow-up re-entry with input=nullopt to emit more pending output before it can accept another upstream input batch.
+- `BLOCKED(resumer)`: the operator cannot make progress until `Resumer::Resume()` is called on the resumer.
+- `PIPE_YIELD`: yield request from the operator.
+- `PIPE_YIELD_BACK`: yield-back signal from a previously yielding operator, indicating the
+  yield-required long synchronous step has completed and it should be scheduled back to a
+  CPU-oriented pool.
+- `FINISHED(optional batch)`: end-of-stream; may carry a final output batch.
+- `CANCELLED`: cancellation marker used by the reference runtime.
+
+Typical uses for `PIPE_YIELD`:
+- Operators can use `PIPE_YIELD` as a cooperative scheduling point before a long synchronous
+  action, such as spilling to disk on the fly. A scheduler can move the task to an IO pool
+  for that work.
+- On the first re-entry after yielding, the operator returns `PIPE_YIELD_BACK` to indicate
+  the long synchronous step has completed and execution can migrate back to a CPU pool.
+- This yield/yield-back handshake provides a natural two-phase scheduling point: run the
+  yielded step in an IO pool, then schedule subsequent work back on a CPU pool.
+
+Contracts for the reference driver in `include/broken_pipeline/pipeline_exec.h`:
+- `SourceOp::Source()` must return one of:
+  - `OpOutput::SourcePipeHasMore(batch)`
+  - `OpOutput::Finished(optional batch)`
+  - `OpOutput::Blocked(resumer)`
+  - an error Result
+- `PipeOp::Pipe()` must return one of:
+  - `OpOutput::PipeSinkNeedsMore()`
+  - `OpOutput::PipeEven(batch)`
+  - `OpOutput::SourcePipeHasMore(batch)`
+  - `OpOutput::Blocked(resumer)`
+  - `OpOutput::PipeYield()`, then later `OpOutput::PipeYieldBack()` on the next re-entry
+    (input=nullopt)
+  - an error Result
+- `PipeOp::Drain()` is called only after the upstream source returned `Finished()`. It must return one of:
+  - `OpOutput::SourcePipeHasMore(batch)`
+  - `OpOutput::Finished(optional batch)`
+  - `OpOutput::Blocked(resumer)`
+  - `OpOutput::PipeYield()`, then later `OpOutput::PipeYieldBack()` on the next re-entry
+    (input=nullopt)
+  - an error Result
+- `SinkOp::Sink()` must return one of:
+  - `OpOutput::PipeSinkNeedsMore()`
+  - `OpOutput::Blocked(resumer)`
+  - an error Result
+  The sink must not return output batches.
+
+### Frontend/Backend task groups and TaskHint
+
+- `SourceOp::Frontend()` returns a list of task groups the host schedules before running the
+  pipelinexe(s) that invoke its `Source()` callback.
+- `SinkOp::Frontend()` returns a list of task groups the host schedules strictly after the
+  pipelinexe(s) feeding the sink have finished.
+- `SourceOp::Backend()` and `SinkOp::Backend()` return an optional task group the host
+  typically schedules before running the main stage work, often to initiate or wait on IO
+  readiness (for example, synchronous IO pulling from a queue, or asynchronous IO waiting on
+  callbacks/signals).
+- `TaskHint` is the scheduler hint that marks tasks as CPU vs IO.
+- A typical orchestration pattern is to use frontend/backend to split work into distinct
+  computation stages and use `TaskHint` so a scheduler can route CPU-bound work and IO-bound
+  work to different pools.
+- A common convention is to treat frontend work as primarily CPU-bound and backend work as
+  primarily IO-bound, but Broken Pipeline does not enforce this split; it is defined by the
+  host scheduler and operator implementations.
+- Examples:
+  - A hash join build can be modeled as a `SinkOp` whose `Sink()` ingests the build side and
+    whose frontend builds the hash table (often in parallel at the pipeline DOP). Its backend
+    can be used to start or wait on IO-heavy work (for example, preparing spill files or
+    awaiting IO completion).
+  - In a right outer join, a hash join probe operator may need a post-probe scan of the build
+    side to output unmatched rows. That scan phase can be represented as a pipe-provided
+    `ImplicitSource()`, which becomes a new downstream pipelinexe. The implicit source can
+    also expose a frontend for preparatory work such as partitioning the hash table, distinct
+    from its per-lane scanning work implemented in `Source()`.
+  - File reads/writes and network RPCs are typically IO-bound and are good candidates for
+    tasks with `TaskHint::Type::IO`.
+
+## Pipelines and compilation
+
+Pipeline graph type:
+- `bp::Pipeline<Traits>` in `include/broken_pipeline/pipeline.h`
+
+A Pipeline contains:
+- name
+- channels: each channel has a SourceOp pointer and a vector of PipeOp pointers
+- a single shared SinkOp pointer
+
+Multiple channels in one pipelinexe:
+- A single pipeline stage can have multiple channels feeding the same sink. This is useful
+  for union-all-like fan-in operators where either child can produce output into the same
+  downstream sink.
+
+Compilation:
+- `bp::Compile(pipeline, dop)` in `include/broken_pipeline/pipeline_exec.h` produces
+  `bp::PipelineExec<Traits>`.
+- Compilation splits a pipeline into an ordered list of Pipelinexes when a pipe returns a
+  non-null `PipeOp::ImplicitSource()`.
+- Only `PipeOp::ImplicitSource()` creates stage boundaries today. `SinkOp::ImplicitSource()`
+  exists for host-level orchestration but is not used by `bp::Compile`.
+
+Lifetime:
+- Pipeline stores raw pointers. Operator instances must outlive the compiled plan and any
+  tasks created from it.
+- Implicit sources returned from PipeOp::ImplicitSource() are owned by the compiled plan and
+  kept alive by each Pipelinexe.
+
+## PipeExec: reference small-step runtime
+
+Each Pipelinexe exposes `Pipelinexe::PipeExec().TaskGroup()`, which runs the stage as a
+`TaskGroup` with dop task instances.
+
+Semantics:
+- Each task instance uses TaskId as ThreadId (0..dop-1).
+- Within a task call, the driver performs bounded work and keeps state internally to
+  continue on a later invocation.
+- If all unfinished channels are blocked, the task returns `TaskStatus::Blocked(awaiter)`
+  built from the channels' resumers.
+- If an operator returns `PIPE_YIELD`, the task returns `TaskStatus::Yield()`. On the next
+  invocation, the driver re-enters the yielding operator (input=nullopt) and expects
+  `PIPE_YIELD_BACK`.
+- If any operator returns an error Result, the plan is cancelled. The call that observes
+  the error returns that error; subsequent calls return `TaskStatus::Cancelled()`.
+
+Concurrency requirements:
+- A scheduler must not execute the same Task instance concurrently.
+- Different TaskIds within the same TaskGroup may run concurrently. Operator implementations
+  must be safe under that assumption, especially for shared objects such as the sink.
+
+## Orchestration
+
+PipelineExec only provides building blocks. A host scheduler/executor is responsible for:
+- Creating a `TaskContext` with `resumer_factory` and `awaiter_factory`.
+- Scheduling frontend/backend task groups (source frontend before pipelinexes, sink frontend
+  after pipelinexes, and backends as IO-readiness tasks typically scheduled ahead).
+- Executing each Pipelinexe PipeExec task group with the desired scheduling policy.
+
+The Arrow example in `examples/broken_pipeline_arrow` demonstrates one possible single-threaded
+driver and shows how to map Traits to Arrow's Status and Result types.
 
 ## Build
 
-This repo is header-only; the CMake target is an INTERFACE library:
+This repo is header-only.
+
+Build the interface target:
 
 ```bash
 cmake -S . -B build
 cmake --build build
 ```
 
+Build and run tests (requires Arrow and GoogleTest):
+
+```bash
+cmake -S . -B build -DBROKEN_PIPELINE_BUILD_TESTS=ON -DBROKEN_PIPELINE_ARROW_PROVIDER=system
+cmake --build build
+ctest --test-dir build
+```
+
+`BROKEN_PIPELINE_ARROW_PROVIDER`:
+- system: use an installed Arrow CMake package (Arrow, ArrowCompute, ArrowTesting)
+- bundled: fetch and build Arrow 22.0.0 as part of the build
+
 ## Examples
 
-- `examples/broken_pipeline_arrow`: Apache Arrow based adoption example (requires Arrow C++ CMake package).
+- `examples/broken_pipeline_arrow`: Apache Arrow adoption example (requires Arrow C++ CMake package)
 
 ## License
 
