@@ -17,7 +17,7 @@ include_guard(GLOBAL)
 # broken_pipeline Arrow integration (tests-only for now).
 #
 # Goals:
-# - Support both "system" and "bundled" Arrow (bundled is Arrow 22.x only).
+# - Support both "system" and "bundled" Arrow (bundled is Arrow 23.x only).
 # - Use ArrowTesting for gtest utilities when building broken_pipeline tests.
 # - When Arrow is built as a subproject, compute include directories so our test targets can
 #   include Arrow's generated headers reliably.
@@ -74,7 +74,7 @@ if(BROKEN_PIPELINE_ARROW_PROVIDER STREQUAL "system")
   return()
 endif()
 
-message(STATUS "Using bundled Arrow (FetchContent, Arrow 22.0.0)")
+message(STATUS "Using bundled Arrow (FetchContent, Arrow 23.0.0)")
 
 include(FetchContent)
 
@@ -82,7 +82,7 @@ if(POLICY CMP0135)
   cmake_policy(SET CMP0135 NEW)
 endif()
 
-# Arrow 22.x assumes `CMAKE_BUILD_TYPE` is non-empty when using a single-config
+# Arrow 23.x assumes `CMAKE_BUILD_TYPE` is non-empty when using a single-config
 # generator. With CMake 4.x, some `string(TOLOWER ...)` calls error when
 # `CMAKE_BUILD_TYPE` is empty, so set a default.
 if(NOT CMAKE_CONFIGURATION_TYPES AND (NOT DEFINED CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL ""))
@@ -91,8 +91,8 @@ endif()
 
 FetchContent_Declare(
   arrow
-  URL "https://github.com/apache/arrow/archive/refs/tags/apache-arrow-22.0.0.tar.gz"
-  URL_HASH "SHA256=8a95e6c7b9bec2bc0058feb73efe38ad6cfd49a0c7094db29b37ecaa8ab16051"
+  URL "https://github.com/apache/arrow/archive/refs/tags/apache-arrow-23.0.0.tar.gz"
+  URL_HASH "SHA256=7510f4b578febb3af5b3e93ad4616ae3cb680b0f651217ebb29f4c7e5ea952f3"
   SOURCE_SUBDIR cpp)
 
 set(ARROW_DEPENDENCY_SOURCE "AUTO" CACHE STRING "" FORCE)
@@ -109,6 +109,8 @@ set(ARROW_BUILD_INTEGRATION OFF CACHE BOOL "" FORCE)
 set(ARROW_BUILD_UTILITIES OFF CACHE BOOL "" FORCE)
 
 set(ARROW_COMPUTE ON CACHE BOOL "" FORCE)
+# ArrowTesting requires JSON support.
+set(ARROW_JSON ON CACHE BOOL "" FORCE)
 set(ARROW_TESTING ON CACHE BOOL "" FORCE)
 
 set(ARROW_ACERO OFF CACHE BOOL "" FORCE)
@@ -118,7 +120,6 @@ set(ARROW_FILESYSTEM OFF CACHE BOOL "" FORCE)
 set(ARROW_FLIGHT OFF CACHE BOOL "" FORCE)
 set(ARROW_GANDIVA OFF CACHE BOOL "" FORCE)
 set(ARROW_IPC OFF CACHE BOOL "" FORCE)
-set(ARROW_JSON OFF CACHE BOOL "" FORCE)
 set(ARROW_ORC OFF CACHE BOOL "" FORCE)
 set(ARROW_PARQUET OFF CACHE BOOL "" FORCE)
 set(ARROW_PLASMA OFF CACHE BOOL "" FORCE)

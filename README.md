@@ -341,7 +341,7 @@ ctest --test-dir build
 
 `BROKEN_PIPELINE_ARROW_PROVIDER`:
 - system: use an installed Arrow CMake package (Arrow, ArrowCompute, ArrowTesting)
-- bundled: fetch and build Arrow 22.0.0 as part of the build
+- bundled: fetch and build Arrow 23.0.0 as part of the build
 
 ## Examples
 
