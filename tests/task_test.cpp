@@ -9,7 +9,7 @@
 
 #include <memory>
 
-namespace broken_pipeline_test {
+namespace bp_test {
 
 namespace {
 
@@ -72,4 +72,4 @@ TEST(BrokenPipelineTaskTest, TaskHintDefaultsToCpu) {
   EXPECT_EQ(t.Hint().type, TaskHint::Type::CPU);
 }
 
-}  // namespace broken_pipeline_test
+}  // namespace bp_test

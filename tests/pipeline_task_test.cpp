@@ -12,7 +12,7 @@
 #include <utility>
 #include <vector>
 
-namespace broken_pipeline_test {
+namespace bp_test {
 
 namespace {
 
@@ -709,4 +709,4 @@ TEST(BrokenPipelinePipeExecTest, ErrorCancelsSubsequentCalls) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-}  // namespace broken_pipeline_test
+}  // namespace bp_test

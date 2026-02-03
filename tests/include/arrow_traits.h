@@ -21,7 +21,7 @@
 
 #include <broken_pipeline/broken_pipeline.h>
 
-namespace broken_pipeline_test {
+namespace bp_test {
 
 struct Context {
   const char* query_name = "broken-pipeline-tests";
@@ -29,7 +29,7 @@ struct Context {
 
 struct Traits {
   using Batch = int;
-  using Context = broken_pipeline_test::Context;
+  using Context = bp_test::Context;
   using Status = arrow::Status;
 
   template <class T>
@@ -69,4 +69,4 @@ using SinkOp = bp::SinkOp<Traits>;
 using Pipeline = bp::Pipeline<Traits>;
 using PipelineChannel = Pipeline::Channel;
 
-}  // namespace broken_pipeline_test
+}  // namespace bp_test

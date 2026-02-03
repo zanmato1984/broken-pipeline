@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-namespace broken_pipeline_test {
+namespace bp_test {
 
 namespace {
 
@@ -268,4 +268,4 @@ TEST(OplPipelineCompileTest, OddQuadroStagePipeline) {
   ASSERT_EQ(seg3.Channels()[0].source_op, implicit_source4);
 }
 
-}  // namespace broken_pipeline_test
+}  // namespace bp_test
