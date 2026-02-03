@@ -18,25 +18,25 @@ std::vector<broken_pipeline_arrow::TaskGroup> CompileTaskGroups(
   auto exec = bp::Compile(pipeline, dop);
 
   std::vector<broken_pipeline_arrow::TaskGroup> task_groups;
-  task_groups.reserve(exec.Segments().size() * 2 + 3);
+  task_groups.reserve(exec.Pipelinexes().size() * 2 + 3);
 
-  for (const auto& segment : exec.Segments()) {
-    const auto source_execs = segment.SourceExecs();
+  for (const auto& pipelinexe : exec.Pipelinexes()) {
+    const auto source_execs = pipelinexe.SourceExecs();
     for (const auto& source : source_execs) {
       for (const auto& tg : source.frontend) {
         task_groups.push_back(tg);
       }
     }
 
-    task_groups.push_back(segment.PipeExec().TaskGroup());
+    task_groups.push_back(pipelinexe.PipeExec().TaskGroup());
   }
 
   for (const auto& tg : exec.Sink().frontend) {
     task_groups.push_back(tg);
   }
 
-  for (const auto& segment : exec.Segments()) {
-    const auto source_execs = segment.SourceExecs();
+  for (const auto& pipelinexe : exec.Pipelinexes()) {
+    const auto source_execs = pipelinexe.SourceExecs();
     for (const auto& source : source_execs) {
       if (source.backend.has_value()) {
         task_groups.push_back(*source.backend);

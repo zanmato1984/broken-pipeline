@@ -75,7 +75,7 @@ TEST(BrokenPipelinePipelineCompileTest, EmptyPipeline) {
   FooSink sink;
   Pipeline pipeline("EmptyPipeline", {}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  ASSERT_TRUE(exec.Segments().empty());
+  ASSERT_TRUE(exec.Pipelinexes().empty());
 }
 
 TEST(BrokenPipelinePipelineCompileTest, SingleChannelPipeline) {
@@ -86,9 +86,9 @@ TEST(BrokenPipelinePipelineCompileTest, SingleChannelPipeline) {
   Pipeline pipeline("SingleChannelPipeline", {PipelineChannel{&source, {&pipe}}}, &sink);
 
   auto exec = Compile(pipeline, /*dop=*/1);
-  ASSERT_EQ(exec.Segments().size(), 1);
+  ASSERT_EQ(exec.Pipelinexes().size(), 1);
 
-  const auto& seg0 = exec.Segments()[0];
+  const auto& seg0 = exec.Pipelinexes()[0];
   ASSERT_EQ(seg0.Channels().size(), 1);
   ASSERT_EQ(seg0.NumImplicitSources(), 0);
 
@@ -108,9 +108,9 @@ TEST(BrokenPipelinePipelineCompileTest, DoubleChannelPipeline) {
       {PipelineChannel{&source1, {&pipe}}, PipelineChannel{&source2, {&pipe}}}, &sink);
 
   auto exec = Compile(pipeline, /*dop=*/1);
-  ASSERT_EQ(exec.Segments().size(), 1);
+  ASSERT_EQ(exec.Pipelinexes().size(), 1);
 
-  const auto& seg0 = exec.Segments()[0];
+  const auto& seg0 = exec.Pipelinexes()[0];
   ASSERT_EQ(seg0.Channels().size(), 2);
   ASSERT_EQ(seg0.NumImplicitSources(), 0);
 
@@ -128,10 +128,10 @@ TEST(BrokenPipelinePipelineCompileTest, DoublePhysicalPipeline) {
   Pipeline pipeline("DoublePhysicalPipeline", {PipelineChannel{&source, {&pipe}}}, &sink);
 
   auto exec = Compile(pipeline, /*dop=*/1);
-  ASSERT_EQ(exec.Segments().size(), 2);
+  ASSERT_EQ(exec.Pipelinexes().size(), 2);
 
-  const auto& seg0 = exec.Segments()[0];
-  const auto& seg1 = exec.Segments()[1];
+  const auto& seg0 = exec.Pipelinexes()[0];
+  const auto& seg1 = exec.Pipelinexes()[1];
 
   ASSERT_EQ(seg0.Channels().size(), 1);
   ASSERT_EQ(seg0.NumImplicitSources(), 0);
@@ -159,10 +159,10 @@ TEST(BrokenPipelinePipelineCompileTest, DoublePhysicalDoubleChannelPipeline) {
       {PipelineChannel{&source1, {&pipe1}}, PipelineChannel{&source2, {&pipe2}}}, &sink);
 
   auto exec = Compile(pipeline, /*dop=*/1);
-  ASSERT_EQ(exec.Segments().size(), 2);
+  ASSERT_EQ(exec.Pipelinexes().size(), 2);
 
-  const auto& seg0 = exec.Segments()[0];
-  const auto& seg1 = exec.Segments()[1];
+  const auto& seg0 = exec.Pipelinexes()[0];
+  const auto& seg1 = exec.Pipelinexes()[1];
 
   ASSERT_EQ(seg0.Channels().size(), 2);
   ASSERT_EQ(seg0.NumImplicitSources(), 0);
@@ -194,11 +194,11 @@ TEST(BrokenPipelinePipelineCompileTest, TripplePhysicalPipeline) {
                     &sink);
 
   auto exec = Compile(pipeline, /*dop=*/1);
-  ASSERT_EQ(exec.Segments().size(), 3);
+  ASSERT_EQ(exec.Pipelinexes().size(), 3);
 
-  const auto& seg0 = exec.Segments()[0];
-  const auto& seg1 = exec.Segments()[1];
-  const auto& seg2 = exec.Segments()[2];
+  const auto& seg0 = exec.Pipelinexes()[0];
+  const auto& seg1 = exec.Pipelinexes()[1];
+  const auto& seg2 = exec.Pipelinexes()[2];
 
   ASSERT_EQ(seg0.Channels().size(), 2);
   ASSERT_EQ(seg0.NumImplicitSources(), 0);
@@ -244,12 +244,12 @@ TEST(BrokenPipelinePipelineCompileTest, OddQuadroStagePipeline) {
       &sink);
 
   auto exec = Compile(pipeline, /*dop=*/1);
-  ASSERT_EQ(exec.Segments().size(), 4);
+  ASSERT_EQ(exec.Pipelinexes().size(), 4);
 
-  const auto& seg0 = exec.Segments()[0];
-  const auto& seg1 = exec.Segments()[1];
-  const auto& seg2 = exec.Segments()[2];
-  const auto& seg3 = exec.Segments()[3];
+  const auto& seg0 = exec.Pipelinexes()[0];
+  const auto& seg1 = exec.Pipelinexes()[1];
+  const auto& seg2 = exec.Pipelinexes()[2];
+  const auto& seg3 = exec.Pipelinexes()[3];
 
   ASSERT_EQ(seg0.Channels().size(), 4);
   ASSERT_EQ(seg0.NumImplicitSources(), 0);

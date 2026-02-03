@@ -174,8 +174,8 @@ the host is still responsible for orchestration and scheduling.
 Reference implementations live in:
 - `include/broken_pipeline/pipeline_exec.h`: `bp::Compile(pipeline, dop)` compiles a
   `Pipeline` into a single `bp::PipelineExec` (with an ordered list of
-  `PipelineExecSegment`s)
-- `include/broken_pipeline/pipeline_exec.h`: `PipelineExecSegment` / `PipeExec` small-step runtime for each segment
+  Pipelinexes (`Pipelinexe`, "pipelinexe"))
+- `include/broken_pipeline/pipeline_exec.h`: `Pipelinexe` / `PipeExec` small-step runtime for each pipelinexe
 
 ## Notes on Lifetime and Threading
 

@@ -32,7 +32,7 @@
  *
  * Helper:
  * - `#include <broken_pipeline/pipeline_exec.h>` provides `bp::Compile(pipeline, dop)`
- *   and the compiled plan `bp::PipelineExec` (with `PipelineExecSegment` / `PipeExec`).
+ *   and the compiled plan `bp::PipelineExec` (with `Pipelinexe` / `PipeExec`).
  */
 
 #include <broken_pipeline/concepts.h>

@@ -397,9 +397,9 @@ TEST(BrokenPipelinePipeExecTest, EmptySourceFinishesWithoutCallingSink) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  ASSERT_EQ(exec.Segments().size(), 1);
+  ASSERT_EQ(exec.Pipelinexes().size(), 1);
 
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   std::vector<TaskStatus> statuses;
@@ -420,9 +420,9 @@ TEST(BrokenPipelinePipeExecTest, EmptySourceNotReady) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  ASSERT_EQ(exec.Segments().size(), 1);
+  ASSERT_EQ(exec.Pipelinexes().size(), 1);
 
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   auto status_r = group.GetTask()(task_ctx, 0);
@@ -459,9 +459,9 @@ TEST(BrokenPipelinePipeExecTest, TwoSourceOneNotReady) {
   Pipeline pipeline("P", {PipelineChannel{&source1, {}}, PipelineChannel{&source2, {}}},
                     &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  ASSERT_EQ(exec.Segments().size(), 1);
+  ASSERT_EQ(exec.Pipelinexes().size(), 1);
 
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   // First run can make progress on channel 2 even if channel 1 is blocked.
@@ -504,7 +504,7 @@ TEST(BrokenPipelinePipeExecTest, OnePass) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   std::vector<TaskStatus> statuses;
@@ -532,7 +532,7 @@ TEST(BrokenPipelinePipeExecTest, OnePassDirectFinish) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   std::vector<TaskStatus> statuses;
@@ -566,7 +566,7 @@ TEST(BrokenPipelinePipeExecTest, OnePassWithPipe) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   ASSERT_OK(RunSingleTaskToDone(group, task_ctx));
@@ -600,7 +600,7 @@ TEST(BrokenPipelinePipeExecTest, PipeNeedsMoreGoesBackToSource) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   ASSERT_OK(RunSingleTaskToDone(group, task_ctx));
@@ -638,7 +638,7 @@ TEST(BrokenPipelinePipeExecTest, PipeHasMoreResumesPipeBeforeSource) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   ASSERT_OK(RunSingleTaskToDone(group, task_ctx));
@@ -675,7 +675,7 @@ TEST(BrokenPipelinePipeExecTest, PipeYieldHandshake) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   auto status_r = group.GetTask()(task_ctx, 0);
@@ -710,7 +710,7 @@ TEST(BrokenPipelinePipeExecTest, PipeAsyncSpill) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   ASSERT_OK(RunSingleTaskToDone(group, task_ctx));
@@ -741,7 +741,7 @@ TEST(BrokenPipelinePipeExecTest, PipeBlockedResumesWithNullInput) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   auto status_r = group.GetTask()(task_ctx, 0);
@@ -784,7 +784,7 @@ TEST(BrokenPipelinePipeExecTest, SinkBackpressureResumesWithNullInput) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   // First call blocks in sink.
@@ -830,7 +830,7 @@ TEST(BrokenPipelinePipeExecTest, DrainProducesTailOutput) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   ASSERT_OK(RunSingleTaskToDone(group, task_ctx));
@@ -876,7 +876,7 @@ TEST(BrokenPipelinePipeExecTest, Drain) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   std::vector<TaskStatus> statuses;
@@ -930,13 +930,13 @@ TEST(BrokenPipelinePipeExecTest, ImplicitSource) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  ASSERT_EQ(exec.Segments().size(), 2);
-  ASSERT_EQ(exec.Segments()[1].Channels().size(), 1);
-  ASSERT_EQ(exec.Segments()[1].Channels()[0].source_op, implicit_source);
+  ASSERT_EQ(exec.Pipelinexes().size(), 2);
+  ASSERT_EQ(exec.Pipelinexes()[1].Channels().size(), 1);
+  ASSERT_EQ(exec.Pipelinexes()[1].Channels()[0].source_op, implicit_source);
 
   auto task_ctx = MakeTaskContext();
-  ASSERT_OK(RunSingleTaskToDone(exec.Segments()[0].PipeExec().TaskGroup(), task_ctx));
-  ASSERT_OK(RunSingleTaskToDone(exec.Segments()[1].PipeExec().TaskGroup(), task_ctx));
+  ASSERT_OK(RunSingleTaskToDone(exec.Pipelinexes()[0].PipeExec().TaskGroup(), task_ctx));
+  ASSERT_OK(RunSingleTaskToDone(exec.Pipelinexes()[1].PipeExec().TaskGroup(), task_ctx));
 
   ASSERT_EQ(traces.size(), 5);
   EXPECT_EQ(traces[0], (Trace{"Source", "Source", std::nullopt, "FINISHED"}));
@@ -971,7 +971,7 @@ TEST(BrokenPipelinePipeExecTest, Backpressure) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   ASSERT_OK(RunSingleTaskToDone(group, task_ctx));
@@ -1027,7 +1027,7 @@ TEST(BrokenPipelinePipeExecTest, MultiPipe) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe1, &pipe2}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   std::vector<TaskStatus> statuses;
@@ -1085,7 +1085,7 @@ TEST(BrokenPipelinePipeExecTest, MultiDrain) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe1, &pipe2}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   std::vector<TaskStatus> statuses;
@@ -1141,7 +1141,7 @@ TEST(BrokenPipelinePipeExecTest, MultiChannel) {
                      PipelineChannel{&source2, {&pipe2}}},
                     &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   // Both channels start blocked.
@@ -1202,7 +1202,7 @@ TEST(BrokenPipelinePipeExecTest, MultiChannelAllBlockedReturnsTaskBlocked) {
   Pipeline pipeline("P", {PipelineChannel{&source1, {}}, PipelineChannel{&source2, {}}},
                     &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   auto status_r = group.GetTask()(task_ctx, 0);
@@ -1222,7 +1222,7 @@ TEST(BrokenPipelinePipeExecTest, ErrorCancelsSubsequentCalls) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   auto status_r = group.GetTask()(task_ctx, 0);
@@ -1243,7 +1243,7 @@ TEST(BrokenPipelinePipeExecTest, DirectSourceError) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1267,7 +1267,7 @@ TEST(BrokenPipelinePipeExecTest, SourceErrorAfterBlocked) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1296,7 +1296,7 @@ TEST(BrokenPipelinePipeExecTest, SourceError) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1323,7 +1323,7 @@ TEST(BrokenPipelinePipeExecTest, PipeError) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1358,7 +1358,7 @@ TEST(BrokenPipelinePipeExecTest, PipeErrorAfterEven) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1390,7 +1390,7 @@ TEST(BrokenPipelinePipeExecTest, PipeErrorAfterNeedsMore) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1422,7 +1422,7 @@ TEST(BrokenPipelinePipeExecTest, PipeErrorAfterHasMore) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1452,7 +1452,7 @@ TEST(BrokenPipelinePipeExecTest, PipeErrorAfterYieldBack) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1481,7 +1481,7 @@ TEST(BrokenPipelinePipeExecTest, PipeErrorAfterBlocked) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1506,7 +1506,7 @@ TEST(BrokenPipelinePipeExecTest, DrainError) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1537,7 +1537,7 @@ TEST(BrokenPipelinePipeExecTest, DrainErrorAfterHasMore) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1565,7 +1565,7 @@ TEST(BrokenPipelinePipeExecTest, DrainErrorAfterYieldBack) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1591,7 +1591,7 @@ TEST(BrokenPipelinePipeExecTest, DrainErrorAfterBlocked) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1618,7 +1618,7 @@ TEST(BrokenPipelinePipeExecTest, SinkError) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1652,7 +1652,7 @@ TEST(BrokenPipelinePipeExecTest, SinkErrorAfterNeedsMore) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1681,7 +1681,7 @@ TEST(BrokenPipelinePipeExecTest, SinkErrorAfterBlocked) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Segments()[0].PipeExec().TaskGroup();
+  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);

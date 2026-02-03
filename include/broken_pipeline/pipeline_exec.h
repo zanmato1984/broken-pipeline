@@ -32,11 +32,11 @@ struct SinkExec {
 };
 
 template <BrokenPipelineTraits Traits>
-class PipelineExecSegment;
+class Pipelinexe;
 
-/**
- * @brief Encapsulation of the task group that runs a pipeline segment.
- */
+ /**
+  * @brief Encapsulation of the task group that runs a pipelinexe.
+  */
 template <BrokenPipelineTraits Traits>
 class PipeExec {
  public:
@@ -53,7 +53,7 @@ class PipeExec {
            SinkOp<Traits>* sink_op, std::size_t dop)
       : dop_(dop), exec_(std::make_shared<Exec>(channels, sink_op, dop_)) {}
 
-  friend class PipelineExecSegment<Traits>;
+  friend class Pipelinexe<Traits>;
 
   class Exec {
    public:
@@ -379,13 +379,14 @@ class PipelineCompiler;
 }  // namespace detail
 
 /**
- * @brief A compiled pipeline segment.
+ * @brief A compiled Pipelinexe.
  *
- * A `PipelineExecSegment` is a small-step, multiplexed runtime over one or more channels
- * (sources feeding the shared sink). Segments are executed in sequence order by the host.
+ * A `Pipelinexe` ("pipelinexe") is a small-step, multiplexed runtime over one or more
+ * channels (sources feeding the shared sink). Pipelinexes are executed in sequence order by
+ * the host.
  */
 template <BrokenPipelineTraits Traits>
-class PipelineExecSegment {
+class Pipelinexe {
  public:
   const std::string& Name() const noexcept { return name_; }
 
@@ -418,7 +419,7 @@ class PipelineExecSegment {
   }
 
  private:
-  PipelineExecSegment(
+  Pipelinexe(
       std::string name, std::vector<typename Pipeline<Traits>::Channel> channels,
       std::vector<std::unique_ptr<SourceOp<Traits>>> implicit_sources_keepalive,
       SinkOp<Traits>* sink_op, std::size_t dop)
@@ -442,9 +443,9 @@ class PipelineExecSegment {
  *
  * A `PipelineExec` contains:
  * - one `SinkExec` (lifecycle task groups for the sink)
- * - an ordered sequence of `PipelineExecSegment`s
+ * - an ordered sequence of Pipelinexes (`Pipelinexe`)
  *
- * The host is responsible for orchestrating ordering between segment/source/sink task
+ * The host is responsible for orchestrating ordering between pipelinexe/source/sink task
  * groups.
  */
 template <BrokenPipelineTraits Traits>
@@ -454,16 +455,16 @@ class PipelineExec {
   std::size_t Dop() const noexcept { return dop_; }
 
   const SinkExec<Traits>& Sink() const noexcept { return sink_; }
-  const std::vector<PipelineExecSegment<Traits>>& Segments() const noexcept {
-    return segments_;
+  const std::vector<Pipelinexe<Traits>>& Pipelinexes() const noexcept {
+    return pipelinexes_;
   }
 
  private:
   PipelineExec(std::string name, SinkExec<Traits> sink,
-               std::vector<PipelineExecSegment<Traits>> segments, std::size_t dop)
+               std::vector<Pipelinexe<Traits>> pipelinexes, std::size_t dop)
       : name_(std::move(name)),
         sink_(std::move(sink)),
-        segments_(std::move(segments)),
+        pipelinexes_(std::move(pipelinexes)),
         dop_(dop) {}
 
   friend class detail::PipelineCompiler<Traits>;
@@ -471,7 +472,7 @@ class PipelineExec {
   std::string name_;
 
   SinkExec<Traits> sink_;
-  std::vector<PipelineExecSegment<Traits>> segments_;
+  std::vector<Pipelinexe<Traits>> pipelinexes_;
 
   std::size_t dop_;
 };
@@ -480,12 +481,12 @@ namespace detail {
 
 /**
  * @brief Internal compiler that splits a `Pipeline` into an ordered list of
- * `PipelineExecSegment`s.
+ * Pipelinexes (`Pipelinexe`).
  *
  * Splitting rule (current):
- * - Only pipe implicit sources (`PipeOp::ImplicitSource()`) create segment boundaries.
+ * - Only pipe implicit sources (`PipeOp::ImplicitSource()`) create pipelinexe boundaries.
  * - When a pipe provides an implicit source, the downstream pipe chain becomes a new
- *   channel rooted at that implicit source in a later segment.
+ *   channel rooted at that implicit source in a later pipelinexe.
  */
 template <BrokenPipelineTraits Traits>
 class PipelineCompiler {
@@ -496,13 +497,13 @@ class PipelineCompiler {
   PipelineExec<Traits> Compile() && {
     ExtractTopology();
     SortTopology();
-    auto segments = BuildSegments();
+    auto pipelinexes = BuildPipelinexes();
 
     SinkExec<Traits> sink;
     sink.frontend = pipeline_.Sink()->Frontend();
     sink.backend = pipeline_.Sink()->Backend();
 
-    return PipelineExec<Traits>(pipeline_.Name(), std::move(sink), std::move(segments),
+    return PipelineExec<Traits>(pipeline_.Name(), std::move(sink), std::move(pipelinexes),
                                 dop_);
   }
 
@@ -549,36 +550,37 @@ class PipelineCompiler {
 
   void SortTopology() {
     for (auto* source : sources_keep_order_) {
-      auto& segment_info = topology_[source];
+      auto& pipelinexe_info = topology_[source];
       if (implicit_sources_keepalive_.count(source) > 0) {
-        segment_infos_[segment_info.first].first.push_back(
+        pipelinexe_infos_[pipelinexe_info.first].first.push_back(
             std::move(implicit_sources_keepalive_[source]));
       }
-      segment_infos_[segment_info.first].second.push_back(std::move(segment_info.second));
+      pipelinexe_infos_[pipelinexe_info.first].second.push_back(
+          std::move(pipelinexe_info.second));
     }
   }
 
-  std::vector<PipelineExecSegment<Traits>> BuildSegments() {
-    std::vector<PipelineExecSegment<Traits>> segments;
+  std::vector<Pipelinexe<Traits>> BuildPipelinexes() {
+    std::vector<Pipelinexe<Traits>> pipelinexes;
 
-    if (segment_infos_.empty()) {
-      return segments;
+    if (pipelinexe_infos_.empty()) {
+      return pipelinexes;
     }
 
-    segments.reserve(segment_infos_.size());
+    pipelinexes.reserve(pipelinexe_infos_.size());
 
-    for (auto& [id, segment_info] : segment_infos_) {
-      auto implicit_sources = std::move(segment_info.first);
-      auto pipeline_channels = std::move(segment_info.second);
+    for (auto& [id, pipelinexe_info] : pipelinexe_infos_) {
+      auto implicit_sources = std::move(pipelinexe_info.first);
+      auto pipeline_channels = std::move(pipelinexe_info.second);
 
       auto name =
-          "PipelineExecSegment" + std::to_string(id) + "(" + pipeline_.Name() + ")";
-      segments.push_back(PipelineExecSegment<Traits>(
+          "pipelinexe" + std::to_string(id) + "(" + pipeline_.Name() + ")";
+      pipelinexes.push_back(Pipelinexe<Traits>(
           std::move(name), std::move(pipeline_channels), std::move(implicit_sources),
           pipeline_.Sink(), dop_));
     }
 
-    return segments;
+    return pipelinexes;
   }
 
   const Pipeline<Traits>& pipeline_;
@@ -593,7 +595,7 @@ class PipelineCompiler {
 
   std::map<std::size_t, std::pair<std::vector<std::unique_ptr<SourceOp<Traits>>>,
                                   std::vector<typename Pipeline<Traits>::Channel>>>
-      segment_infos_;
+      pipelinexe_infos_;
 };
 
 }  // namespace detail
