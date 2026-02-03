@@ -18,9 +18,7 @@
 #include <vector>
 
 #include <arrow/status.h>
-
 #include <broken_pipeline/broken_pipeline.h>
-#include <broken_pipeline/pipeline_exec.h>
 
 #include "arrow_op.h"
 #include "arrow_traits.h"

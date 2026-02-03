@@ -28,6 +28,7 @@
 #include <arrow/schema.h>
 #include <arrow/status.h>
 #include <arrow/type.h>
+#include <broken_pipeline/broken_pipeline.h>
 
 #include "arrow_traits.h"
 
