@@ -34,7 +34,6 @@
 
 namespace bp {
 
-template <BrokenPipelineTraits Traits>
 /// @brief Source-provided task groups collected during compilation.
 ///
 /// Contains the task groups returned by `SourceOp::Frontend()` and `SourceOp::Backend()`.
@@ -44,6 +43,7 @@ template <BrokenPipelineTraits Traits>
 ///
 /// These task groups are opaque to Broken Pipeline core. A scheduler may route them using
 /// `TaskHint` (for example, CPU vs IO pools).
+template <BrokenPipelineTraits Traits>
 struct SourceExec {
   /// @brief Source frontend task groups.
   std::vector<TaskGroup<Traits>> frontend;
@@ -52,7 +52,6 @@ struct SourceExec {
   std::optional<TaskGroup<Traits>> backend;
 };
 
-template <BrokenPipelineTraits Traits>
 /// @brief Sink-provided task groups collected during compilation.
 ///
 /// Contains the task groups returned by `SinkOp::Frontend()` and `SinkOp::Backend()`.
@@ -62,6 +61,7 @@ template <BrokenPipelineTraits Traits>
 ///
 /// These task groups are opaque to Broken Pipeline core. A scheduler may route them using
 /// `TaskHint` (for example, CPU vs IO pools).
+template <BrokenPipelineTraits Traits>
 struct SinkExec {
   /// @brief Sink frontend task groups.
   std::vector<TaskGroup<Traits>> frontend;
