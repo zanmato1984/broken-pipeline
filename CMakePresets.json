@@ -17,12 +17,11 @@
     },
     {
       "name": "tests",
-      "displayName": "Tests (bundled Arrow)",
+      "displayName": "Tests",
       "inherits": "base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "BROKEN_PIPELINE_BUILD_TESTS": "ON",
-        "BROKEN_PIPELINE_ARROW_PROVIDER": "bundled"
+        "BROKEN_PIPELINE_BUILD_TESTS": "ON"
       }
     }
   ],

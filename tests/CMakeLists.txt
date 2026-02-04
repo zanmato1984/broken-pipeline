@@ -26,16 +26,8 @@ target_link_libraries(
   broken_pipeline_test_support
   PUBLIC
     broken_pipeline
+    Arrow::arrow_shared
 )
-if(BROKEN_PIPELINE_ARROW_INCLUDE_DIRS)
-  foreach(_broken_pipeline_arrow_inc_dir IN LISTS BROKEN_PIPELINE_ARROW_INCLUDE_DIRS)
-    target_include_directories(
-      broken_pipeline_test_support
-      SYSTEM PUBLIC
-      "$<BUILD_INTERFACE:${_broken_pipeline_arrow_inc_dir}>"
-    )
-  endforeach()
-endif()
 
 function(add_broken_pipeline_unit_test TEST_NAME TEST_SRC)
   add_broken_pipeline_test(${TEST_NAME} ${TEST_SRC})

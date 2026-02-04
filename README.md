@@ -335,17 +335,13 @@ cmake -S . -B build
 cmake --build build
 ```
 
-Build and run tests (requires Arrow and GoogleTest):
+Build and run tests (requires Arrow C++ CMake packages (Arrow, ArrowCompute) and GoogleTest):
 
 ```bash
-cmake -S . -B build -DBROKEN_PIPELINE_BUILD_TESTS=ON -DBROKEN_PIPELINE_ARROW_PROVIDER=system
+cmake -S . -B build -DBROKEN_PIPELINE_BUILD_TESTS=ON
 cmake --build build
 ctest --test-dir build
 ```
-
-`BROKEN_PIPELINE_ARROW_PROVIDER`:
-- system: use an installed Arrow CMake package (Arrow, ArrowCompute, ArrowTesting)
-- bundled: fetch and build Arrow 23.0.0 as part of the build
 
 ## Examples
 

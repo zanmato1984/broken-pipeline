@@ -1,0 +1,17 @@
+name: broken-pipeline-dev
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  # Arrow C++ (system-provided). Conda-forge packages the C++ libraries as libarrow.
+  - libarrow>=22
+  - libarrow-compute>=22
+  # Some transitive Arrow deps need *-devel packages for unversioned linker names.
+  - liblzma-devel
+  - folly
+  - glog
+  - gflags
+  - gtest
+  - cmake
+  - ninja
+  - pkg-config
