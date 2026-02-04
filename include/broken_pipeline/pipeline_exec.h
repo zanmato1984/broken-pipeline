@@ -35,80 +35,6 @@
 
 namespace bp {
 
-namespace detail {
-
-/// @brief Minimal generator-like coroutine wrapper for stepwise execution.
-///
-/// The coroutine yields `T` values via `co_yield`. The host drives progress by calling
-/// `Next()`, which resumes until the next `co_yield`.
-template <class T>
-class CoroStepper {
- public:
-  struct promise_type {
-    std::optional<T> current;
-
-    CoroStepper get_return_object() {
-      return CoroStepper(std::coroutine_handle<promise_type>::from_promise(*this));
-    }
-    std::suspend_always initial_suspend() noexcept { return {}; }
-    std::suspend_always final_suspend() noexcept { return {}; }
-    std::suspend_always yield_value(T value) noexcept {
-      current = std::move(value);
-      return {};
-    }
-    void return_void() noexcept {}
-    void unhandled_exception() { std::terminate(); }
-  };
-
-  using handle_type = std::coroutine_handle<promise_type>;
-
-  CoroStepper() = default;
-  explicit CoroStepper(handle_type handle) : handle_(handle) {}
-
-  CoroStepper(CoroStepper&& other) noexcept
-      : handle_(std::exchange(other.handle_, handle_type{})) {}
-  CoroStepper& operator=(CoroStepper&& other) noexcept {
-    if (this == &other) {
-      return *this;
-    }
-    if (handle_) {
-      handle_.destroy();
-    }
-    handle_ = std::exchange(other.handle_, handle_type{});
-    return *this;
-  }
-
-  CoroStepper(const CoroStepper&) = delete;
-  CoroStepper& operator=(const CoroStepper&) = delete;
-
-  ~CoroStepper() {
-    if (handle_) {
-      handle_.destroy();
-    }
-  }
-
-  explicit operator bool() const noexcept { return static_cast<bool>(handle_); }
-
-  T Next() {
-    assert(handle_);
-    if (handle_.done()) {
-      std::terminate();
-    }
-    handle_.resume();
-    if (!handle_.promise().current.has_value()) {
-      std::terminate();
-    }
-    T out = std::move(*handle_.promise().current);
-    handle_.promise().current.reset();
-    return out;
-  }
-
- private:
-  handle_type handle_{};
-};
-
-}  // namespace detail
-
 /// @brief Source-provided task groups collected during compilation.
 ///
 /// Contains the task groups returned by `SourceOp::Frontend()` and `SourceOp::Backend()`.
@@ -507,6 +433,80 @@ class PipeExec {
   std::size_t dop_;
   std::shared_ptr<Exec> exec_;
 };
+
+namespace detail {
+
+/// @brief Minimal generator-like coroutine wrapper for stepwise execution.
+///
+/// The coroutine yields `T` values via `co_yield`. The host drives progress by calling
+/// `Next()`, which resumes until the next `co_yield`.
+template <class T>
+class CoroStepper {
+ public:
+  struct promise_type {
+    std::optional<T> current;
+
+    CoroStepper get_return_object() {
+      return CoroStepper(std::coroutine_handle<promise_type>::from_promise(*this));
+    }
+    std::suspend_always initial_suspend() noexcept { return {}; }
+    std::suspend_always final_suspend() noexcept { return {}; }
+    std::suspend_always yield_value(T value) noexcept {
+      current = std::move(value);
+      return {};
+    }
+    void return_void() noexcept {}
+    void unhandled_exception() { std::terminate(); }
+  };
+
+  using handle_type = std::coroutine_handle<promise_type>;
+
+  CoroStepper() = default;
+  explicit CoroStepper(handle_type handle) : handle_(handle) {}
+
+  CoroStepper(CoroStepper&& other) noexcept
+      : handle_(std::exchange(other.handle_, handle_type{})) {}
+  CoroStepper& operator=(CoroStepper&& other) noexcept {
+    if (this == &other) {
+      return *this;
+    }
+    if (handle_) {
+      handle_.destroy();
+    }
+    handle_ = std::exchange(other.handle_, handle_type{});
+    return *this;
+  }
+
+  CoroStepper(const CoroStepper&) = delete;
+  CoroStepper& operator=(const CoroStepper&) = delete;
+
+  ~CoroStepper() {
+    if (handle_) {
+      handle_.destroy();
+    }
+  }
+
+  explicit operator bool() const noexcept { return static_cast<bool>(handle_); }
+
+  T Next() {
+    assert(handle_);
+    if (handle_.done()) {
+      std::terminate();
+    }
+    handle_.resume();
+    if (!handle_.promise().current.has_value()) {
+      std::terminate();
+    }
+    T out = std::move(*handle_.promise().current);
+    handle_.promise().current.reset();
+    return out;
+  }
+
+ private:
+  handle_type handle_{};
+};
+
+}  // namespace detail
 
 /// @brief Coroutine-based variant of `PipeExec` (prototype).
 ///
