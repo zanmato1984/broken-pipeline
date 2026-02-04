@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "arrow_traits.h"
+#include "test_scheduler.h"
 
 #include <arrow/testing/gtest_util.h>
 
@@ -30,26 +31,6 @@
 namespace bp_test {
 
 namespace {
-
-class TestResumer final : public Resumer {
- public:
-  void Resume() override { resumed_.store(true); }
-  bool IsResumed() const override { return resumed_.load(); }
-
- private:
-  std::atomic_bool resumed_{false};
-};
-
-class TestAwaiter final : public Awaiter {
- public:
-  explicit TestAwaiter(std::vector<std::shared_ptr<Resumer>> resumers)
-      : resumers_(std::move(resumers)) {}
-
-  const std::vector<std::shared_ptr<Resumer>>& Resumers() const { return resumers_; }
-
- private:
-  std::vector<std::shared_ptr<Resumer>> resumers_;
-};
 
 struct Trace {
   std::string op;
@@ -343,64 +324,6 @@ class ScriptedSink final : public SinkOp {
   std::vector<Trace>* traces_;
 };
 
-TaskContext MakeTaskContext() {
-  TaskContext task_ctx;
-  task_ctx.context = nullptr;
-  task_ctx.resumer_factory = []() -> Result<std::shared_ptr<Resumer>> {
-    return std::make_shared<TestResumer>();
-  };
-  task_ctx.awaiter_factory = [](std::vector<std::shared_ptr<Resumer>> resumers)
-      -> Result<std::shared_ptr<Awaiter>> {
-    return std::make_shared<TestAwaiter>(std::move(resumers));
-  };
-  return task_ctx;
-}
-
-Status RunSingleTaskToDone(const TaskGroup& group, const TaskContext& task_ctx,
-                           std::vector<TaskStatus>* statuses = nullptr) {
-  bool done = false;
-  std::size_t steps = 0;
-  while (!done) {
-    if (steps++ >= 1000u) {
-      ADD_FAILURE() << "RunSingleTaskToDone exceeded step limit";
-      return Status::Invalid("RunSingleTaskToDone exceeded step limit");
-    }
-
-    auto status_r = group.Task()(task_ctx, /*task_id=*/0);
-    if (!status_r.ok()) {
-      return status_r.status();
-    }
-    const auto& ts = status_r.ValueOrDie();
-    if (statuses) {
-      statuses->push_back(ts);
-    }
-
-    if (ts.IsContinue() || ts.IsYield()) {
-      continue;
-    }
-    if (ts.IsFinished() || ts.IsCancelled()) {
-      done = true;
-      continue;
-    }
-    if (ts.IsBlocked()) {
-      auto* awaiter = dynamic_cast<TestAwaiter*>(ts.GetAwaiter().get());
-      if (awaiter == nullptr) {
-        ADD_FAILURE() << "unexpected awaiter type";
-        return Status::Invalid("unexpected awaiter type");
-      }
-      for (auto& resumer : awaiter->Resumers()) {
-        if (resumer == nullptr) {
-          ADD_FAILURE() << "null resumer";
-          return Status::Invalid("null resumer");
-        }
-        resumer->Resume();
-      }
-      continue;
-    }
-  }
-  return Status::OK();
-}
-
 }  // namespace
 
 using PipelineExec = bp::PipelineExec<Traits>;
@@ -417,11 +340,42 @@ struct CoroPipeExecRunner {
   }
 };
 
-template <class Runner>
-class BrokenPipelinePipeExecTest : public ::testing::Test {};
+template <class RunnerT, class SchedulerT>
+struct PipeExecTestType {
+  using Runner = RunnerT;
+  using Scheduler = SchedulerT;
 
-using PipeExecRunners = ::testing::Types<LegacyPipeExecRunner, CoroPipeExecRunner>;
-TYPED_TEST_SUITE(BrokenPipelinePipeExecTest, PipeExecRunners);
+  static TaskGroup MakeTaskGroup(const PipelineExec& exec, std::size_t idx) {
+    return Runner::MakeTaskGroup(exec, idx);
+  }
+};
+
+using PipeExecTestTypes = ::testing::Types<
+    PipeExecTestType<LegacyPipeExecRunner, sched::NaiveParallelScheduler>,
+    PipeExecTestType<LegacyPipeExecRunner, sched::AsyncDualPoolScheduler>,
+    PipeExecTestType<CoroPipeExecRunner, sched::NaiveParallelScheduler>,
+    PipeExecTestType<CoroPipeExecRunner, sched::AsyncDualPoolScheduler>>;
+
+template <class Param>
+class BrokenPipelinePipeExecTest : public ::testing::Test {
+ public:
+  using Scheduler = typename Param::Scheduler;
+
+ protected:
+  Status RunToDone(const TaskGroup& group, std::vector<TaskStatus>* statuses = nullptr) {
+    auto handle = scheduler_.ScheduleTaskGroup(group, task_ctx_, statuses);
+    auto final_r = scheduler_.WaitTaskGroup(handle);
+    if (!final_r.ok()) {
+      return final_r.status();
+    }
+    return Status::OK();
+  }
+
+  Scheduler scheduler_;
+  TaskContext task_ctx_ = scheduler_.MakeTaskContext();
+};
+
+TYPED_TEST_SUITE(BrokenPipelinePipeExecTest, PipeExecTestTypes);
 
 TYPED_TEST(BrokenPipelinePipeExecTest, EmptySourceFinishesWithoutCallingSink) {
   std::vector<Trace> traces;
@@ -434,10 +388,9 @@ TYPED_TEST(BrokenPipelinePipeExecTest, EmptySourceFinishesWithoutCallingSink) {
   ASSERT_EQ(exec.Pipelinexes().size(), 1);
 
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
   std::vector<TaskStatus> statuses;
-  ASSERT_OK(RunSingleTaskToDone(group, task_ctx, &statuses));
+  ASSERT_OK(this->RunToDone(group, &statuses));
   ASSERT_FALSE(statuses.empty());
   EXPECT_TRUE(statuses.back().IsFinished());
 
@@ -457,27 +410,26 @@ TYPED_TEST(BrokenPipelinePipeExecTest, EmptySourceNotReady) {
   ASSERT_EQ(exec.Pipelinexes().size(), 1);
 
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
-  auto status_r = group.Task()(task_ctx, 0);
+  auto status_r = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r.ok());
   ASSERT_TRUE(status_r->IsBlocked());
   ASSERT_EQ(traces.size(), 1);
   EXPECT_EQ(traces[0], (Trace{"Source", "Source", std::nullopt, "BLOCKED"}));
 
   // Calling again without resuming stays blocked and does not re-invoke Source().
-  auto status_r2 = group.Task()(task_ctx, 0);
+  auto status_r2 = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsBlocked());
   ASSERT_EQ(traces.size(), 1);
 
-  auto* awaiter = dynamic_cast<TestAwaiter*>(status_r->GetAwaiter().get());
+  auto* awaiter = dynamic_cast<sched::ResumersAwaiter*>(status_r->GetAwaiter().get());
   ASSERT_NE(awaiter, nullptr);
   for (auto& resumer : awaiter->Resumers()) {
     resumer->Resume();
   }
 
-  ASSERT_OK(RunSingleTaskToDone(group, task_ctx));
+  ASSERT_OK(this->RunToDone(group));
   ASSERT_EQ(traces.size(), 2);
   EXPECT_EQ(traces[1], (Trace{"Source", "Source", std::nullopt, "FINISHED"}));
 }
@@ -496,10 +448,9 @@ TYPED_TEST(BrokenPipelinePipeExecTest, TwoSourceOneNotReady) {
   ASSERT_EQ(exec.Pipelinexes().size(), 1);
 
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
   // First run can make progress on channel 2 even if channel 1 is blocked.
-  auto status_r = group.Task()(task_ctx, 0);
+  auto status_r = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r.ok());
   ASSERT_TRUE(status_r->IsContinue());
 
@@ -508,16 +459,16 @@ TYPED_TEST(BrokenPipelinePipeExecTest, TwoSourceOneNotReady) {
   EXPECT_EQ(traces[1], (Trace{"Source2", "Source", std::nullopt, "FINISHED"}));
 
   // Now only channel 1 is unfinished and blocked -> task blocks.
-  auto status_r2 = group.Task()(task_ctx, 0);
+  auto status_r2 = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsBlocked());
 
-  auto* awaiter = dynamic_cast<TestAwaiter*>(status_r2->GetAwaiter().get());
+  auto* awaiter = dynamic_cast<sched::ResumersAwaiter*>(status_r2->GetAwaiter().get());
   ASSERT_NE(awaiter, nullptr);
   ASSERT_EQ(awaiter->Resumers().size(), 1);
   awaiter->Resumers()[0]->Resume();
 
-  ASSERT_OK(RunSingleTaskToDone(group, task_ctx));
+  ASSERT_OK(this->RunToDone(group));
 
   ASSERT_EQ(traces.size(), 3);
   EXPECT_EQ(traces[2], (Trace{"Source1", "Source", std::nullopt, "FINISHED"}));
@@ -539,10 +490,9 @@ TYPED_TEST(BrokenPipelinePipeExecTest, OnePass) {
   Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
   std::vector<TaskStatus> statuses;
-  ASSERT_OK(RunSingleTaskToDone(group, task_ctx, &statuses));
+  ASSERT_OK(this->RunToDone(group, &statuses));
 
   ASSERT_GE(statuses.size(), 2u);
   EXPECT_TRUE(statuses[0].IsContinue());
@@ -567,10 +517,9 @@ TYPED_TEST(BrokenPipelinePipeExecTest, OnePassDirectFinish) {
   Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
   std::vector<TaskStatus> statuses;
-  ASSERT_OK(RunSingleTaskToDone(group, task_ctx, &statuses));
+  ASSERT_OK(this->RunToDone(group, &statuses));
 
   ASSERT_GE(statuses.size(), 2u);
   EXPECT_TRUE(statuses[0].IsContinue());
@@ -600,9 +549,8 @@ TYPED_TEST(BrokenPipelinePipeExecTest, OnePassWithPipe) {
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
-  ASSERT_OK(RunSingleTaskToDone(group, task_ctx));
+  ASSERT_OK(this->RunToDone(group));
 
   ASSERT_EQ(traces.size(), 4);
   EXPECT_EQ(traces[0], (Trace{"Source", "Source", std::nullopt, "SOURCE_PIPE_HAS_MORE"}));
@@ -634,9 +582,8 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeNeedsMoreGoesBackToSource) {
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
-  ASSERT_OK(RunSingleTaskToDone(group, task_ctx));
+  ASSERT_OK(this->RunToDone(group));
 
   ASSERT_EQ(traces.size(), 5);
   EXPECT_EQ(traces[0], (Trace{"Source", "Source", std::nullopt, "SOURCE_PIPE_HAS_MORE"}));
@@ -672,9 +619,8 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeHasMoreResumesPipeBeforeSource) {
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
-  ASSERT_OK(RunSingleTaskToDone(group, task_ctx));
+  ASSERT_OK(this->RunToDone(group));
 
   ASSERT_EQ(traces.size(), 6);
   EXPECT_EQ(traces[0], (Trace{"Source", "Source", std::nullopt, "SOURCE_PIPE_HAS_MORE"}));
@@ -709,15 +655,14 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeYieldHandshake) {
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
-  auto status_r = group.Task()(task_ctx, 0);
+  auto status_r = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r.ok());
   ASSERT_TRUE(status_r->IsYield());
 
   // Re-enter after yield: yield-back + continue running.
   std::vector<TaskStatus> statuses;
-  ASSERT_OK(RunSingleTaskToDone(group, task_ctx, &statuses));
+  ASSERT_OK(this->RunToDone(group, &statuses));
 
   ASSERT_FALSE(traces.empty());
   EXPECT_EQ(traces[0], (Trace{"Source", "Source", std::nullopt, "SOURCE_PIPE_HAS_MORE"}));
@@ -744,9 +689,8 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeAsyncSpill) {
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
-  ASSERT_OK(RunSingleTaskToDone(group, task_ctx));
+  ASSERT_OK(this->RunToDone(group));
 
   ASSERT_EQ(traces.size(), 4);
   EXPECT_EQ(traces[0], (Trace{"Source", "Source", std::nullopt, "SOURCE_PIPE_HAS_MORE"}));
@@ -775,24 +719,23 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeBlockedResumesWithNullInput) {
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
-  auto status_r = group.Task()(task_ctx, 0);
+  auto status_r = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r.ok());
   ASSERT_TRUE(status_r->IsBlocked());
 
   // Calling again without resuming stays blocked and does not re-invoke Pipe().
-  auto status_r2 = group.Task()(task_ctx, 0);
+  auto status_r2 = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsBlocked());
 
   // Resume and complete.
-  auto* awaiter = dynamic_cast<TestAwaiter*>(status_r->GetAwaiter().get());
+  auto* awaiter = dynamic_cast<sched::ResumersAwaiter*>(status_r->GetAwaiter().get());
   ASSERT_NE(awaiter, nullptr);
   for (auto& resumer : awaiter->Resumers()) {
     resumer->Resume();
   }
-  ASSERT_OK(RunSingleTaskToDone(group, task_ctx));
+  ASSERT_OK(this->RunToDone(group));
 
   ASSERT_GE(traces.size(), 2u);
   EXPECT_EQ(traces[0], (Trace{"Source", "Source", std::nullopt, "SOURCE_PIPE_HAS_MORE"}));
@@ -818,20 +761,19 @@ TYPED_TEST(BrokenPipelinePipeExecTest, SinkBackpressureResumesWithNullInput) {
   Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
   // First call blocks in sink.
-  auto status_r = group.Task()(task_ctx, 0);
+  auto status_r = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r.ok());
   ASSERT_TRUE(status_r->IsBlocked());
 
-  auto* awaiter = dynamic_cast<TestAwaiter*>(status_r->GetAwaiter().get());
+  auto* awaiter = dynamic_cast<sched::ResumersAwaiter*>(status_r->GetAwaiter().get());
   ASSERT_NE(awaiter, nullptr);
   for (auto& resumer : awaiter->Resumers()) {
     resumer->Resume();
   }
 
-  ASSERT_OK(RunSingleTaskToDone(group, task_ctx));
+  ASSERT_OK(this->RunToDone(group));
 
   ASSERT_GE(traces.size(), 2u);
   EXPECT_EQ(traces[0], (Trace{"Source", "Source", std::nullopt, "SOURCE_PIPE_HAS_MORE"}));
@@ -864,9 +806,8 @@ TYPED_TEST(BrokenPipelinePipeExecTest, DrainProducesTailOutput) {
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
-  ASSERT_OK(RunSingleTaskToDone(group, task_ctx));
+  ASSERT_OK(this->RunToDone(group));
 
   ASSERT_EQ(traces.size(), 5);
   EXPECT_EQ(traces[0], (Trace{"Source", "Source", std::nullopt, "FINISHED"}));
@@ -907,10 +848,9 @@ TYPED_TEST(BrokenPipelinePipeExecTest, Drain) {
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
   std::vector<TaskStatus> statuses;
-  ASSERT_OK(RunSingleTaskToDone(group, task_ctx, &statuses));
+  ASSERT_OK(this->RunToDone(group, &statuses));
 
   // Draining includes a yield handshake.
   ASSERT_FALSE(statuses.empty());
@@ -963,9 +903,8 @@ TYPED_TEST(BrokenPipelinePipeExecTest, ImplicitSource) {
   ASSERT_EQ(exec.Pipelinexes()[1].Channels().size(), 1);
   ASSERT_EQ(exec.Pipelinexes()[1].Channels()[0].source_op, implicit_source);
 
-  auto task_ctx = MakeTaskContext();
-  ASSERT_OK(RunSingleTaskToDone(TypeParam::MakeTaskGroup(exec, 0), task_ctx));
-  ASSERT_OK(RunSingleTaskToDone(TypeParam::MakeTaskGroup(exec, 1), task_ctx));
+  ASSERT_OK(this->RunToDone(TypeParam::MakeTaskGroup(exec, 0)));
+  ASSERT_OK(this->RunToDone(TypeParam::MakeTaskGroup(exec, 1)));
 
   ASSERT_EQ(traces.size(), 5);
   EXPECT_EQ(traces[0], (Trace{"Source", "Source", std::nullopt, "FINISHED"}));
@@ -1000,9 +939,8 @@ TYPED_TEST(BrokenPipelinePipeExecTest, Backpressure) {
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
-  ASSERT_OK(RunSingleTaskToDone(group, task_ctx));
+  ASSERT_OK(this->RunToDone(group));
 
   ASSERT_EQ(traces.size(), 8);
   EXPECT_EQ(traces[0], (Trace{"Source", "Source", std::nullopt, "SOURCE_PIPE_HAS_MORE"}));
@@ -1055,10 +993,9 @@ TYPED_TEST(BrokenPipelinePipeExecTest, MultiPipe) {
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe1, &pipe2}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
   std::vector<TaskStatus> statuses;
-  ASSERT_OK(RunSingleTaskToDone(group, task_ctx, &statuses));
+  ASSERT_OK(this->RunToDone(group, &statuses));
   EXPECT_TRUE(std::any_of(statuses.begin(), statuses.end(),
                           [](const TaskStatus& s) { return s.IsYield(); }));
 
@@ -1111,10 +1048,9 @@ TYPED_TEST(BrokenPipelinePipeExecTest, MultiDrain) {
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe1, &pipe2}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
   std::vector<TaskStatus> statuses;
-  ASSERT_OK(RunSingleTaskToDone(group, task_ctx, &statuses));
+  ASSERT_OK(this->RunToDone(group, &statuses));
   EXPECT_TRUE(std::any_of(statuses.begin(), statuses.end(),
                           [](const TaskStatus& s) { return s.IsYield(); }));
 
@@ -1165,14 +1101,13 @@ TYPED_TEST(BrokenPipelinePipeExecTest, MultiChannel) {
       &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
   // Both channels start blocked.
-  auto status_r = group.Task()(task_ctx, 0);
+  auto status_r = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r.ok());
   ASSERT_TRUE(status_r->IsBlocked());
 
-  auto* awaiter = dynamic_cast<TestAwaiter*>(status_r->GetAwaiter().get());
+  auto* awaiter = dynamic_cast<sched::ResumersAwaiter*>(status_r->GetAwaiter().get());
   ASSERT_NE(awaiter, nullptr);
   ASSERT_EQ(awaiter->Resumers().size(), 2);
 
@@ -1180,25 +1115,25 @@ TYPED_TEST(BrokenPipelinePipeExecTest, MultiChannel) {
   awaiter->Resumers()[0]->Resume();
 
   // Channel 0 can now run and reach sink.
-  auto status_r2 = group.Task()(task_ctx, 0);
+  auto status_r2 = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsContinue());
 
   // Finish channel 0; task still continues because channel 1 is blocked.
-  auto status_r3 = group.Task()(task_ctx, 0);
+  auto status_r3 = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r3.ok());
   ASSERT_TRUE(status_r3->IsContinue());
 
   // Now the only unfinished channel is blocked -> task blocks with a single resumer.
-  auto status_r4 = group.Task()(task_ctx, 0);
+  auto status_r4 = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r4.ok());
   ASSERT_TRUE(status_r4->IsBlocked());
-  auto* awaiter2 = dynamic_cast<TestAwaiter*>(status_r4->GetAwaiter().get());
+  auto* awaiter2 = dynamic_cast<sched::ResumersAwaiter*>(status_r4->GetAwaiter().get());
   ASSERT_NE(awaiter2, nullptr);
   ASSERT_EQ(awaiter2->Resumers().size(), 1);
   awaiter2->Resumers()[0]->Resume();
 
-  ASSERT_OK(RunSingleTaskToDone(group, task_ctx));
+  ASSERT_OK(this->RunToDone(group));
 
   ASSERT_EQ(traces.size(), 12);
   EXPECT_EQ(traces[0], (Trace{"Source1", "Source", std::nullopt, "BLOCKED"}));
@@ -1228,13 +1163,12 @@ TYPED_TEST(BrokenPipelinePipeExecTest, MultiChannelAllBlockedReturnsTaskBlocked)
                     &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
-  auto status_r = group.Task()(task_ctx, 0);
+  auto status_r = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r.ok());
   ASSERT_TRUE(status_r->IsBlocked());
 
-  auto* awaiter = dynamic_cast<TestAwaiter*>(status_r->GetAwaiter().get());
+  auto* awaiter = dynamic_cast<sched::ResumersAwaiter*>(status_r->GetAwaiter().get());
   ASSERT_NE(awaiter, nullptr);
   ASSERT_EQ(awaiter->Resumers().size(), 2);
 }
@@ -1248,13 +1182,12 @@ TYPED_TEST(BrokenPipelinePipeExecTest, ErrorCancelsSubsequentCalls) {
   Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
-  auto status_r = group.Task()(task_ctx, 0);
+  auto status_r = group.Task()(this->task_ctx_, 0);
   ASSERT_FALSE(status_r.ok());
   ASSERT_EQ(status_r.status().message(), "boom");
 
-  auto status_r2 = group.Task()(task_ctx, 0);
+  auto status_r2 = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1269,14 +1202,13 @@ TYPED_TEST(BrokenPipelinePipeExecTest, DirectSourceError) {
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
-  auto st = RunSingleTaskToDone(group, task_ctx);
+  auto st = this->RunToDone(group);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.Task()(task_ctx, 0);
+  auto status_r2 = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1292,14 +1224,13 @@ TYPED_TEST(BrokenPipelinePipeExecTest, SourceErrorAfterBlocked) {
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
-  auto st = RunSingleTaskToDone(group, task_ctx);
+  auto st = this->RunToDone(group);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.Task()(task_ctx, 0);
+  auto status_r2 = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1319,14 +1250,13 @@ TYPED_TEST(BrokenPipelinePipeExecTest, SourceError) {
   Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
-  auto st = RunSingleTaskToDone(group, task_ctx);
+  auto st = this->RunToDone(group);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.Task()(task_ctx, 0);
+  auto status_r2 = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1346,14 +1276,13 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeError) {
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
-  auto st = RunSingleTaskToDone(group, task_ctx);
+  auto st = this->RunToDone(group);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.Task()(task_ctx, 0);
+  auto status_r2 = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1378,14 +1307,13 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeErrorAfterEven) {
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
-  auto st = RunSingleTaskToDone(group, task_ctx);
+  auto st = this->RunToDone(group);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.Task()(task_ctx, 0);
+  auto status_r2 = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1408,14 +1336,13 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeErrorAfterNeedsMore) {
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
-  auto st = RunSingleTaskToDone(group, task_ctx);
+  auto st = this->RunToDone(group);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.Task()(task_ctx, 0);
+  auto status_r2 = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1439,14 +1366,13 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeErrorAfterHasMore) {
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
-  auto st = RunSingleTaskToDone(group, task_ctx);
+  auto st = this->RunToDone(group);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.Task()(task_ctx, 0);
+  auto status_r2 = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1468,14 +1394,13 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeErrorAfterYieldBack) {
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
-  auto st = RunSingleTaskToDone(group, task_ctx);
+  auto st = this->RunToDone(group);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.Task()(task_ctx, 0);
+  auto status_r2 = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1496,14 +1421,13 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeErrorAfterBlocked) {
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
-  auto st = RunSingleTaskToDone(group, task_ctx);
+  auto st = this->RunToDone(group);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.Task()(task_ctx, 0);
+  auto status_r2 = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1521,14 +1445,13 @@ TYPED_TEST(BrokenPipelinePipeExecTest, DrainError) {
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
-  auto st = RunSingleTaskToDone(group, task_ctx);
+  auto st = this->RunToDone(group);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.Task()(task_ctx, 0);
+  auto status_r2 = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1550,14 +1473,13 @@ TYPED_TEST(BrokenPipelinePipeExecTest, DrainErrorAfterHasMore) {
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
-  auto st = RunSingleTaskToDone(group, task_ctx);
+  auto st = this->RunToDone(group);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.Task()(task_ctx, 0);
+  auto status_r2 = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1578,14 +1500,13 @@ TYPED_TEST(BrokenPipelinePipeExecTest, DrainErrorAfterYieldBack) {
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
-  auto st = RunSingleTaskToDone(group, task_ctx);
+  auto st = this->RunToDone(group);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.Task()(task_ctx, 0);
+  auto status_r2 = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1603,14 +1524,13 @@ TYPED_TEST(BrokenPipelinePipeExecTest, DrainErrorAfterBlocked) {
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
-  auto st = RunSingleTaskToDone(group, task_ctx);
+  auto st = this->RunToDone(group);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.Task()(task_ctx, 0);
+  auto status_r2 = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1629,14 +1549,13 @@ TYPED_TEST(BrokenPipelinePipeExecTest, SinkError) {
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
-  auto st = RunSingleTaskToDone(group, task_ctx);
+  auto st = this->RunToDone(group);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.Task()(task_ctx, 0);
+  auto status_r2 = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1661,14 +1580,13 @@ TYPED_TEST(BrokenPipelinePipeExecTest, SinkErrorAfterNeedsMore) {
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
-  auto st = RunSingleTaskToDone(group, task_ctx);
+  auto st = this->RunToDone(group);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.Task()(task_ctx, 0);
+  auto status_r2 = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }
@@ -1689,14 +1607,13 @@ TYPED_TEST(BrokenPipelinePipeExecTest, SinkErrorAfterBlocked) {
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
-  auto task_ctx = MakeTaskContext();
 
-  auto st = RunSingleTaskToDone(group, task_ctx);
+  auto st = this->RunToDone(group);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
 
-  auto status_r2 = group.Task()(task_ctx, 0);
+  auto status_r2 = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsCancelled());
 }

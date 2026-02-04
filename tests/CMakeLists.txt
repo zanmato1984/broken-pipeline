@@ -14,9 +14,33 @@
 
 set(BROKEN_PIPELINE_TEST_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
+add_library(broken_pipeline_test_support STATIC
+  "${CMAKE_CURRENT_SOURCE_DIR}/test_scheduler.cpp"
+)
+target_include_directories(
+  broken_pipeline_test_support
+  PUBLIC
+    "${BROKEN_PIPELINE_TEST_INCLUDE_DIR}"
+)
+target_link_libraries(
+  broken_pipeline_test_support
+  PUBLIC
+    broken_pipeline
+)
+if(BROKEN_PIPELINE_ARROW_INCLUDE_DIRS)
+  foreach(_broken_pipeline_arrow_inc_dir IN LISTS BROKEN_PIPELINE_ARROW_INCLUDE_DIRS)
+    target_include_directories(
+      broken_pipeline_test_support
+      SYSTEM PUBLIC
+      "$<BUILD_INTERFACE:${_broken_pipeline_arrow_inc_dir}>"
+    )
+  endforeach()
+endif()
+
 function(add_broken_pipeline_unit_test TEST_NAME TEST_SRC)
   add_broken_pipeline_test(${TEST_NAME} ${TEST_SRC})
   target_include_directories(${TEST_NAME} PRIVATE "${BROKEN_PIPELINE_TEST_INCLUDE_DIR}")
+  target_link_libraries(${TEST_NAME} PRIVATE broken_pipeline_test_support)
 endfunction()
 
 add_broken_pipeline_unit_test(
