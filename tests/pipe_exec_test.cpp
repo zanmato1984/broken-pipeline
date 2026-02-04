@@ -403,7 +403,27 @@ Status RunSingleTaskToDone(const TaskGroup& group, const TaskContext& task_ctx,
 
 }  // namespace
 
-TEST(BrokenPipelinePipeExecTest, EmptySourceFinishesWithoutCallingSink) {
+using PipelineExec = bp::PipelineExec<Traits>;
+
+struct LegacyPipeExecRunner {
+  static TaskGroup MakeTaskGroup(const PipelineExec& exec, std::size_t idx) {
+    return exec.Pipelinexes()[idx].PipeExec().TaskGroup();
+  }
+};
+
+struct CoroPipeExecRunner {
+  static TaskGroup MakeTaskGroup(const PipelineExec& exec, std::size_t idx) {
+    return exec.Pipelinexes()[idx].PipeExecCoro().TaskGroup();
+  }
+};
+
+template <class Runner>
+class BrokenPipelinePipeExecTest : public ::testing::Test {};
+
+using PipeExecRunners = ::testing::Types<LegacyPipeExecRunner, CoroPipeExecRunner>;
+TYPED_TEST_SUITE(BrokenPipelinePipeExecTest, PipeExecRunners);
+
+TYPED_TEST(BrokenPipelinePipeExecTest, EmptySourceFinishesWithoutCallingSink) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces);
@@ -413,7 +433,7 @@ TEST(BrokenPipelinePipeExecTest, EmptySourceFinishesWithoutCallingSink) {
   auto exec = Compile(pipeline, /*dop=*/1);
   ASSERT_EQ(exec.Pipelinexes().size(), 1);
 
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   std::vector<TaskStatus> statuses;
@@ -425,7 +445,7 @@ TEST(BrokenPipelinePipeExecTest, EmptySourceFinishesWithoutCallingSink) {
   EXPECT_EQ(traces[0], (Trace{"Source", "Source", std::nullopt, "FINISHED"}));
 }
 
-TEST(BrokenPipelinePipeExecTest, EmptySourceNotReady) {
+TYPED_TEST(BrokenPipelinePipeExecTest, EmptySourceNotReady) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source", {{BlockedStep(), OutputStep(OpOutput::Finished())}},
@@ -436,7 +456,7 @@ TEST(BrokenPipelinePipeExecTest, EmptySourceNotReady) {
   auto exec = Compile(pipeline, /*dop=*/1);
   ASSERT_EQ(exec.Pipelinexes().size(), 1);
 
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   auto status_r = group.Task()(task_ctx, 0);
@@ -462,7 +482,7 @@ TEST(BrokenPipelinePipeExecTest, EmptySourceNotReady) {
   EXPECT_EQ(traces[1], (Trace{"Source", "Source", std::nullopt, "FINISHED"}));
 }
 
-TEST(BrokenPipelinePipeExecTest, TwoSourceOneNotReady) {
+TYPED_TEST(BrokenPipelinePipeExecTest, TwoSourceOneNotReady) {
   std::vector<Trace> traces;
 
   ScriptedSource source1("Source1", {{BlockedStep(), OutputStep(OpOutput::Finished())}},
@@ -475,7 +495,7 @@ TEST(BrokenPipelinePipeExecTest, TwoSourceOneNotReady) {
   auto exec = Compile(pipeline, /*dop=*/1);
   ASSERT_EQ(exec.Pipelinexes().size(), 1);
 
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   // First run can make progress on channel 2 even if channel 1 is blocked.
@@ -503,7 +523,7 @@ TEST(BrokenPipelinePipeExecTest, TwoSourceOneNotReady) {
   EXPECT_EQ(traces[2], (Trace{"Source1", "Source", std::nullopt, "FINISHED"}));
 }
 
-TEST(BrokenPipelinePipeExecTest, OnePass) {
+TYPED_TEST(BrokenPipelinePipeExecTest, OnePass) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -518,7 +538,7 @@ TEST(BrokenPipelinePipeExecTest, OnePass) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   std::vector<TaskStatus> statuses;
@@ -534,7 +554,7 @@ TEST(BrokenPipelinePipeExecTest, OnePass) {
   EXPECT_EQ(traces[2], (Trace{"Source", "Source", std::nullopt, "FINISHED"}));
 }
 
-TEST(BrokenPipelinePipeExecTest, OnePassDirectFinish) {
+TYPED_TEST(BrokenPipelinePipeExecTest, OnePassDirectFinish) {
   std::vector<Trace> traces;
 
   ScriptedSource source(
@@ -546,7 +566,7 @@ TEST(BrokenPipelinePipeExecTest, OnePassDirectFinish) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   std::vector<TaskStatus> statuses;
@@ -561,7 +581,7 @@ TEST(BrokenPipelinePipeExecTest, OnePassDirectFinish) {
   EXPECT_EQ(traces[1], (Trace{"Sink", "Sink", Batch{1}, "PIPE_SINK_NEEDS_MORE"}));
 }
 
-TEST(BrokenPipelinePipeExecTest, OnePassWithPipe) {
+TYPED_TEST(BrokenPipelinePipeExecTest, OnePassWithPipe) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -579,7 +599,7 @@ TEST(BrokenPipelinePipeExecTest, OnePassWithPipe) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   ASSERT_OK(RunSingleTaskToDone(group, task_ctx));
@@ -591,7 +611,7 @@ TEST(BrokenPipelinePipeExecTest, OnePassWithPipe) {
   EXPECT_EQ(traces[3], (Trace{"Source", "Source", std::nullopt, "FINISHED"}));
 }
 
-TEST(BrokenPipelinePipeExecTest, PipeNeedsMoreGoesBackToSource) {
+TYPED_TEST(BrokenPipelinePipeExecTest, PipeNeedsMoreGoesBackToSource) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -613,7 +633,7 @@ TEST(BrokenPipelinePipeExecTest, PipeNeedsMoreGoesBackToSource) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   ASSERT_OK(RunSingleTaskToDone(group, task_ctx));
@@ -626,7 +646,7 @@ TEST(BrokenPipelinePipeExecTest, PipeNeedsMoreGoesBackToSource) {
   EXPECT_EQ(traces[4], (Trace{"Sink", "Sink", Batch{2}, "PIPE_SINK_NEEDS_MORE"}));
 }
 
-TEST(BrokenPipelinePipeExecTest, PipeHasMoreResumesPipeBeforeSource) {
+TYPED_TEST(BrokenPipelinePipeExecTest, PipeHasMoreResumesPipeBeforeSource) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -651,7 +671,7 @@ TEST(BrokenPipelinePipeExecTest, PipeHasMoreResumesPipeBeforeSource) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   ASSERT_OK(RunSingleTaskToDone(group, task_ctx));
@@ -667,7 +687,7 @@ TEST(BrokenPipelinePipeExecTest, PipeHasMoreResumesPipeBeforeSource) {
   EXPECT_EQ(traces[5], (Trace{"Source", "Source", std::nullopt, "FINISHED"}));
 }
 
-TEST(BrokenPipelinePipeExecTest, PipeYieldHandshake) {
+TYPED_TEST(BrokenPipelinePipeExecTest, PipeYieldHandshake) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -688,7 +708,7 @@ TEST(BrokenPipelinePipeExecTest, PipeYieldHandshake) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   auto status_r = group.Task()(task_ctx, 0);
@@ -705,7 +725,7 @@ TEST(BrokenPipelinePipeExecTest, PipeYieldHandshake) {
   EXPECT_EQ(traces[2], (Trace{"Pipe", "Pipe", std::nullopt, "PIPE_YIELD_BACK"}));
 }
 
-TEST(BrokenPipelinePipeExecTest, PipeAsyncSpill) {
+TYPED_TEST(BrokenPipelinePipeExecTest, PipeAsyncSpill) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -723,7 +743,7 @@ TEST(BrokenPipelinePipeExecTest, PipeAsyncSpill) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   ASSERT_OK(RunSingleTaskToDone(group, task_ctx));
@@ -735,7 +755,7 @@ TEST(BrokenPipelinePipeExecTest, PipeAsyncSpill) {
   EXPECT_EQ(traces[3], (Trace{"Source", "Source", std::nullopt, "FINISHED"}));
 }
 
-TEST(BrokenPipelinePipeExecTest, PipeBlockedResumesWithNullInput) {
+TYPED_TEST(BrokenPipelinePipeExecTest, PipeBlockedResumesWithNullInput) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -754,7 +774,7 @@ TEST(BrokenPipelinePipeExecTest, PipeBlockedResumesWithNullInput) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   auto status_r = group.Task()(task_ctx, 0);
@@ -779,7 +799,7 @@ TEST(BrokenPipelinePipeExecTest, PipeBlockedResumesWithNullInput) {
   EXPECT_EQ(traces[1], (Trace{"Pipe", "Pipe", Batch{1}, "BLOCKED"}));
 }
 
-TEST(BrokenPipelinePipeExecTest, SinkBackpressureResumesWithNullInput) {
+TYPED_TEST(BrokenPipelinePipeExecTest, SinkBackpressureResumesWithNullInput) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -797,7 +817,7 @@ TEST(BrokenPipelinePipeExecTest, SinkBackpressureResumesWithNullInput) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   // First call blocks in sink.
@@ -822,7 +842,7 @@ TEST(BrokenPipelinePipeExecTest, SinkBackpressureResumesWithNullInput) {
   EXPECT_EQ(traces[2], (Trace{"Sink", "Sink", std::nullopt, "BLOCKED"}));
 }
 
-TEST(BrokenPipelinePipeExecTest, DrainProducesTailOutput) {
+TYPED_TEST(BrokenPipelinePipeExecTest, DrainProducesTailOutput) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces);
@@ -843,7 +863,7 @@ TEST(BrokenPipelinePipeExecTest, DrainProducesTailOutput) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   ASSERT_OK(RunSingleTaskToDone(group, task_ctx));
@@ -856,7 +876,7 @@ TEST(BrokenPipelinePipeExecTest, DrainProducesTailOutput) {
   EXPECT_EQ(traces[4], (Trace{"Sink", "Sink", Batch{2}, "PIPE_SINK_NEEDS_MORE"}));
 }
 
-TEST(BrokenPipelinePipeExecTest, Drain) {
+TYPED_TEST(BrokenPipelinePipeExecTest, Drain) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -886,7 +906,7 @@ TEST(BrokenPipelinePipeExecTest, Drain) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   std::vector<TaskStatus> statuses;
@@ -915,7 +935,7 @@ TEST(BrokenPipelinePipeExecTest, Drain) {
   EXPECT_EQ(traces[14], (Trace{"Sink", "Sink", Batch{32}, "PIPE_SINK_NEEDS_MORE"}));
 }
 
-TEST(BrokenPipelinePipeExecTest, ImplicitSource) {
+TYPED_TEST(BrokenPipelinePipeExecTest, ImplicitSource) {
   std::vector<Trace> traces;
 
   auto implicit_source_up = std::make_unique<ScriptedSource>(
@@ -944,8 +964,8 @@ TEST(BrokenPipelinePipeExecTest, ImplicitSource) {
   ASSERT_EQ(exec.Pipelinexes()[1].Channels()[0].source_op, implicit_source);
 
   auto task_ctx = MakeTaskContext();
-  ASSERT_OK(RunSingleTaskToDone(exec.Pipelinexes()[0].PipeExec().TaskGroup(), task_ctx));
-  ASSERT_OK(RunSingleTaskToDone(exec.Pipelinexes()[1].PipeExec().TaskGroup(), task_ctx));
+  ASSERT_OK(RunSingleTaskToDone(TypeParam::MakeTaskGroup(exec, 0), task_ctx));
+  ASSERT_OK(RunSingleTaskToDone(TypeParam::MakeTaskGroup(exec, 1), task_ctx));
 
   ASSERT_EQ(traces.size(), 5);
   EXPECT_EQ(traces[0], (Trace{"Source", "Source", std::nullopt, "FINISHED"}));
@@ -955,7 +975,7 @@ TEST(BrokenPipelinePipeExecTest, ImplicitSource) {
   EXPECT_EQ(traces[4], (Trace{"Sink", "Sink", Batch{2}, "PIPE_SINK_NEEDS_MORE"}));
 }
 
-TEST(BrokenPipelinePipeExecTest, Backpressure) {
+TYPED_TEST(BrokenPipelinePipeExecTest, Backpressure) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -979,7 +999,7 @@ TEST(BrokenPipelinePipeExecTest, Backpressure) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   ASSERT_OK(RunSingleTaskToDone(group, task_ctx));
@@ -995,7 +1015,7 @@ TEST(BrokenPipelinePipeExecTest, Backpressure) {
   EXPECT_EQ(traces[7], (Trace{"Sink", "Sink", Batch{20}, "PIPE_SINK_NEEDS_MORE"}));
 }
 
-TEST(BrokenPipelinePipeExecTest, MultiPipe) {
+TYPED_TEST(BrokenPipelinePipeExecTest, MultiPipe) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -1034,7 +1054,7 @@ TEST(BrokenPipelinePipeExecTest, MultiPipe) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe1, &pipe2}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   std::vector<TaskStatus> statuses;
@@ -1062,7 +1082,7 @@ TEST(BrokenPipelinePipeExecTest, MultiPipe) {
   EXPECT_EQ(traces[16], (Trace{"Sink", "Sink", Batch{300}, "PIPE_SINK_NEEDS_MORE"}));
 }
 
-TEST(BrokenPipelinePipeExecTest, MultiDrain) {
+TYPED_TEST(BrokenPipelinePipeExecTest, MultiDrain) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces);
@@ -1090,7 +1110,7 @@ TEST(BrokenPipelinePipeExecTest, MultiDrain) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe1, &pipe2}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   std::vector<TaskStatus> statuses;
@@ -1111,7 +1131,7 @@ TEST(BrokenPipelinePipeExecTest, MultiDrain) {
   EXPECT_EQ(traces[9], (Trace{"Sink", "Sink", Batch{2}, "PIPE_SINK_NEEDS_MORE"}));
 }
 
-TEST(BrokenPipelinePipeExecTest, MultiChannel) {
+TYPED_TEST(BrokenPipelinePipeExecTest, MultiChannel) {
   std::vector<Trace> traces;
 
   ScriptedSource source1(
@@ -1144,7 +1164,7 @@ TEST(BrokenPipelinePipeExecTest, MultiChannel) {
       "P", {PipelineChannel{&source1, {&pipe1}}, PipelineChannel{&source2, {&pipe2}}},
       &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   // Both channels start blocked.
@@ -1197,7 +1217,7 @@ TEST(BrokenPipelinePipeExecTest, MultiChannel) {
   EXPECT_EQ(traces[11], (Trace{"Source2", "Source", std::nullopt, "FINISHED"}));
 }
 
-TEST(BrokenPipelinePipeExecTest, MultiChannelAllBlockedReturnsTaskBlocked) {
+TYPED_TEST(BrokenPipelinePipeExecTest, MultiChannelAllBlockedReturnsTaskBlocked) {
   std::vector<Trace> traces;
 
   ScriptedSource source1("Source1", {{BlockedStep()}}, &traces);
@@ -1207,7 +1227,7 @@ TEST(BrokenPipelinePipeExecTest, MultiChannelAllBlockedReturnsTaskBlocked) {
   Pipeline pipeline("P", {PipelineChannel{&source1, {}}, PipelineChannel{&source2, {}}},
                     &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   auto status_r = group.Task()(task_ctx, 0);
@@ -1219,7 +1239,7 @@ TEST(BrokenPipelinePipeExecTest, MultiChannelAllBlockedReturnsTaskBlocked) {
   ASSERT_EQ(awaiter->Resumers().size(), 2);
 }
 
-TEST(BrokenPipelinePipeExecTest, ErrorCancelsSubsequentCalls) {
+TYPED_TEST(BrokenPipelinePipeExecTest, ErrorCancelsSubsequentCalls) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source", {{ErrorStep(Status::UnknownError("boom"))}}, &traces);
@@ -1227,7 +1247,7 @@ TEST(BrokenPipelinePipeExecTest, ErrorCancelsSubsequentCalls) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   auto status_r = group.Task()(task_ctx, 0);
@@ -1239,7 +1259,7 @@ TEST(BrokenPipelinePipeExecTest, ErrorCancelsSubsequentCalls) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TEST(BrokenPipelinePipeExecTest, DirectSourceError) {
+TYPED_TEST(BrokenPipelinePipeExecTest, DirectSourceError) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source", {{ErrorStep(Status::UnknownError("42"))}}, &traces);
@@ -1248,7 +1268,7 @@ TEST(BrokenPipelinePipeExecTest, DirectSourceError) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1261,7 +1281,7 @@ TEST(BrokenPipelinePipeExecTest, DirectSourceError) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TEST(BrokenPipelinePipeExecTest, SourceErrorAfterBlocked) {
+TYPED_TEST(BrokenPipelinePipeExecTest, SourceErrorAfterBlocked) {
   std::vector<Trace> traces;
 
   ScriptedSource source(
@@ -1271,7 +1291,7 @@ TEST(BrokenPipelinePipeExecTest, SourceErrorAfterBlocked) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1284,7 +1304,7 @@ TEST(BrokenPipelinePipeExecTest, SourceErrorAfterBlocked) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TEST(BrokenPipelinePipeExecTest, SourceError) {
+TYPED_TEST(BrokenPipelinePipeExecTest, SourceError) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -1298,7 +1318,7 @@ TEST(BrokenPipelinePipeExecTest, SourceError) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1311,7 +1331,7 @@ TEST(BrokenPipelinePipeExecTest, SourceError) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TEST(BrokenPipelinePipeExecTest, PipeError) {
+TYPED_TEST(BrokenPipelinePipeExecTest, PipeError) {
   std::vector<Trace> traces;
 
   ScriptedSource source(
@@ -1325,7 +1345,7 @@ TEST(BrokenPipelinePipeExecTest, PipeError) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1338,7 +1358,7 @@ TEST(BrokenPipelinePipeExecTest, PipeError) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TEST(BrokenPipelinePipeExecTest, PipeErrorAfterEven) {
+TYPED_TEST(BrokenPipelinePipeExecTest, PipeErrorAfterEven) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -1357,7 +1377,7 @@ TEST(BrokenPipelinePipeExecTest, PipeErrorAfterEven) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1370,7 +1390,7 @@ TEST(BrokenPipelinePipeExecTest, PipeErrorAfterEven) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TEST(BrokenPipelinePipeExecTest, PipeErrorAfterNeedsMore) {
+TYPED_TEST(BrokenPipelinePipeExecTest, PipeErrorAfterNeedsMore) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -1387,7 +1407,7 @@ TEST(BrokenPipelinePipeExecTest, PipeErrorAfterNeedsMore) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1400,7 +1420,7 @@ TEST(BrokenPipelinePipeExecTest, PipeErrorAfterNeedsMore) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TEST(BrokenPipelinePipeExecTest, PipeErrorAfterHasMore) {
+TYPED_TEST(BrokenPipelinePipeExecTest, PipeErrorAfterHasMore) {
   std::vector<Trace> traces;
 
   ScriptedSource source(
@@ -1418,7 +1438,7 @@ TEST(BrokenPipelinePipeExecTest, PipeErrorAfterHasMore) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1431,7 +1451,7 @@ TEST(BrokenPipelinePipeExecTest, PipeErrorAfterHasMore) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TEST(BrokenPipelinePipeExecTest, PipeErrorAfterYieldBack) {
+TYPED_TEST(BrokenPipelinePipeExecTest, PipeErrorAfterYieldBack) {
   std::vector<Trace> traces;
 
   ScriptedSource source(
@@ -1447,7 +1467,7 @@ TEST(BrokenPipelinePipeExecTest, PipeErrorAfterYieldBack) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1460,7 +1480,7 @@ TEST(BrokenPipelinePipeExecTest, PipeErrorAfterYieldBack) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TEST(BrokenPipelinePipeExecTest, PipeErrorAfterBlocked) {
+TYPED_TEST(BrokenPipelinePipeExecTest, PipeErrorAfterBlocked) {
   std::vector<Trace> traces;
 
   ScriptedSource source(
@@ -1475,7 +1495,7 @@ TEST(BrokenPipelinePipeExecTest, PipeErrorAfterBlocked) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1488,7 +1508,7 @@ TEST(BrokenPipelinePipeExecTest, PipeErrorAfterBlocked) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TEST(BrokenPipelinePipeExecTest, DrainError) {
+TYPED_TEST(BrokenPipelinePipeExecTest, DrainError) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces);
@@ -1500,7 +1520,7 @@ TEST(BrokenPipelinePipeExecTest, DrainError) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1513,7 +1533,7 @@ TEST(BrokenPipelinePipeExecTest, DrainError) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TEST(BrokenPipelinePipeExecTest, DrainErrorAfterHasMore) {
+TYPED_TEST(BrokenPipelinePipeExecTest, DrainErrorAfterHasMore) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces);
@@ -1529,7 +1549,7 @@ TEST(BrokenPipelinePipeExecTest, DrainErrorAfterHasMore) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1542,7 +1562,7 @@ TEST(BrokenPipelinePipeExecTest, DrainErrorAfterHasMore) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TEST(BrokenPipelinePipeExecTest, DrainErrorAfterYieldBack) {
+TYPED_TEST(BrokenPipelinePipeExecTest, DrainErrorAfterYieldBack) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces);
@@ -1557,7 +1577,7 @@ TEST(BrokenPipelinePipeExecTest, DrainErrorAfterYieldBack) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1570,7 +1590,7 @@ TEST(BrokenPipelinePipeExecTest, DrainErrorAfterYieldBack) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TEST(BrokenPipelinePipeExecTest, DrainErrorAfterBlocked) {
+TYPED_TEST(BrokenPipelinePipeExecTest, DrainErrorAfterBlocked) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces);
@@ -1582,7 +1602,7 @@ TEST(BrokenPipelinePipeExecTest, DrainErrorAfterBlocked) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1595,7 +1615,7 @@ TEST(BrokenPipelinePipeExecTest, DrainErrorAfterBlocked) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TEST(BrokenPipelinePipeExecTest, SinkError) {
+TYPED_TEST(BrokenPipelinePipeExecTest, SinkError) {
   std::vector<Trace> traces;
 
   ScriptedSource source(
@@ -1608,7 +1628,7 @@ TEST(BrokenPipelinePipeExecTest, SinkError) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1621,7 +1641,7 @@ TEST(BrokenPipelinePipeExecTest, SinkError) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TEST(BrokenPipelinePipeExecTest, SinkErrorAfterNeedsMore) {
+TYPED_TEST(BrokenPipelinePipeExecTest, SinkErrorAfterNeedsMore) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -1640,7 +1660,7 @@ TEST(BrokenPipelinePipeExecTest, SinkErrorAfterNeedsMore) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
@@ -1653,7 +1673,7 @@ TEST(BrokenPipelinePipeExecTest, SinkErrorAfterNeedsMore) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TEST(BrokenPipelinePipeExecTest, SinkErrorAfterBlocked) {
+TYPED_TEST(BrokenPipelinePipeExecTest, SinkErrorAfterBlocked) {
   std::vector<Trace> traces;
 
   ScriptedSource source(
@@ -1668,7 +1688,7 @@ TEST(BrokenPipelinePipeExecTest, SinkErrorAfterBlocked) {
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
-  auto group = exec.Pipelinexes()[0].PipeExec().TaskGroup();
+  auto group = TypeParam::MakeTaskGroup(exec, 0);
   auto task_ctx = MakeTaskContext();
 
   auto st = RunSingleTaskToDone(group, task_ctx);
