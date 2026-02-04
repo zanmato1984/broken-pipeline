@@ -19,6 +19,7 @@
 #include <cassert>
 #include <coroutine>
 #include <cstddef>
+#include <exception>
 #include <map>
 #include <memory>
 #include <optional>
@@ -33,6 +34,80 @@
 #include <broken_pipeline/task.h>
 
 namespace bp {
+
+namespace detail {
+
+/// @brief Minimal generator-like coroutine wrapper for stepwise execution.
+///
+/// The coroutine yields `T` values via `co_yield`. The host drives progress by calling
+/// `Next()`, which resumes until the next `co_yield`.
+template <class T>
+class CoroStepper {
+ public:
+  struct promise_type {
+    std::optional<T> current;
+
+    CoroStepper get_return_object() {
+      return CoroStepper(std::coroutine_handle<promise_type>::from_promise(*this));
+    }
+    std::suspend_always initial_suspend() noexcept { return {}; }
+    std::suspend_always final_suspend() noexcept { return {}; }
+    std::suspend_always yield_value(T value) noexcept {
+      current = std::move(value);
+      return {};
+    }
+    void return_void() noexcept {}
+    void unhandled_exception() { std::terminate(); }
+  };
+
+  using handle_type = std::coroutine_handle<promise_type>;
+
+  CoroStepper() = default;
+  explicit CoroStepper(handle_type handle) : handle_(handle) {}
+
+  CoroStepper(CoroStepper&& other) noexcept
+      : handle_(std::exchange(other.handle_, handle_type{})) {}
+  CoroStepper& operator=(CoroStepper&& other) noexcept {
+    if (this == &other) {
+      return *this;
+    }
+    if (handle_) {
+      handle_.destroy();
+    }
+    handle_ = std::exchange(other.handle_, handle_type{});
+    return *this;
+  }
+
+  CoroStepper(const CoroStepper&) = delete;
+  CoroStepper& operator=(const CoroStepper&) = delete;
+
+  ~CoroStepper() {
+    if (handle_) {
+      handle_.destroy();
+    }
+  }
+
+  explicit operator bool() const noexcept { return static_cast<bool>(handle_); }
+
+  T Next() {
+    assert(handle_);
+    if (handle_.done()) {
+      std::terminate();
+    }
+    handle_.resume();
+    if (!handle_.promise().current.has_value()) {
+      std::terminate();
+    }
+    T out = std::move(*handle_.promise().current);
+    handle_.promise().current.reset();
+    return out;
+  }
+
+ private:
+  handle_type handle_{};
+};
+
+}  // namespace detail
 
 /// @brief Source-provided task groups collected during compilation.
 ///
@@ -494,72 +569,18 @@ class PipeExecCoro {
       }
 
      private:
-      class Stepper {
-       public:
-        struct promise_type {
-          OpResult<Traits> current =
-              OpResult<Traits>(OpOutput<Traits>::PipeSinkNeedsMore());
-
-          Stepper get_return_object() {
-            return Stepper(std::coroutine_handle<promise_type>::from_promise(*this));
-          }
-          std::suspend_always initial_suspend() noexcept { return {}; }
-          std::suspend_always final_suspend() noexcept { return {}; }
-          std::suspend_always yield_value(OpResult<Traits> value) noexcept {
-            current = std::move(value);
-            return {};
-          }
-          void return_void() noexcept {}
-          void unhandled_exception() { std::terminate(); }
-        };
-
-        using handle_type = std::coroutine_handle<promise_type>;
-
-        Stepper() = default;
-        explicit Stepper(handle_type handle) : handle_(handle) {}
-
-        Stepper(Stepper&& other) noexcept
-            : handle_(std::exchange(other.handle_, handle_type{})) {}
-        Stepper& operator=(Stepper&& other) noexcept {
-          if (this == &other) {
-            return *this;
-          }
-          if (handle_) {
-            handle_.destroy();
-          }
-          handle_ = std::exchange(other.handle_, handle_type{});
-          return *this;
-        }
-
-        Stepper(const Stepper&) = delete;
-        Stepper& operator=(const Stepper&) = delete;
-
-        ~Stepper() {
-          if (handle_) {
-            handle_.destroy();
-          }
-        }
-
-        explicit operator bool() const noexcept { return static_cast<bool>(handle_); }
-
-        OpResult<Traits> Next() {
-          assert(handle_);
-          handle_.resume();
-          return std::move(handle_.promise().current);
-        }
-
-       private:
-        handle_type handle_{};
-      };
+      using Stepper = detail::CoroStepper<OpResult<Traits>>;
 
       Stepper Run(const TaskContext<Traits>* task_ctx, ThreadId thread_id) {
         bool source_done = false;
         std::size_t draining = 0;
         std::vector<std::size_t> pipe_stack;
 
-        std::size_t push_pipe_id = 0;
-        std::optional<typename Traits::Batch> push_input;
-        bool push_requested = false;
+        struct PushRequest {
+          std::size_t pipe_id;
+          std::optional<typename Traits::Batch> input;
+        };
+        std::optional<PushRequest> push;
 
         while (true) {
           if (cancelled_.load()) {
@@ -567,15 +588,12 @@ class PipeExecCoro {
             co_return;
           }
 
-          push_requested = false;
-          push_input.reset();
-          push_pipe_id = 0;
+          push.reset();
 
           if (!pipe_stack.empty()) {
-            push_pipe_id = pipe_stack.back();
+            const std::size_t push_pipe_id = pipe_stack.back();
             pipe_stack.pop_back();
-            push_input = std::nullopt;
-            push_requested = true;
+            push = PushRequest{push_pipe_id, std::nullopt};
           } else if (!source_done) {
             auto src_r = source_(*task_ctx, thread_id);
             if (!src_r.ok()) {
@@ -591,16 +609,12 @@ class PipeExecCoro {
             if (src_out.IsFinished()) {
               source_done = true;
               if (src_out.GetBatch().has_value()) {
-                push_pipe_id = 0;
-                push_input = std::move(src_out.GetBatch());
-                push_requested = true;
+                push = PushRequest{0, std::move(src_out.GetBatch())};
               }
             } else {
               assert(src_out.IsSourcePipeHasMore());
               assert(src_out.GetBatch().has_value());
-              push_pipe_id = 0;
-              push_input = std::move(src_out.GetBatch());
-              push_requested = true;
+              push = PushRequest{0, std::move(src_out.GetBatch())};
             }
           } else {
             // Draining.
@@ -642,29 +656,26 @@ class PipeExecCoro {
                 if (drain_out.IsFinished()) {
                   ++draining;
                 }
-                push_pipe_id = drain_id + 1;
-                push_input = std::move(drain_out.GetBatch());
-                push_requested = true;
+                push = PushRequest{drain_id + 1, std::move(drain_out.GetBatch())};
                 break;
               }
 
               ++draining;
             }
 
-            if (!push_requested) {
-              if (draining >= drains_.size()) {
-                co_yield OpResult<Traits>(OpOutput<Traits>::Finished());
-                co_return;
-              }
+            if (!push.has_value() && draining >= drains_.size()) {
+              co_yield OpResult<Traits>(OpOutput<Traits>::Finished());
+              co_return;
             }
           }
 
-          if (!push_requested) {
+          if (!push.has_value()) {
             continue;
           }
 
           // Push a (possibly null) input through pipe chain into sink.
-          std::optional<typename Traits::Batch> input = std::move(push_input);
+          const std::size_t push_pipe_id = push->pipe_id;
+          std::optional<typename Traits::Batch> input = std::move(push->input);
 
           bool push_done = false;
           for (std::size_t i = push_pipe_id; i < pipes_.size() && !push_done; ++i) {
@@ -759,113 +770,122 @@ class PipeExecCoro {
 
     Exec(const std::vector<typename Pipeline<Traits>::Channel>& channels,
          SinkOp<Traits>* sink_op, std::size_t dop)
-        : cancelled_(false) {
+        : steppers_(dop), cancelled_(false) {
       channels_.reserve(channels.size());
       for (std::size_t i = 0; i < channels.size(); ++i) {
         channels_.emplace_back(channels[i], sink_op, i, dop, cancelled_);
-      }
-      thread_locals_.reserve(dop);
-      for (std::size_t i = 0; i < dop; ++i) {
-        thread_locals_.emplace_back(channels_.size());
       }
     }
 
     Result<Traits, TaskStatus> operator()(const TaskContext<Traits>& task_ctx,
                                           TaskId task_id) {
       const ThreadId thread_id = static_cast<ThreadId>(task_id);
-      if (cancelled_.load()) {
-        return Result<Traits, TaskStatus>(TaskStatus::Cancelled());
+      auto& stepper = steppers_[thread_id];
+      if (!stepper) {
+        stepper = Run(&task_ctx, thread_id);
       }
-
-      bool all_finished = true;
-      bool all_unfinished_blocked = true;
-      std::vector<std::shared_ptr<Resumer>> blocked_resumers;
-
-      OpResult<Traits> last_op_result(OpOutput<Traits>::PipeSinkNeedsMore());
-
-      auto& tl = thread_locals_[thread_id];
-      for (std::size_t channel_id = 0; channel_id < channels_.size(); ++channel_id) {
-        if (tl.finished[channel_id]) {
-          continue;
-        }
-
-        if (auto& resumer = tl.resumers[channel_id]; resumer) {
-          if (resumer->IsResumed()) {
-            resumer.reset();
-          } else {
-            blocked_resumers.push_back(resumer);
-            all_finished = false;
-            continue;
-          }
-        }
-
-        last_op_result = channels_[channel_id](task_ctx, thread_id);
-        if (!last_op_result.ok()) {
-          cancelled_.store(true);
-          return Result<Traits, TaskStatus>(last_op_result.status());
-        }
-
-        auto& out = last_op_result.ValueOrDie();
-        if (out.IsFinished()) {
-          assert(!out.GetBatch().has_value());
-          tl.finished[channel_id] = true;
-        } else {
-          all_finished = false;
-        }
-
-        if (out.IsBlocked()) {
-          tl.resumers[channel_id] = out.GetResumer();
-          blocked_resumers.push_back(tl.resumers[channel_id]);
-        } else {
-          all_unfinished_blocked = false;
-        }
-
-        if (!out.IsFinished() && !out.IsBlocked()) {
-          break;
-        }
-      }
-
-      if (all_finished) {
-        return Result<Traits, TaskStatus>(TaskStatus::Finished());
-      }
-
-      if (all_unfinished_blocked && !blocked_resumers.empty()) {
-        auto awaiter_r = task_ctx.awaiter_factory(std::move(blocked_resumers));
-        if (!awaiter_r.ok()) {
-          cancelled_.store(true);
-          return Result<Traits, TaskStatus>(awaiter_r.status());
-        }
-        auto awaiter = std::move(awaiter_r).ValueOrDie();
-        return Result<Traits, TaskStatus>(TaskStatus::Blocked(std::move(awaiter)));
-      }
-
-      if (!last_op_result.ok()) {
-        cancelled_.store(true);
-        return Result<Traits, TaskStatus>(last_op_result.status());
-      }
-
-      const auto& out = last_op_result.ValueOrDie();
-      if (out.IsPipeYield()) {
-        return Result<Traits, TaskStatus>(TaskStatus::Yield());
-      }
-      if (out.IsCancelled()) {
-        cancelled_.store(true);
-        return Result<Traits, TaskStatus>(TaskStatus::Cancelled());
-      }
-      return Result<Traits, TaskStatus>(TaskStatus::Continue());
+      return stepper.Next();
     }
 
    private:
-    struct ThreadLocal {
-      explicit ThreadLocal(std::size_t num_channels)
-          : finished(num_channels, false), resumers(num_channels) {}
+    using Stepper = detail::CoroStepper<Result<Traits, TaskStatus>>;
 
-      std::vector<bool> finished;
-      std::vector<std::shared_ptr<Resumer>> resumers;
-    };
+    Stepper Run(const TaskContext<Traits>* task_ctx, ThreadId thread_id) {
+      std::vector<bool> finished(channels_.size(), false);
+      std::vector<std::shared_ptr<Resumer>> resumers(channels_.size());
+
+      while (true) {
+        if (cancelled_.load()) {
+          co_yield Result<Traits, TaskStatus>(TaskStatus::Cancelled());
+          continue;
+        }
+
+        bool all_finished = true;
+        bool all_unfinished_blocked = true;
+        std::vector<std::shared_ptr<Resumer>> blocked_resumers;
+        blocked_resumers.reserve(channels_.size());
+        std::optional<Result<Traits, TaskStatus>> turn_status;
+
+        for (std::size_t channel_id = 0; channel_id < channels_.size(); ++channel_id) {
+          if (finished[channel_id]) {
+            continue;
+          }
+          all_finished = false;
+
+          if (auto& resumer = resumers[channel_id]; resumer) {
+            if (resumer->IsResumed()) {
+              resumer.reset();
+            } else {
+              blocked_resumers.push_back(resumer);
+              continue;
+            }
+          }
+
+          auto op_r = channels_[channel_id](*task_ctx, thread_id);
+          if (!op_r.ok()) {
+            cancelled_.store(true);
+            turn_status = Result<Traits, TaskStatus>(op_r.status());
+            break;
+          }
+
+          auto& out = op_r.ValueOrDie();
+
+          if (out.IsFinished()) {
+            assert(!out.GetBatch().has_value());
+            finished[channel_id] = true;
+          }
+
+          if (out.IsBlocked()) {
+            resumers[channel_id] = out.GetResumer();
+            blocked_resumers.push_back(resumers[channel_id]);
+          } else {
+            all_unfinished_blocked = false;
+          }
+
+          if (out.IsPipeYield()) {
+            turn_status = Result<Traits, TaskStatus>(TaskStatus::Yield());
+            break;
+          }
+          if (out.IsCancelled()) {
+            cancelled_.store(true);
+            turn_status = Result<Traits, TaskStatus>(TaskStatus::Cancelled());
+            break;
+          }
+
+          if (!out.IsFinished() && !out.IsBlocked()) {
+            turn_status = Result<Traits, TaskStatus>(TaskStatus::Continue());
+            break;
+          }
+        }
+
+        if (turn_status.has_value()) {
+          co_yield std::move(*turn_status);
+          continue;
+        }
+
+        if (all_finished) {
+          co_yield Result<Traits, TaskStatus>(TaskStatus::Finished());
+          continue;
+        }
+
+        if (all_unfinished_blocked && !blocked_resumers.empty()) {
+          auto awaiter_r = task_ctx->awaiter_factory(std::move(blocked_resumers));
+          if (!awaiter_r.ok()) {
+            cancelled_.store(true);
+            co_yield Result<Traits, TaskStatus>(awaiter_r.status());
+            continue;
+          }
+          auto awaiter = std::move(awaiter_r).ValueOrDie();
+          co_yield Result<Traits, TaskStatus>(TaskStatus::Blocked(std::move(awaiter)));
+          continue;
+        }
+
+        co_yield Result<Traits, TaskStatus>(TaskStatus::Continue());
+      }
+    }
 
     std::vector<Channel> channels_;
-    std::vector<ThreadLocal> thread_locals_;
+    std::vector<Stepper> steppers_;
 
     std::atomic_bool cancelled_;
   };
