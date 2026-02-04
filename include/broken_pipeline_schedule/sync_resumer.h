@@ -1,15 +1,15 @@
 #pragma once
 
-#include "arrow_traits.h"
+#include <broken_pipeline/task.h>
 
 #include <atomic>
 #include <functional>
 #include <mutex>
 #include <vector>
 
-namespace bp_test::schedule {
+namespace bp::schedule {
 
-class CallbackResumer : public Resumer {
+class CallbackResumer : public bp::Resumer {
  public:
   using Callback = std::function<void()>;
 
@@ -56,4 +56,4 @@ class CallbackResumer : public Resumer {
 
 class SyncResumer final : public CallbackResumer {};
 
-}  // namespace bp_test::schedule
+}  // namespace bp::schedule

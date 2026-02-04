@@ -1,14 +1,11 @@
-#include "naive_parallel_scheduler.h"
-
-#include "sync_awaiter.h"
-#include "sync_resumer.h"
+#include <broken_pipeline_schedule/naive_parallel_scheduler.h>
 
 #include <future>
 #include <utility>
 
-namespace bp_test::schedule {
+namespace bp::schedule {
 
-TaskContext NaiveParallelScheduler::MakeTaskContext(const Context* context) const {
+TaskContext NaiveParallelScheduler::MakeTaskContext(const void* context) const {
   TaskContext task_ctx;
   task_ctx.context = context;
   task_ctx.resumer_factory = []() -> Result<std::shared_ptr<Resumer>> {
@@ -108,12 +105,11 @@ Result<TaskStatus> NaiveParallelScheduler::WaitTaskGroup(TaskGroupHandle& handle
 }
 
 Result<TaskStatus> NaiveParallelScheduler::ScheduleAndWait(const TaskGroup& group,
-                                                           const Context* context,
+                                                           const void* context,
                                                            std::vector<TaskStatus>* statuses) const {
   auto task_ctx = MakeTaskContext(context);
   auto handle = ScheduleTaskGroup(group, std::move(task_ctx), statuses);
   return WaitTaskGroup(handle);
 }
 
-}  // namespace bp_test::schedule
-
+}  // namespace bp::schedule

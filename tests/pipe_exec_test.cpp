@@ -13,7 +13,9 @@
 // limitations under the License.
 
 #include "arrow_traits.h"
-#include "test_scheduler.h"
+
+#include <broken_pipeline_schedule/async_dual_pool_scheduler.h>
+#include <broken_pipeline_schedule/naive_parallel_scheduler.h>
 
 #include <arrow/testing/gtest_util.h>
 
@@ -29,6 +31,8 @@
 #include <vector>
 
 namespace bp_test {
+
+namespace sched = bp::schedule;
 
 namespace {
 
@@ -372,7 +376,7 @@ class BrokenPipelinePipeExecTest : public ::testing::Test {
   }
 
   Scheduler scheduler_;
-  TaskContext task_ctx_ = scheduler_.MakeTaskContext();
+  TaskContext task_ctx_ = scheduler_.template MakeTaskContext<Traits>();
 };
 
 TYPED_TEST_SUITE(BrokenPipelinePipeExecTest, PipeExecTestTypes);
@@ -425,7 +429,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, EmptySourceNotReady) {
 
   auto* awaiter = dynamic_cast<sched::ResumersAwaiter*>(status_r->GetAwaiter().get());
   ASSERT_NE(awaiter, nullptr);
-  for (auto& resumer : awaiter->Resumers()) {
+  for (auto& resumer : awaiter->GetResumers()) {
     resumer->Resume();
   }
 
@@ -465,8 +469,8 @@ TYPED_TEST(BrokenPipelinePipeExecTest, TwoSourceOneNotReady) {
 
   auto* awaiter = dynamic_cast<sched::ResumersAwaiter*>(status_r2->GetAwaiter().get());
   ASSERT_NE(awaiter, nullptr);
-  ASSERT_EQ(awaiter->Resumers().size(), 1);
-  awaiter->Resumers()[0]->Resume();
+  ASSERT_EQ(awaiter->GetResumers().size(), 1);
+  awaiter->GetResumers()[0]->Resume();
 
   ASSERT_OK(this->RunToDone(group));
 
@@ -732,7 +736,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeBlockedResumesWithNullInput) {
   // Resume and complete.
   auto* awaiter = dynamic_cast<sched::ResumersAwaiter*>(status_r->GetAwaiter().get());
   ASSERT_NE(awaiter, nullptr);
-  for (auto& resumer : awaiter->Resumers()) {
+  for (auto& resumer : awaiter->GetResumers()) {
     resumer->Resume();
   }
   ASSERT_OK(this->RunToDone(group));
@@ -769,7 +773,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, SinkBackpressureResumesWithNullInput) {
 
   auto* awaiter = dynamic_cast<sched::ResumersAwaiter*>(status_r->GetAwaiter().get());
   ASSERT_NE(awaiter, nullptr);
-  for (auto& resumer : awaiter->Resumers()) {
+  for (auto& resumer : awaiter->GetResumers()) {
     resumer->Resume();
   }
 
@@ -1109,10 +1113,10 @@ TYPED_TEST(BrokenPipelinePipeExecTest, MultiChannel) {
 
   auto* awaiter = dynamic_cast<sched::ResumersAwaiter*>(status_r->GetAwaiter().get());
   ASSERT_NE(awaiter, nullptr);
-  ASSERT_EQ(awaiter->Resumers().size(), 2);
+  ASSERT_EQ(awaiter->GetResumers().size(), 2);
 
   // Resume only channel 0 first (leave channel 1 blocked).
-  awaiter->Resumers()[0]->Resume();
+  awaiter->GetResumers()[0]->Resume();
 
   // Channel 0 can now run and reach sink.
   auto status_r2 = group.Task()(this->task_ctx_, 0);
@@ -1130,8 +1134,8 @@ TYPED_TEST(BrokenPipelinePipeExecTest, MultiChannel) {
   ASSERT_TRUE(status_r4->IsBlocked());
   auto* awaiter2 = dynamic_cast<sched::ResumersAwaiter*>(status_r4->GetAwaiter().get());
   ASSERT_NE(awaiter2, nullptr);
-  ASSERT_EQ(awaiter2->Resumers().size(), 1);
-  awaiter2->Resumers()[0]->Resume();
+  ASSERT_EQ(awaiter2->GetResumers().size(), 1);
+  awaiter2->GetResumers()[0]->Resume();
 
   ASSERT_OK(this->RunToDone(group));
 
@@ -1170,7 +1174,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, MultiChannelAllBlockedReturnsTaskBlocked)
 
   auto* awaiter = dynamic_cast<sched::ResumersAwaiter*>(status_r->GetAwaiter().get());
   ASSERT_NE(awaiter, nullptr);
-  ASSERT_EQ(awaiter->Resumers().size(), 2);
+  ASSERT_EQ(awaiter->GetResumers().size(), 2);
 }
 
 TYPED_TEST(BrokenPipelinePipeExecTest, ErrorCancelsSubsequentCalls) {

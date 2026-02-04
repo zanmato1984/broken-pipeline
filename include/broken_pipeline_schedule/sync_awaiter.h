@@ -9,7 +9,7 @@
 #include <mutex>
 #include <vector>
 
-namespace bp_test::schedule {
+namespace bp::schedule {
 
 class SyncAwaiter final : public ResumersAwaiter,
                           public std::enable_shared_from_this<SyncAwaiter> {
@@ -35,4 +35,4 @@ class SyncAwaiter final : public ResumersAwaiter,
   std::size_t readies_{0};
 };
 
-}  // namespace bp_test::schedule
+}  // namespace bp::schedule

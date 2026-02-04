@@ -1,5 +1,5 @@
-#include "sync_awaiter.h"
-#include "sync_resumer.h"
+#include <broken_pipeline_schedule/sync_awaiter.h>
+#include <broken_pipeline_schedule/sync_resumer.h>
 
 #include <arrow/testing/gtest_util.h>
 
@@ -10,22 +10,22 @@
 #include <future>
 #include <thread>
 
-using namespace bp_test::schedule;
-using namespace bp_test;
+namespace sched = bp::schedule;
 
 namespace {
 
 constexpr std::size_t kRaceRounds = 2000;
 constexpr std::size_t kManyResumers = 256;
 
-std::shared_ptr<SyncAwaiter> CastSyncAwaiter(const std::shared_ptr<Awaiter>& awaiter) {
-  return std::dynamic_pointer_cast<SyncAwaiter>(awaiter);
+std::shared_ptr<sched::SyncAwaiter> CastSyncAwaiter(
+    const std::shared_ptr<bp::Awaiter>& awaiter) {
+  return std::dynamic_pointer_cast<sched::SyncAwaiter>(awaiter);
 }
 
 }  // namespace
 
 TEST(SyncResumerTest, Basic) {
-  auto resumer = std::make_shared<SyncResumer>();
+  auto resumer = std::make_shared<sched::SyncResumer>();
   bool cb1_called = false, cb2_called = false, cb3_called = false;
   resumer->AddCallback([&]() { cb1_called = true; });
   resumer->AddCallback([&]() { cb2_called = cb1_called; });
@@ -41,7 +41,7 @@ TEST(SyncResumerTest, Basic) {
 }
 
 TEST(SyncResumerTest, Interleaving) {
-  auto resumer = std::make_shared<SyncResumer>();
+  auto resumer = std::make_shared<sched::SyncResumer>();
   std::atomic_bool cb1_called = false, cb2_called = false, cb3_called = false;
   resumer->AddCallback([&]() { cb1_called.store(true, std::memory_order_release); });
   resumer->AddCallback([&]() {
@@ -69,7 +69,7 @@ TEST(SyncResumerTest, Interleaving) {
 }
 
 TEST(SyncResumerTest, Interleaving2) {
-  auto resumer = std::make_shared<SyncResumer>();
+  auto resumer = std::make_shared<sched::SyncResumer>();
   std::atomic_bool cb1_called = false, cb2_called = false, cb3_called = false;
   resumer->AddCallback([&]() { cb1_called.store(true, std::memory_order_release); });
   resumer->AddCallback([&]() {
@@ -97,8 +97,8 @@ TEST(SyncResumerTest, Interleaving2) {
 }
 
 TEST(SyncAwaiterTest, SingleWaitFirst) {
-  ResumerPtr resumer = std::make_shared<SyncResumer>();
-  ASSERT_OK_AND_ASSIGN(auto awaiter_base, SyncAwaiter::MakeSingle(resumer));
+  sched::ResumerPtr resumer = std::make_shared<sched::SyncResumer>();
+  ASSERT_OK_AND_ASSIGN(auto awaiter_base, sched::SyncAwaiter::MakeSingle(resumer));
   auto awaiter = CastSyncAwaiter(awaiter_base);
   ASSERT_NE(awaiter, nullptr);
 
@@ -115,8 +115,8 @@ TEST(SyncAwaiterTest, SingleWaitFirst) {
 }
 
 TEST(SyncAwaiterTest, SingleResumeFirst) {
-  ResumerPtr resumer = std::make_shared<SyncResumer>();
-  ASSERT_OK_AND_ASSIGN(auto awaiter_base, SyncAwaiter::MakeSingle(resumer));
+  sched::ResumerPtr resumer = std::make_shared<sched::SyncResumer>();
+  ASSERT_OK_AND_ASSIGN(auto awaiter_base, sched::SyncAwaiter::MakeSingle(resumer));
   auto awaiter = CastSyncAwaiter(awaiter_base);
   ASSERT_NE(awaiter, nullptr);
 
@@ -131,8 +131,8 @@ TEST(SyncAwaiterTest, SingleResumeFirst) {
 
 TEST(SyncAwaiterTest, Race) {
   for (std::size_t i = 0; i < kRaceRounds; ++i) {
-    ResumerPtr resumer = std::make_shared<SyncResumer>();
-    ASSERT_OK_AND_ASSIGN(auto awaiter_base, SyncAwaiter::MakeSingle(resumer));
+    sched::ResumerPtr resumer = std::make_shared<sched::SyncResumer>();
+    ASSERT_OK_AND_ASSIGN(auto awaiter_base, sched::SyncAwaiter::MakeSingle(resumer));
     auto awaiter = CastSyncAwaiter(awaiter_base);
     ASSERT_NE(awaiter, nullptr);
 
@@ -161,11 +161,11 @@ TEST(SyncAwaiterTest, Race) {
 
 TEST(SyncAwaiterTest, AnyWaitFirst) {
   constexpr std::size_t lucky = 42;
-  Resumers resumers(kManyResumers);
+  sched::Resumers resumers(kManyResumers);
   for (auto& resumer : resumers) {
-    resumer = std::make_shared<SyncResumer>();
+    resumer = std::make_shared<sched::SyncResumer>();
   }
-  ASSERT_OK_AND_ASSIGN(auto awaiter_base, SyncAwaiter::MakeAny(resumers));
+  ASSERT_OK_AND_ASSIGN(auto awaiter_base, sched::SyncAwaiter::MakeAny(resumers));
   auto awaiter = CastSyncAwaiter(awaiter_base);
   ASSERT_NE(awaiter, nullptr);
 
@@ -189,12 +189,12 @@ TEST(SyncAwaiterTest, AnyWaitFirst) {
 
 TEST(SyncAwaiterTest, AnyReentrantWait) {
   constexpr std::size_t lucky = 42;
-  Resumers resumers(kManyResumers);
+  sched::Resumers resumers(kManyResumers);
   for (auto& resumer : resumers) {
-    resumer = std::make_shared<SyncResumer>();
+    resumer = std::make_shared<sched::SyncResumer>();
   }
 
-  ASSERT_OK_AND_ASSIGN(auto awaiter1_base, SyncAwaiter::MakeAny(resumers));
+  ASSERT_OK_AND_ASSIGN(auto awaiter1_base, sched::SyncAwaiter::MakeAny(resumers));
   auto awaiter1 = CastSyncAwaiter(awaiter1_base);
   ASSERT_NE(awaiter1, nullptr);
   resumers[lucky]->Resume();
@@ -207,8 +207,8 @@ TEST(SyncAwaiterTest, AnyReentrantWait) {
     }
   }
 
-  resumers[lucky] = std::make_shared<SyncResumer>();
-  ASSERT_OK_AND_ASSIGN(auto awaiter2_base, SyncAwaiter::MakeAny(resumers));
+  resumers[lucky] = std::make_shared<sched::SyncResumer>();
+  ASSERT_OK_AND_ASSIGN(auto awaiter2_base, sched::SyncAwaiter::MakeAny(resumers));
   auto awaiter2 = CastSyncAwaiter(awaiter2_base);
   ASSERT_NE(awaiter2, nullptr);
   resumers[lucky]->Resume();
@@ -223,12 +223,12 @@ TEST(SyncAwaiterTest, AnyReentrantWait) {
 }
 
 TEST(SyncAwaiterTest, AnyResumeFirst) {
-  Resumers resumers(kManyResumers);
+  sched::Resumers resumers(kManyResumers);
   for (auto& resumer : resumers) {
-    resumer = std::make_shared<SyncResumer>();
+    resumer = std::make_shared<sched::SyncResumer>();
     resumer->Resume();
   }
-  ASSERT_OK_AND_ASSIGN(auto awaiter_base, SyncAwaiter::MakeAny(resumers));
+  ASSERT_OK_AND_ASSIGN(auto awaiter_base, sched::SyncAwaiter::MakeAny(resumers));
   auto awaiter = CastSyncAwaiter(awaiter_base);
   ASSERT_NE(awaiter, nullptr);
 
@@ -245,11 +245,11 @@ TEST(SyncAwaiterTest, AnyResumeFirst) {
 
 TEST(SyncAwaiterTest, LifeSpan) {
   constexpr std::size_t lucky = 42;
-  Resumers resumers(kManyResumers);
+  sched::Resumers resumers(kManyResumers);
   for (auto& resumer : resumers) {
-    resumer = std::make_shared<SyncResumer>();
+    resumer = std::make_shared<sched::SyncResumer>();
   }
-  ASSERT_OK_AND_ASSIGN(auto awaiter_base, SyncAwaiter::MakeAny(resumers));
+  ASSERT_OK_AND_ASSIGN(auto awaiter_base, sched::SyncAwaiter::MakeAny(resumers));
   auto awaiter = CastSyncAwaiter(awaiter_base);
   ASSERT_NE(awaiter, nullptr);
 
@@ -274,11 +274,11 @@ TEST(SyncAwaiterTest, LifeSpan) {
 }
 
 TEST(SyncAwaiterTest, AllWaitFirst) {
-  Resumers resumers(kManyResumers);
+  sched::Resumers resumers(kManyResumers);
   for (auto& resumer : resumers) {
-    resumer = std::make_shared<SyncResumer>();
+    resumer = std::make_shared<sched::SyncResumer>();
   }
-  ASSERT_OK_AND_ASSIGN(auto awaiter_base, SyncAwaiter::MakeAll(resumers));
+  ASSERT_OK_AND_ASSIGN(auto awaiter_base, sched::SyncAwaiter::MakeAll(resumers));
   auto awaiter = CastSyncAwaiter(awaiter_base);
   ASSERT_NE(awaiter, nullptr);
 
@@ -299,12 +299,12 @@ TEST(SyncAwaiterTest, AllWaitFirst) {
 }
 
 TEST(SyncAwaiterTest, AllResumeFirst) {
-  Resumers resumers(kManyResumers);
+  sched::Resumers resumers(kManyResumers);
   for (auto& resumer : resumers) {
-    resumer = std::make_shared<SyncResumer>();
+    resumer = std::make_shared<sched::SyncResumer>();
     resumer->Resume();
   }
-  ASSERT_OK_AND_ASSIGN(auto awaiter_base, SyncAwaiter::MakeAll(resumers));
+  ASSERT_OK_AND_ASSIGN(auto awaiter_base, sched::SyncAwaiter::MakeAll(resumers));
   auto awaiter = CastSyncAwaiter(awaiter_base);
   ASSERT_NE(awaiter, nullptr);
 

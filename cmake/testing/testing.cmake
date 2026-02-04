@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-message(STATUS "Finding Arrow")
-set(Arrow_FIND_QUIETLY 0)
-find_package(Arrow CONFIG REQUIRED)
-find_package(ArrowCompute CONFIG REQUIRED)
+include("${CMAKE_CURRENT_LIST_DIR}/../deps.cmake")
+
+broken_pipeline_resolve_arrow_core_target(BROKEN_PIPELINE_ARROW_CORE_TARGET_RESOLVED)
+broken_pipeline_resolve_arrow_compute_target(BROKEN_PIPELINE_ARROW_COMPUTE_TARGET_RESOLVED)
 
 message(STATUS "Finding Folly")
 set(Folly_FIND_QUIETLY 0)
@@ -36,7 +36,8 @@ function(add_broken_pipeline_test TEST_NAME TEST_SRC)
   target_link_libraries(
     ${TEST_NAME}
     PRIVATE broken_pipeline GTest::gtest GTest::gtest_main Threads::Threads
-            Arrow::arrow_shared ArrowCompute::arrow_compute_shared)
+            ${BROKEN_PIPELINE_ARROW_CORE_TARGET_RESOLVED}
+            ${BROKEN_PIPELINE_ARROW_COMPUTE_TARGET_RESOLVED})
 
   set_target_properties(${TEST_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gtests")
   add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})

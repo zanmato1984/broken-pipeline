@@ -2,8 +2,8 @@
 
 #include "sync_resumer.h"
 
-namespace bp_test::schedule {
+namespace bp::schedule {
 
 class AsyncResumer final : public CallbackResumer {};
 
-}  // namespace bp_test::schedule
+}  // namespace bp::schedule

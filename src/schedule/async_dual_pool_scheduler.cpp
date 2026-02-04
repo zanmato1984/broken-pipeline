@@ -1,7 +1,4 @@
-#include "async_dual_pool_scheduler.h"
-
-#include "async_awaiter.h"
-#include "async_resumer.h"
+#include <broken_pipeline_schedule/async_dual_pool_scheduler.h>
 
 #include <folly/executors/CPUThreadPoolExecutor.h>
 #include <folly/executors/IOThreadPoolExecutor.h>
@@ -10,7 +7,7 @@
 #include <exception>
 #include <utility>
 
-namespace bp_test::schedule {
+namespace bp::schedule {
 
 struct AsyncDualPoolScheduler::TaskState {
   Task task;
@@ -53,7 +50,7 @@ AsyncDualPoolScheduler::AsyncDualPoolScheduler(folly::Executor* cpu_executor,
       cpu_executor_(cpu_executor),
       io_executor_(io_executor) {}
 
-TaskContext AsyncDualPoolScheduler::MakeTaskContext(const Context* context) const {
+TaskContext AsyncDualPoolScheduler::MakeTaskContext(const void* context) const {
   TaskContext task_ctx;
   task_ctx.context = context;
   task_ctx.resumer_factory = []() -> Result<std::shared_ptr<Resumer>> {
@@ -181,11 +178,11 @@ Result<TaskStatus> AsyncDualPoolScheduler::WaitTaskGroup(TaskGroupHandle& handle
 }
 
 Result<TaskStatus> AsyncDualPoolScheduler::ScheduleAndWait(const TaskGroup& group,
-                                                           const Context* context,
+                                                           const void* context,
                                                            std::vector<TaskStatus>* statuses) {
   auto task_ctx = MakeTaskContext(context);
   auto handle = ScheduleTaskGroup(group, std::move(task_ctx), statuses);
   return WaitTaskGroup(handle);
 }
 
-}  // namespace bp_test::schedule
+}  // namespace bp::schedule

@@ -14,24 +14,22 @@
 
 set(BROKEN_PIPELINE_TEST_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
-add_library(broken_pipeline_test_support STATIC
-  "${CMAKE_CURRENT_SOURCE_DIR}/test_scheduler.cpp"
-)
+if(NOT TARGET broken_pipeline_schedule)
+  message(FATAL_ERROR
+    "broken_pipeline_schedule target not found. "
+    "Set BROKEN_PIPELINE_BUILD_SCHEDULE=ON (the tests preset does this)."
+  )
+endif()
+
+add_library(broken_pipeline_test_support INTERFACE)
 target_include_directories(
   broken_pipeline_test_support
-  PUBLIC
+  INTERFACE
     "${BROKEN_PIPELINE_TEST_INCLUDE_DIR}"
-)
-target_link_libraries(
-  broken_pipeline_test_support
-  PUBLIC
-    broken_pipeline
-    Arrow::arrow_shared
 )
 
 function(add_broken_pipeline_unit_test TEST_NAME TEST_SRC)
   add_broken_pipeline_test(${TEST_NAME} ${TEST_SRC})
-  target_include_directories(${TEST_NAME} PRIVATE "${BROKEN_PIPELINE_TEST_INCLUDE_DIR}")
   target_link_libraries(${TEST_NAME} PRIVATE broken_pipeline_test_support)
 endfunction()
 
@@ -41,3 +39,6 @@ add_broken_pipeline_unit_test(
   broken-pipeline-pipeline-compile-test "${CMAKE_CURRENT_SOURCE_DIR}/pipeline_compile_test.cpp")
 add_broken_pipeline_unit_test(
   broken-pipeline-pipe-exec-test "${CMAKE_CURRENT_SOURCE_DIR}/pipe_exec_test.cpp")
+target_link_libraries(broken-pipeline-pipe-exec-test PRIVATE broken_pipeline_schedule)
+
+add_subdirectory(schedule)

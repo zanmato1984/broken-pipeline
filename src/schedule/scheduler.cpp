@@ -1,6 +1,6 @@
-#include "scheduler.h"
+#include <broken_pipeline_schedule/scheduler.h>
 
-namespace bp_test::schedule {
+namespace bp::schedule {
 
 Status InvalidAwaiterType(const char* scheduler_name) {
   return Status::Invalid(std::string(scheduler_name) + ": unexpected awaiter type");
@@ -10,7 +10,7 @@ Status InvalidResumerType(const char* scheduler_name) {
   return Status::Invalid(std::string(scheduler_name) + ": unexpected resumer type");
 }
 
-void AutoResumeBlocked(const std::shared_ptr<Awaiter>& awaiter) {
+void AutoResumeBlocked(const std::shared_ptr<bp::Awaiter>& awaiter) {
   auto* resumers_awaiter = dynamic_cast<ResumersAwaiter*>(awaiter.get());
   if (resumers_awaiter == nullptr) {
     return;
@@ -22,4 +22,4 @@ void AutoResumeBlocked(const std::shared_ptr<Awaiter>& awaiter) {
   }
 }
 
-}  // namespace bp_test::schedule
+}  // namespace bp::schedule

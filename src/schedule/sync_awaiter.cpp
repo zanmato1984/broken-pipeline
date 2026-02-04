@@ -1,6 +1,6 @@
-#include "sync_awaiter.h"
+#include <broken_pipeline_schedule/sync_awaiter.h>
 
-namespace bp_test::schedule {
+namespace bp::schedule {
 
 SyncAwaiter::SyncAwaiter(std::size_t num_readies, Resumers resumers)
     : num_readies_(num_readies), resumers_(std::move(resumers)) {}
@@ -54,4 +54,4 @@ Result<std::shared_ptr<Awaiter>> SyncAwaiter::MakeAll(Resumers resumers) {
   return std::static_pointer_cast<Awaiter>(std::move(awaiter));
 }
 
-}  // namespace bp_test::schedule
+}  // namespace bp::schedule

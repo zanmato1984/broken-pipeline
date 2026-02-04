@@ -3,9 +3,13 @@
 #include "async_resumer.h"
 #include "scheduler.h"
 
+#include <cstddef>
+#include <memory>
+#include <mutex>
+
 #include <folly/futures/Future.h>
 
-namespace bp_test::schedule {
+namespace bp::schedule {
 
 class AsyncAwaiter final : public ResumersAwaiter,
                            public std::enable_shared_from_this<AsyncAwaiter> {
@@ -21,7 +25,7 @@ class AsyncAwaiter final : public ResumersAwaiter,
 
  private:
   AsyncAwaiter(std::size_t num_readies, Resumers resumers,
-              std::shared_ptr<folly::Promise<folly::Unit>> promise, Future future);
+               std::shared_ptr<folly::Promise<folly::Unit>> promise, Future future);
 
   static Result<std::shared_ptr<AsyncAwaiter>> MakeAsyncAwaiter(std::size_t num_readies,
                                                                 Resumers resumers);
@@ -37,4 +41,4 @@ class AsyncAwaiter final : public ResumersAwaiter,
   Future future_;
 };
 
-}  // namespace bp_test::schedule
+}  // namespace bp::schedule

@@ -1,11 +1,11 @@
-#include "async_awaiter.h"
+#include <broken_pipeline_schedule/async_awaiter.h>
 
 #include <cstddef>
 #include <future>
 #include <mutex>
 #include <utility>
 
-namespace bp_test::schedule {
+namespace bp::schedule {
 
 AsyncAwaiter::AsyncAwaiter(std::size_t num_readies, Resumers resumers,
                            std::shared_ptr<folly::Promise<folly::Unit>> promise,
@@ -77,4 +77,4 @@ Result<std::shared_ptr<Awaiter>> AsyncAwaiter::MakeAll(Resumers resumers) {
   return std::static_pointer_cast<Awaiter>(std::move(awaiter));
 }
 
-}  // namespace bp_test::schedule
+}  // namespace bp::schedule

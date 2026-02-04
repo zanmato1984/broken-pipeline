@@ -1,5 +1,7 @@
-#include "async_dual_pool_scheduler.h"
-#include "naive_parallel_scheduler.h"
+#include "arrow_traits.h"
+
+#include <broken_pipeline_schedule/async_dual_pool_scheduler.h>
+#include <broken_pipeline_schedule/naive_parallel_scheduler.h>
 
 #include <arrow/testing/gtest_util.h>
 
@@ -16,7 +18,8 @@
 #include <vector>
 
 using namespace bp_test;
-using namespace bp_test::schedule;
+
+namespace sched = bp::schedule;
 
 namespace {
 
@@ -25,8 +28,8 @@ constexpr std::size_t kIoThreadPoolSize = 2;
 constexpr auto kTinySleep = std::chrono::milliseconds(10);
 constexpr auto kShortSleep = std::chrono::milliseconds(50);
 
-SchedulerOptions TestOptions() {
-  SchedulerOptions o;
+sched::SchedulerOptions TestOptions() {
+  sched::SchedulerOptions o;
   o.auto_resume_blocked = false;
   o.step_limit = 1'000'000;
   return o;
@@ -35,11 +38,11 @@ SchedulerOptions TestOptions() {
 struct AsyncDualPoolSchedulerHolder {
   folly::CPUThreadPoolExecutor cpu_executor{kCpuThreadPoolSize};
   folly::IOThreadPoolExecutor io_executor{kIoThreadPoolSize};
-  AsyncDualPoolScheduler scheduler{&cpu_executor, &io_executor, TestOptions()};
+  sched::AsyncDualPoolScheduler scheduler{&cpu_executor, &io_executor, TestOptions()};
 };
 
 struct NaiveParallelSchedulerHolder {
-  NaiveParallelScheduler scheduler{TestOptions()};
+  sched::NaiveParallelScheduler scheduler{TestOptions()};
 };
 
 template <typename SchedulerHolder>
@@ -49,7 +52,7 @@ class ScheduleTest : public ::testing::Test {
                                   std::optional<Continuation> cont = std::nullopt) {
     TaskGroup task_group("ScheduleTest", std::move(task), num_tasks, std::move(cont));
     SchedulerHolder holder;
-    auto task_ctx = holder.scheduler.MakeTaskContext();
+    auto task_ctx = holder.scheduler.template MakeTaskContext<Traits>();
     auto handle = holder.scheduler.ScheduleTaskGroup(task_group, std::move(task_ctx));
     return holder.scheduler.WaitTaskGroup(handle);
   }
@@ -158,14 +161,14 @@ TYPED_TEST(ScheduleTest, YieldTask) {
 TYPED_TEST(ScheduleTest, BlockedTask) {
   constexpr std::size_t num_tasks = 32;
   std::atomic<std::size_t> counter = 0;
-  Resumers resumers(num_tasks);
+  sched::Resumers resumers(num_tasks);
   std::atomic<std::size_t> num_resumers_set = 0;
 
   Task blocked_task("BlockedTask",
                     [&](const TaskContext& task_ctx, TaskId task_id) -> Result<TaskStatus> {
                       if (resumers[task_id] == nullptr) {
                         ARROW_ASSIGN_OR_RAISE(auto resumer, task_ctx.resumer_factory());
-                        Resumers one{resumer};
+                        sched::Resumers one{resumer};
                         ARROW_ASSIGN_OR_RAISE(auto awaiter,
                                               task_ctx.awaiter_factory(std::move(one)));
                         resumers[task_id] = std::move(resumer);
@@ -221,7 +224,7 @@ TYPED_TEST(ScheduleTest, BlockedTaskResumerErrorNotify) {
   std::atomic<std::size_t> counter = 0;
 
   std::mutex resumers_mutex;
-  Resumers resumers(num_tasks);
+  sched::Resumers resumers(num_tasks);
   std::atomic<std::size_t> num_resumers_set = 0;
   std::atomic_bool resumer_task_errored = false;
   std::atomic_bool unblock_requested = false;
@@ -232,7 +235,7 @@ TYPED_TEST(ScheduleTest, BlockedTaskResumerErrorNotify) {
                         std::lock_guard<std::mutex> lock(resumers_mutex);
                         if (resumers[task_id] == nullptr) {
                           ARROW_ASSIGN_OR_RAISE(auto resumer, task_ctx.resumer_factory());
-                          Resumers one{resumer};
+                          sched::Resumers one{resumer};
                           ARROW_ASSIGN_OR_RAISE(
                               auto awaiter, task_ctx.awaiter_factory(std::move(one)));
                           resumers[task_id] = resumer;
@@ -277,7 +280,7 @@ TYPED_TEST(ScheduleTest, BlockedTaskResumerErrorNotify) {
     while (!resumer_task_errored.load()) {
       if (std::chrono::steady_clock::now() > deadline) {
         unblock_requested = true;
-        Resumers snapshot;
+        sched::Resumers snapshot;
         {
           std::lock_guard<std::mutex> lock(resumers_mutex);
           snapshot = resumers;
@@ -293,7 +296,7 @@ TYPED_TEST(ScheduleTest, BlockedTaskResumerErrorNotify) {
     }
 
     unblock_requested = true;
-    Resumers snapshot;
+    sched::Resumers snapshot;
     {
       std::lock_guard<std::mutex> lock(resumers_mutex);
       snapshot = resumers;
