@@ -14,10 +14,11 @@
 
 #include <broken_pipeline/schedule/naive_parallel_scheduler.h>
 
+#include <cassert>
 #include <future>
 #include <utility>
 
-namespace bp::schedule {
+namespace broken_pipeline::schedule {
 
 TaskContext NaiveParallelScheduler::MakeTaskContext(const Traits::Context* context) const {
   TaskContext task_ctx;
@@ -46,20 +47,19 @@ NaiveParallelScheduler::ConcreteTask NaiveParallelScheduler::MakeTask(
                       std::size_t steps = 0;
                       while (result.ok() && !result->IsFinished() &&
                              !result->IsCancelled()) {
-                        if (++steps > options_.step_limit) {
+                        if (++steps > step_limit_) {
                           return Status::Invalid(
                               "NaiveParallelScheduler: task step limit exceeded");
                         }
 
                         if (result->IsBlocked()) {
-                          if (options_.auto_resume_blocked) {
-                            AutoResumeBlocked(result->GetAwaiter());
-                          }
-
                           auto awaiter =
                               std::dynamic_pointer_cast<SyncAwaiter>(result->GetAwaiter());
                           if (!awaiter) {
-                            return InvalidAwaiterType("NaiveParallelScheduler");
+                            assert(false &&
+                                   "NaiveParallelScheduler expects awaiter type SyncAwaiter");
+                            return Status::Invalid(
+                                "NaiveParallelScheduler: unexpected awaiter type");
                           }
                           awaiter->Wait();
                         }
@@ -129,4 +129,4 @@ Result<TaskStatus> NaiveParallelScheduler::ScheduleAndWait(const TaskGroup& grou
   return WaitTaskGroup(handle);
 }
 
-}  // namespace bp::schedule
+}  // namespace broken_pipeline::schedule

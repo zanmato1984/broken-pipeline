@@ -14,23 +14,24 @@
 
 #pragma once
 
-#include "scheduler.h"
 #include "sync_awaiter.h"
 #include "sync_resumer.h"
+#include "traits.h"
 
 #include <cstddef>
 #include <future>
 #include <memory>
 #include <mutex>
-#include <type_traits>
 #include <vector>
 
-namespace bp::schedule {
+namespace broken_pipeline::schedule {
 
 class NaiveParallelScheduler {
  public:
-  explicit NaiveParallelScheduler(SchedulerOptions options = {})
-      : options_(std::move(options)) {}
+  static constexpr std::size_t kDefaultStepLimit = 1'000'000;
+
+  explicit NaiveParallelScheduler(std::size_t step_limit = kDefaultStepLimit)
+      : step_limit_(step_limit) {}
 
   TaskContext MakeTaskContext(const Traits::Context* context = nullptr) const;
 
@@ -56,7 +57,7 @@ class NaiveParallelScheduler {
                         std::shared_ptr<std::mutex> statuses_mutex,
                         std::shared_ptr<std::vector<TaskStatus>> statuses) const;
 
-  SchedulerOptions options_;
+  std::size_t step_limit_;
 };
 
-}  // namespace bp::schedule
+}  // namespace broken_pipeline::schedule

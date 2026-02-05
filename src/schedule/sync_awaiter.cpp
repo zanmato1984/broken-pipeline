@@ -14,7 +14,9 @@
 
 #include <broken_pipeline/schedule/sync_awaiter.h>
 
-namespace bp::schedule {
+#include <cassert>
+
+namespace broken_pipeline::schedule {
 
 SyncAwaiter::SyncAwaiter(std::size_t num_readies, Resumers resumers)
     : num_readies_(num_readies), resumers_(std::move(resumers)) {}
@@ -32,7 +34,8 @@ Result<std::shared_ptr<SyncAwaiter>> SyncAwaiter::MakeSyncAwaiter(std::size_t nu
   for (auto& resumer : resumers) {
     auto casted = std::dynamic_pointer_cast<SyncResumer>(resumer);
     if (casted == nullptr) {
-      return InvalidResumerType("SyncAwaiter");
+      assert(false && "SyncAwaiter expects resumer type SyncResumer");
+      return Status::Invalid("SyncAwaiter: unexpected resumer type");
     }
     casted->AddCallback([awaiter]() {
       std::unique_lock<std::mutex> lock(awaiter->mutex_);
@@ -50,4 +53,4 @@ void SyncAwaiter::Wait() {
   }
 }
 
-}  // namespace bp::schedule
+}  // namespace broken_pipeline::schedule

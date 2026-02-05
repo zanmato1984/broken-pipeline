@@ -14,12 +14,13 @@
 
 #include <broken_pipeline/schedule/async_awaiter.h>
 
+#include <cassert>
 #include <cstddef>
 #include <future>
 #include <mutex>
 #include <utility>
 
-namespace bp::schedule {
+namespace broken_pipeline::schedule {
 
 AsyncAwaiter::AsyncAwaiter(std::size_t num_readies, Resumers resumers,
                            std::shared_ptr<folly::Promise<folly::Unit>> promise,
@@ -47,7 +48,8 @@ Result<std::shared_ptr<AsyncAwaiter>> AsyncAwaiter::MakeAsyncAwaiter(std::size_t
   for (auto& resumer : resumers) {
     auto casted = std::dynamic_pointer_cast<AsyncResumer>(resumer);
     if (casted == nullptr) {
-      return InvalidResumerType("AsyncAwaiter");
+      assert(false && "AsyncAwaiter expects resumer type AsyncResumer");
+      return Status::Invalid("AsyncAwaiter: unexpected resumer type");
     }
     casted->AddCallback([awaiter]() { awaiter->OnResumed(); });
   }
@@ -73,4 +75,4 @@ void AsyncAwaiter::OnResumed() {
   }
 }
 
-}  // namespace bp::schedule
+}  // namespace broken_pipeline::schedule

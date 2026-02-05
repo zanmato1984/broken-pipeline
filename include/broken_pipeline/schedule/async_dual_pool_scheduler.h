@@ -14,9 +14,9 @@
 
 #pragma once
 
-#include "scheduler.h"
 #include "async_awaiter.h"
 #include "async_resumer.h"
+#include "traits.h"
 
 #include <folly/Executor.h>
 #include <folly/futures/Future.h>
@@ -32,15 +32,17 @@ class CPUThreadPoolExecutor;
 class IOThreadPoolExecutor;
 }  // namespace folly
 
-namespace bp::schedule {
+namespace broken_pipeline::schedule {
 
 class AsyncDualPoolScheduler {
  public:
-  explicit AsyncDualPoolScheduler(SchedulerOptions options = {}, std::size_t cpu_threads = 1,
-                                  std::size_t io_threads = 1);
+  static constexpr std::size_t kDefaultStepLimit = 1'000'000;
+
+  explicit AsyncDualPoolScheduler(std::size_t cpu_threads = 1, std::size_t io_threads = 1,
+                                  std::size_t step_limit = kDefaultStepLimit);
 
   AsyncDualPoolScheduler(folly::Executor* cpu_executor, folly::Executor* io_executor,
-                         SchedulerOptions options = {});
+                         std::size_t step_limit = kDefaultStepLimit);
 
   ~AsyncDualPoolScheduler();
 
@@ -74,7 +76,7 @@ class AsyncDualPoolScheduler {
                             std::shared_ptr<std::mutex> statuses_mutex,
                             std::shared_ptr<std::vector<TaskStatus>> statuses) const;
 
-  SchedulerOptions options_;
+  std::size_t step_limit_;
 
   std::unique_ptr<folly::CPUThreadPoolExecutor> owned_cpu_executor_;
   std::unique_ptr<folly::IOThreadPoolExecutor> owned_io_executor_;
@@ -83,4 +85,4 @@ class AsyncDualPoolScheduler {
   folly::Executor* io_executor_;
 };
 
-}  // namespace bp::schedule
+}  // namespace broken_pipeline::schedule

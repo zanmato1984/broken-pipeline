@@ -15,7 +15,7 @@
 #pragma once
 
 #include "async_resumer.h"
-#include "scheduler.h"
+#include "traits.h"
 
 #include <cstddef>
 #include <memory>
@@ -23,7 +23,7 @@
 
 #include <folly/futures/Future.h>
 
-namespace bp::schedule {
+namespace broken_pipeline::schedule {
 
 class AsyncAwaiter final : public ResumersAwaiter,
                            public std::enable_shared_from_this<AsyncAwaiter> {
@@ -51,4 +51,4 @@ class AsyncAwaiter final : public ResumersAwaiter,
   Future future_;
 };
 
-}  // namespace bp::schedule
+}  // namespace broken_pipeline::schedule

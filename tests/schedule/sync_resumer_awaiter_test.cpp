@@ -24,7 +24,7 @@
 #include <future>
 #include <thread>
 
-namespace sched = bp::schedule;
+namespace sched = broken_pipeline::schedule;
 
 namespace {
 

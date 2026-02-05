@@ -31,9 +31,9 @@
 #include <unordered_set>
 #include <vector>
 
-using namespace bp::schedule::arrow;
+using namespace broken_pipeline::schedule;
 
-namespace sched = bp::schedule;
+namespace sched = broken_pipeline::schedule;
 
 namespace {
 
@@ -42,21 +42,14 @@ constexpr std::size_t kIoThreadPoolSize = 2;
 constexpr auto kTinySleep = std::chrono::milliseconds(10);
 constexpr auto kShortSleep = std::chrono::milliseconds(50);
 
-sched::SchedulerOptions TestOptions() {
-  sched::SchedulerOptions o;
-  o.auto_resume_blocked = false;
-  o.step_limit = 1'000'000;
-  return o;
-}
-
 struct AsyncDualPoolSchedulerHolder {
   folly::CPUThreadPoolExecutor cpu_executor{kCpuThreadPoolSize};
   folly::IOThreadPoolExecutor io_executor{kIoThreadPoolSize};
-  sched::AsyncDualPoolScheduler scheduler{&cpu_executor, &io_executor, TestOptions()};
+  sched::AsyncDualPoolScheduler scheduler{&cpu_executor, &io_executor};
 };
 
 struct NaiveParallelSchedulerHolder {
-  sched::NaiveParallelScheduler scheduler{TestOptions()};
+  sched::NaiveParallelScheduler scheduler;
 };
 
 template <typename SchedulerHolder>

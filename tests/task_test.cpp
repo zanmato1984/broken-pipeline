@@ -25,7 +25,7 @@
 
 namespace bp_test {
 
-using namespace bp::schedule::arrow;
+using namespace broken_pipeline::schedule;
 
 namespace {
 

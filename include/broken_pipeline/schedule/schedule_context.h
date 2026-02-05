@@ -16,7 +16,7 @@
 
 #include <cstddef>
 
-namespace bp::schedule {
+namespace broken_pipeline::schedule {
 
 /// @brief Optional opaque context pointer for schedule-driven tasks.
 ///
@@ -27,4 +27,4 @@ struct ScheduleContext {
   const void* context = nullptr;
 };
 
-}  // namespace bp::schedule
+}  // namespace broken_pipeline::schedule

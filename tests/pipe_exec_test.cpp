@@ -33,9 +33,9 @@
 
 namespace bp_test {
 
-using namespace bp::schedule::arrow;
+using namespace broken_pipeline::schedule;
 
-namespace sched = bp::schedule;
+namespace sched = broken_pipeline::schedule;
 
 namespace {
 
@@ -380,10 +380,43 @@ class BrokenPipelinePipeExecTest : public ::testing::Test {
 
  protected:
   Status RunToDone(const TaskGroup& group, std::vector<TaskStatus>* statuses = nullptr) {
-    auto handle = scheduler_.ScheduleTaskGroup(group, task_ctx_, statuses);
-    auto final_r = scheduler_.WaitTaskGroup(handle);
-    if (!final_r.ok()) {
-      return final_r.status();
+    const auto& task = group.Task();
+    const auto cont = group.Continuation();
+
+    Result<TaskStatus> result = TaskStatus::Continue();
+    std::size_t steps = 0;
+    while (result.ok() && !result->IsFinished() && !result->IsCancelled()) {
+      if (++steps > Scheduler::kDefaultStepLimit) {
+        return Status::Invalid("PipeExecTest: task step limit exceeded");
+      }
+
+      if (result->IsBlocked()) {
+        auto* awaiter = dynamic_cast<sched::ResumersAwaiter*>(result->GetAwaiter().get());
+        if (awaiter == nullptr) {
+          return Status::Invalid("PipeExecTest: unexpected awaiter type");
+        }
+        for (auto& resumer : awaiter->GetResumers()) {
+          if (resumer) {
+            resumer->Resume();
+          }
+        }
+      }
+
+      result = task(task_ctx_, 0);
+      if (result.ok() && statuses != nullptr) {
+        statuses->push_back(result.ValueOrDie());
+      }
+    }
+
+    if (!result.ok()) {
+      return result.status();
+    }
+
+    if (result.ok() && result->IsFinished() && cont.has_value()) {
+      auto cont_result = cont.value()(task_ctx_);
+      if (!cont_result.ok()) {
+        return cont_result.status();
+      }
     }
     return Status::OK();
   }
