@@ -24,7 +24,6 @@
 #include <cstddef>
 #include <future>
 #include <memory>
-#include <mutex>
 #include <vector>
 
 namespace folly {
@@ -55,7 +54,6 @@ class AsyncDualPoolScheduler {
 
   struct TaskGroupHandle {
     folly::SemiFuture<Result<TaskStatus>> future;
-    std::shared_ptr<std::mutex> statuses_mutex;
     std::shared_ptr<std::vector<TaskStatus>> statuses;
   };
 
@@ -73,8 +71,7 @@ class AsyncDualPoolScheduler {
   using TaskFuture = folly::Future<Result<TaskStatus>>;
 
   TaskFuture MakeTaskFuture(const Task& task, TaskContext task_ctx, TaskId task_id,
-                            std::shared_ptr<std::mutex> statuses_mutex,
-                            std::shared_ptr<std::vector<TaskStatus>> statuses) const;
+                            std::shared_ptr<std::vector<TaskStatus>> status_log) const;
 
   std::size_t step_limit_;
 

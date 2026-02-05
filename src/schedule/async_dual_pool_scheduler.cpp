@@ -30,21 +30,18 @@ struct AsyncDualPoolScheduler::TaskState {
   TaskId task_id;
 
   std::size_t step_limit;
-  std::shared_ptr<std::mutex> statuses_mutex;
-  std::shared_ptr<std::vector<TaskStatus>> statuses;
+  std::shared_ptr<std::vector<TaskStatus>> status_log;
 
   std::size_t steps = 0;
   Result<TaskStatus> result = TaskStatus::Continue();
 
   TaskState(const Task& task_, TaskContext task_ctx_, TaskId task_id_, std::size_t step_limit_,
-            std::shared_ptr<std::mutex> statuses_mutex_,
-            std::shared_ptr<std::vector<TaskStatus>> statuses_)
+            std::shared_ptr<std::vector<TaskStatus>> status_log_)
       : task(task_),
         task_ctx(std::move(task_ctx_)),
         task_id(task_id_),
         step_limit(step_limit_),
-        statuses_mutex(std::move(statuses_mutex_)),
-        statuses(std::move(statuses_)) {}
+        status_log(std::move(status_log_)) {}
 };
 
 AsyncDualPoolScheduler::~AsyncDualPoolScheduler() = default;
@@ -82,10 +79,9 @@ TaskContext AsyncDualPoolScheduler::MakeTaskContext(const Traits::Context* conte
 
 AsyncDualPoolScheduler::TaskFuture AsyncDualPoolScheduler::MakeTaskFuture(
     const Task& task, TaskContext task_ctx, TaskId task_id,
-    std::shared_ptr<std::mutex> statuses_mutex,
-    std::shared_ptr<std::vector<TaskStatus>> statuses) const {
+    std::shared_ptr<std::vector<TaskStatus>> status_log) const {
   auto state = std::make_shared<TaskState>(task, std::move(task_ctx), task_id, step_limit_,
-                                           std::move(statuses_mutex), std::move(statuses));
+                                           std::move(status_log));
 
   auto pred = [state]() {
     return state->result.ok() && !state->result->IsFinished() &&
@@ -113,9 +109,8 @@ AsyncDualPoolScheduler::TaskFuture AsyncDualPoolScheduler::MakeTaskFuture(
     if (state->result->IsYield()) {
       return folly::via(io_executor_).thenValue([state](auto&&) {
         state->result = state->task(state->task_ctx, state->task_id);
-        if (state->result.ok()) {
-          std::lock_guard<std::mutex> lock(*state->statuses_mutex);
-          state->statuses->push_back(state->result.ValueOrDie());
+        if (state->result.ok() && state->status_log != nullptr) {
+          state->status_log->push_back(state->result.ValueOrDie());
         }
       });
     }
@@ -124,9 +119,8 @@ AsyncDualPoolScheduler::TaskFuture AsyncDualPoolScheduler::MakeTaskFuture(
         state->task.Hint().type == TaskHint::Type::IO ? io_executor_ : cpu_executor_;
     return folly::via(executor).thenValue([state](auto&&) {
       state->result = state->task(state->task_ctx, state->task_id);
-      if (state->result.ok()) {
-        std::lock_guard<std::mutex> lock(*state->statuses_mutex);
-        state->statuses->push_back(state->result.ValueOrDie());
+      if (state->result.ok() && state->status_log != nullptr) {
+        state->status_log->push_back(state->result.ValueOrDie());
       }
     });
   };
@@ -139,7 +133,6 @@ AsyncDualPoolScheduler::TaskFuture AsyncDualPoolScheduler::MakeTaskFuture(
 
 AsyncDualPoolScheduler::TaskGroupHandle AsyncDualPoolScheduler::ScheduleTaskGroup(
     const TaskGroup& group, TaskContext task_ctx, std::vector<TaskStatus>* statuses) {
-  auto statuses_mutex = std::make_shared<std::mutex>();
   auto statuses_shared =
       statuses != nullptr ? std::shared_ptr<std::vector<TaskStatus>>(statuses, [](auto*) {})
                           : std::make_shared<std::vector<TaskStatus>>();
@@ -148,28 +141,59 @@ AsyncDualPoolScheduler::TaskGroupHandle AsyncDualPoolScheduler::ScheduleTaskGrou
   const auto num_tasks = group.NumTasks();
   const auto cont = group.Continuation();
 
+  std::vector<std::shared_ptr<std::vector<TaskStatus>>> task_statuses;
+  task_statuses.reserve(num_tasks);
+  for (std::size_t i = 0; i < num_tasks; ++i) {
+    task_statuses.push_back(std::make_shared<std::vector<TaskStatus>>());
+  }
+
   std::vector<TaskFuture> task_futures;
   task_futures.reserve(num_tasks);
   for (std::size_t i = 0; i < num_tasks; ++i) {
-    task_futures.push_back(MakeTaskFuture(task, task_ctx, i, statuses_mutex, statuses_shared));
+    task_futures.push_back(MakeTaskFuture(task, task_ctx, i, task_statuses[i]));
   }
 
   auto group_future =
       folly::collectAll(std::move(task_futures))
           .via(cpu_executor_)
-          .thenValue([cont, task_ctx](auto&& tries) -> Result<TaskStatus> {
+          .thenValue([cont, task_ctx, statuses = statuses_shared,
+                      task_statuses = std::move(task_statuses)](auto&& tries)
+                         -> Result<TaskStatus> {
             bool any_cancelled = false;
+            bool has_error = false;
+            Status error_status = Status::OK();
             for (auto&& t : tries) {
               if (!t.hasValue()) {
-                return Status::Invalid("AsyncDualPoolScheduler: task future missing value");
+                if (!has_error) {
+                  has_error = true;
+                  error_status =
+                      Status::Invalid("AsyncDualPoolScheduler: task future missing value");
+                }
+                continue;
               }
               auto r = t.value();
               if (!r.ok()) {
-                return r.status();
+                if (!has_error) {
+                  has_error = true;
+                  error_status = r.status();
+                }
+                continue;
               }
               if (r->IsCancelled()) {
                 any_cancelled = true;
               }
+            }
+
+            if (statuses != nullptr) {
+              for (const auto& per_task : task_statuses) {
+                if (per_task != nullptr) {
+                  statuses->insert(statuses->end(), per_task->begin(), per_task->end());
+                }
+              }
+            }
+
+            if (has_error) {
+              return error_status;
             }
             if (any_cancelled) {
               return TaskStatus::Cancelled();
@@ -181,8 +205,7 @@ AsyncDualPoolScheduler::TaskGroupHandle AsyncDualPoolScheduler::ScheduleTaskGrou
           })
           .semi();
 
-  return TaskGroupHandle{std::move(group_future), std::move(statuses_mutex),
-                         std::move(statuses_shared)};
+  return TaskGroupHandle{std::move(group_future), std::move(statuses_shared)};
 }
 
 Result<TaskStatus> AsyncDualPoolScheduler::WaitTaskGroup(TaskGroupHandle& handle) const {

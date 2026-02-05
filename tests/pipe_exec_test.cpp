@@ -22,15 +22,12 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
-#include <atomic>
-#include <condition_variable>
 #include <cstddef>
 #include <deque>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
-#include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -155,14 +152,98 @@ const std::vector<std::shared_ptr<Resumer>>* GetResumers(const Awaiter* awaiter)
   return nullptr;
 }
 
+struct AutoResumeState {
+  void Start() {
+    std::lock_guard<std::mutex> lock(mutex);
+    stopping = false;
+    waiters.clear();
+  }
+
+  void Stop() {
+    std::vector<std::shared_ptr<Resumer>> to_wake;
+    {
+      std::lock_guard<std::mutex> lock(mutex);
+      stopping = true;
+      to_wake.swap(waiters);
+    }
+    for (auto& waiter : to_wake) {
+      if (waiter != nullptr && !waiter->IsResumed()) {
+        waiter->Resume();
+      }
+    }
+  }
+
+  void Enqueue(std::shared_ptr<Resumer> resumer) {
+    std::vector<std::shared_ptr<Resumer>> to_wake;
+    {
+      std::lock_guard<std::mutex> lock(mutex);
+      queue.push_back(std::move(resumer));
+      to_wake.swap(waiters);
+    }
+    for (auto& waiter : to_wake) {
+      if (waiter != nullptr && !waiter->IsResumed()) {
+        waiter->Resume();
+      }
+    }
+  }
+
+  Result<TaskStatus> BackendStep(const TaskContext& task_ctx) {
+    std::deque<std::shared_ptr<Resumer>> to_resume;
+    {
+      std::lock_guard<std::mutex> lock(mutex);
+      to_resume.swap(queue);
+    }
+
+    for (auto& resumer : to_resume) {
+      if (resumer != nullptr && !resumer->IsResumed()) {
+        resumer->Resume();
+      }
+    }
+
+    {
+      std::lock_guard<std::mutex> lock(mutex);
+      if (stopping && queue.empty()) {
+        return TaskStatus::Finished();
+      }
+      if (!queue.empty()) {
+        return TaskStatus::Continue();
+      }
+    }
+
+    ARROW_ASSIGN_OR_RAISE(auto waiter, task_ctx.resumer_factory());
+    std::vector<std::shared_ptr<Resumer>> one{waiter};
+    ARROW_ASSIGN_OR_RAISE(auto awaiter, task_ctx.awaiter_factory(std::move(one)));
+
+    {
+      std::lock_guard<std::mutex> lock(mutex);
+      if (stopping) {
+        return TaskStatus::Finished();
+      }
+      if (!queue.empty()) {
+        return TaskStatus::Continue();
+      }
+      waiters.push_back(waiter);
+    }
+
+    return TaskStatus::Blocked(std::move(awaiter));
+  }
+
+  std::mutex mutex;
+  std::deque<std::shared_ptr<Resumer>> queue;
+  std::vector<std::shared_ptr<Resumer>> waiters;
+  bool stopping = false;
+};
+
 class ScriptedSource final : public SourceOp {
  public:
   ScriptedSource(std::string name, std::vector<std::vector<Step>> steps,
-                 std::vector<Trace>* traces)
+                 std::vector<Trace>* traces,
+                 std::shared_ptr<AutoResumeState> auto_resume_state = nullptr)
       : SourceOp(std::move(name)),
         steps_(std::move(steps)),
         pcs_(steps_.size(), 0),
-        traces_(traces) {}
+        traces_(traces),
+        auto_resume_state_(std::move(auto_resume_state)) {}
 
   PipelineSource Source() override {
     return [this](const TaskContext& task_ctx, ThreadId tid) -> OpResult {
@@ -179,6 +260,9 @@ class ScriptedSource final : public SourceOp {
           return resumer_r.status();
         }
         auto resumer = std::move(resumer_r).ValueOrDie();
+        if (auto_resume_state_ != nullptr) {
+          auto_resume_state_->Enqueue(resumer);
+        }
         auto out = OpOutput::Blocked(std::move(resumer));
         traces_->push_back(Trace{Name(), "Source", std::nullopt, out.ToString()});
         return out;
@@ -191,7 +275,17 @@ class ScriptedSource final : public SourceOp {
   }
 
   std::vector<TaskGroup> Frontend() override { return {}; }
-  std::optional<TaskGroup> Backend() override { return std::nullopt; }
+  std::optional<TaskGroup> Backend() override {
+    if (auto_resume_state_ == nullptr) {
+      return std::nullopt;
+    }
+
+    Task task(Name() + ".BackendAutoResume",
+              [state = auto_resume_state_](const TaskContext& task_ctx, TaskId)
+                  -> Result<TaskStatus> { return state->BackendStep(task_ctx); },
+              {TaskHint::Type::IO});
+    return TaskGroup(Name() + ".BackendAutoResume", std::move(task), /*num_tasks=*/1);
+  }
 
  private:
   Step NextStep(ThreadId tid) {
@@ -209,20 +303,23 @@ class ScriptedSource final : public SourceOp {
   std::vector<std::vector<Step>> steps_;
   std::vector<std::size_t> pcs_;
   std::vector<Trace>* traces_;
+  std::shared_ptr<AutoResumeState> auto_resume_state_;
 };
 
 class ScriptedPipe final : public PipeOp {
  public:
   ScriptedPipe(std::string name, std::vector<std::vector<Step>> pipe_steps,
                std::vector<std::vector<Step>> drain_steps, std::vector<Trace>* traces,
-               std::unique_ptr<SourceOp> implicit_source = nullptr)
+               std::unique_ptr<SourceOp> implicit_source = nullptr,
+               std::shared_ptr<AutoResumeState> auto_resume_state = nullptr)
       : PipeOp(std::move(name)),
         pipe_steps_(std::move(pipe_steps)),
         drain_steps_(std::move(drain_steps)),
         pipe_pcs_(pipe_steps_.size(), 0),
         drain_pcs_(drain_steps_.size(), 0),
         traces_(traces),
-        implicit_source_(std::move(implicit_source)) {}
+        implicit_source_(std::move(implicit_source)),
+        auto_resume_state_(std::move(auto_resume_state)) {}
 
   PipelinePipe Pipe() override {
     return [this](const TaskContext& task_ctx, ThreadId tid,
@@ -299,6 +396,9 @@ class ScriptedPipe final : public PipeOp {
         return resumer_r.status();
       }
       auto resumer = std::move(resumer_r).ValueOrDie();
+      if (auto_resume_state_ != nullptr) {
+        auto_resume_state_->Enqueue(resumer);
+      }
       auto out = OpOutput::Blocked(std::move(resumer));
       traces_->push_back(
           Trace{Name(), std::move(method), std::move(input), out.ToString()});
@@ -317,16 +417,19 @@ class ScriptedPipe final : public PipeOp {
   std::vector<std::size_t> drain_pcs_;
   std::vector<Trace>* traces_;
   std::unique_ptr<SourceOp> implicit_source_;
+  std::shared_ptr<AutoResumeState> auto_resume_state_;
 };
 
 class ScriptedSink final : public SinkOp {
  public:
   ScriptedSink(std::string name, std::vector<std::vector<Step>> steps,
-               std::vector<Trace>* traces)
+               std::vector<Trace>* traces,
+               std::shared_ptr<AutoResumeState> auto_resume_state = nullptr)
       : SinkOp(std::move(name)),
         steps_(std::move(steps)),
         pcs_(steps_.size(), 0),
-        traces_(traces) {}
+        traces_(traces),
+        auto_resume_state_(std::move(auto_resume_state)) {}
 
   PipelineSink Sink() override {
     return [this](const TaskContext& task_ctx, ThreadId tid,
@@ -345,6 +448,9 @@ class ScriptedSink final : public SinkOp {
           return resumer_r.status();
         }
         auto resumer = std::move(resumer_r).ValueOrDie();
+        if (auto_resume_state_ != nullptr) {
+          auto_resume_state_->Enqueue(resumer);
+        }
         auto out = OpOutput::Blocked(std::move(resumer));
         traces_->push_back(Trace{Name(), "Sink", std::move(input), out.ToString()});
         return out;
@@ -357,7 +463,17 @@ class ScriptedSink final : public SinkOp {
   }
 
   std::vector<TaskGroup> Frontend() override { return {}; }
-  std::optional<TaskGroup> Backend() override { return std::nullopt; }
+  std::optional<TaskGroup> Backend() override {
+    if (auto_resume_state_ == nullptr) {
+      return std::nullopt;
+    }
+
+    Task task(Name() + ".BackendAutoResume",
+              [state = auto_resume_state_](const TaskContext& task_ctx, TaskId)
+                  -> Result<TaskStatus> { return state->BackendStep(task_ctx); },
+              {TaskHint::Type::IO});
+    return TaskGroup(Name() + ".BackendAutoResume", std::move(task), /*num_tasks=*/1);
+  }
   std::unique_ptr<SourceOp> ImplicitSource() override { return nullptr; }
 
  private:
@@ -383,6 +499,7 @@ class ScriptedSink final : public SinkOp {
   std::vector<std::vector<Step>> steps_;
   std::vector<std::size_t> pcs_;
   std::vector<Trace>* traces_;
+  std::shared_ptr<AutoResumeState> auto_resume_state_;
 };
 
 }  // namespace
@@ -424,89 +541,28 @@ class BrokenPipelinePipeExecTest : public ::testing::Test {
 
   BrokenPipelinePipeExecTest() {
     task_ctx_ = scheduler_.MakeTaskContext();
-    const auto orig_resumer_factory = task_ctx_.resumer_factory;
-    auto mailbox = resumer_mailbox_;
-    task_ctx_.resumer_factory = [orig_resumer_factory,
-                                 mailbox]() -> Result<std::shared_ptr<Resumer>> {
-      auto resumer_r = orig_resumer_factory();
-      if (resumer_r.ok() && mailbox != nullptr) {
-        {
-          std::lock_guard<std::mutex> lock(mailbox->mutex);
-          mailbox->queue.push_back(resumer_r.ValueOrDie());
-        }
-        mailbox->cv.notify_one();
-      }
-      return resumer_r;
-    };
   }
 
  private:
-  struct ResumerMailbox {
-    std::mutex mutex;
-    std::condition_variable cv;
-    std::deque<std::shared_ptr<Resumer>> queue;
-  };
-
-  class AutoResumerDriver {
-   public:
-    explicit AutoResumerDriver(std::shared_ptr<ResumerMailbox> mailbox)
-        : mailbox_(std::move(mailbox)), thread_([this]() { Run(); }) {}
-
-    AutoResumerDriver(const AutoResumerDriver&) = delete;
-    AutoResumerDriver& operator=(const AutoResumerDriver&) = delete;
-
-    ~AutoResumerDriver() { Stop(); }
-
-    void Stop() {
-      stopped_.store(true, std::memory_order_release);
-      if (mailbox_ != nullptr) {
-        mailbox_->cv.notify_all();
-      }
-      if (thread_.joinable()) {
-        thread_.join();
-      }
-    }
-
-   private:
-    void Run() {
-      if (mailbox_ == nullptr) {
-        return;
-      }
-
-      while (true) {
-        std::shared_ptr<Resumer> resumer;
-        {
-          std::unique_lock<std::mutex> lock(mailbox_->mutex);
-          mailbox_->cv.wait(lock, [this]() {
-            return stopped_.load(std::memory_order_acquire) || !mailbox_->queue.empty();
-          });
-          if (mailbox_->queue.empty()) {
-            if (stopped_.load(std::memory_order_acquire)) {
-              return;
-            }
-            continue;
-          }
-          resumer = std::move(mailbox_->queue.front());
-          mailbox_->queue.pop_front();
-        }
-
-        if (resumer != nullptr && !resumer->IsResumed()) {
-          resumer->Resume();
-        }
-      }
-    }
-
-    std::shared_ptr<ResumerMailbox> mailbox_;
-    std::atomic_bool stopped_{false};
-    std::thread thread_;
-  };
-
  protected:
-  Status RunToDone(const TaskGroup& group, std::vector<TaskStatus>* statuses = nullptr) {
-    AutoResumerDriver resumer_driver(resumer_mailbox_);
+  Status RunToDone(const TaskGroup& group, const PipelineExec& exec, std::size_t idx,
+                   std::vector<TaskStatus>* statuses = nullptr) {
+    auto_resume_state_->Start();
+    auto backend_groups = CollectBackendGroups(exec, idx);
+
+    std::vector<typename Scheduler::TaskGroupHandle> backend_handles;
+    backend_handles.reserve(backend_groups.size());
+    for (const auto& backend : backend_groups) {
+      backend_handles.push_back(scheduler_.ScheduleTaskGroup(backend, task_ctx_));
+    }
 
     auto handle = scheduler_.ScheduleTaskGroup(group, task_ctx_, statuses);
     auto result = scheduler_.WaitTaskGroup(handle);
+
+    auto_resume_state_->Stop();
+    for (auto& backend_handle : backend_handles) {
+      (void)scheduler_.WaitTaskGroup(backend_handle);
+    }
 
     if (!result.ok()) {
       return result.status();
@@ -519,9 +575,34 @@ class BrokenPipelinePipeExecTest : public ::testing::Test {
     return Status::OK();
   }
 
-  std::shared_ptr<ResumerMailbox> resumer_mailbox_ = std::make_shared<ResumerMailbox>();
+  Status RunToDone(const PipelineExec& exec, std::size_t idx,
+                   std::vector<TaskStatus>* statuses = nullptr) {
+    auto group = Param::MakeTaskGroup(exec, idx);
+    return RunToDone(group, exec, idx, statuses);
+  }
+
+  std::shared_ptr<AutoResumeState> auto_resume_state_ = std::make_shared<AutoResumeState>();
   Scheduler scheduler_;
   TaskContext task_ctx_;
+
+ private:
+  std::vector<TaskGroup> CollectBackendGroups(const PipelineExec& exec,
+                                             std::size_t idx) const {
+    std::vector<TaskGroup> backend_groups;
+
+    if (const auto& sink_backend = exec.Sink().backend; sink_backend.has_value()) {
+      backend_groups.push_back(*sink_backend);
+    }
+
+    auto source_execs = exec.Pipelinexes()[idx].SourceExecs();
+    for (auto& src_exec : source_execs) {
+      if (src_exec.backend.has_value()) {
+        backend_groups.push_back(std::move(*src_exec.backend));
+      }
+    }
+
+    return backend_groups;
+  }
 };
 
 TYPED_TEST_SUITE(BrokenPipelinePipeExecTest, PipeExecTestTypes);
@@ -529,8 +610,9 @@ TYPED_TEST_SUITE(BrokenPipelinePipeExecTest, PipeExecTestTypes);
 TYPED_TEST(BrokenPipelinePipeExecTest, EmptySourceFinishesWithoutCallingSink) {
   std::vector<Trace> traces;
 
-  ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces);
-  ScriptedSink sink("Sink", {{}}, &traces);
+  ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces,
+                        this->auto_resume_state_);
+  ScriptedSink sink("Sink", {{}}, &traces, this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
@@ -539,7 +621,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, EmptySourceFinishesWithoutCallingSink) {
   auto group = TypeParam::MakeTaskGroup(exec, 0);
 
   std::vector<TaskStatus> statuses;
-  ASSERT_OK(this->RunToDone(group, &statuses));
+  ASSERT_OK(this->RunToDone(group, exec, 0, &statuses));
   ASSERT_FALSE(statuses.empty());
   EXPECT_TRUE(statuses.back().IsFinished());
 
@@ -551,8 +633,8 @@ TYPED_TEST(BrokenPipelinePipeExecTest, EmptySourceNotReady) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source", {{BlockedStep(), OutputStep(OpOutput::Finished())}},
-                        &traces);
-  ScriptedSink sink("Sink", {{}}, &traces);
+                        &traces, this->auto_resume_state_);
+  ScriptedSink sink("Sink", {{}}, &traces, this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
@@ -578,7 +660,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, EmptySourceNotReady) {
     resumer->Resume();
   }
 
-  ASSERT_OK(this->RunToDone(group));
+  ASSERT_OK(this->RunToDone(group, exec, 0));
   ASSERT_EQ(traces.size(), 2);
   EXPECT_EQ(traces[1], (Trace{"Source", "Source", std::nullopt, "FINISHED"}));
 }
@@ -587,9 +669,10 @@ TYPED_TEST(BrokenPipelinePipeExecTest, TwoSourceOneNotReady) {
   std::vector<Trace> traces;
 
   ScriptedSource source1("Source1", {{BlockedStep(), OutputStep(OpOutput::Finished())}},
-                         &traces);
-  ScriptedSource source2("Source2", {{OutputStep(OpOutput::Finished())}}, &traces);
-  ScriptedSink sink("Sink", {{}}, &traces);
+                         &traces, this->auto_resume_state_);
+  ScriptedSource source2("Source2", {{OutputStep(OpOutput::Finished())}}, &traces,
+                         this->auto_resume_state_);
+  ScriptedSink sink("Sink", {{}}, &traces, this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source1, {}}, PipelineChannel{&source2, {}}},
                     &sink);
@@ -617,7 +700,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, TwoSourceOneNotReady) {
   ASSERT_EQ(resumers->size(), 1);
   (*resumers)[0]->Resume();
 
-  ASSERT_OK(this->RunToDone(group));
+  ASSERT_OK(this->RunToDone(group, exec, 0));
 
   ASSERT_EQ(traces.size(), 3);
   EXPECT_EQ(traces[2], (Trace{"Source1", "Source", std::nullopt, "FINISHED"}));
@@ -629,19 +712,19 @@ TYPED_TEST(BrokenPipelinePipeExecTest, OnePass) {
   ScriptedSource source("Source",
                         {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1))),
                           OutputStep(OpOutput::Finished())}},
-                        &traces);
+                        &traces, this->auto_resume_state_);
 
   ScriptedSink sink("Sink",
                     {{OutputStep(OpOutput::PipeSinkNeedsMore(),
                                  std::optional<std::optional<Batch>>(B(1)))}},
-                    &traces);
+                    &traces, this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
 
   std::vector<TaskStatus> statuses;
-  ASSERT_OK(this->RunToDone(group, &statuses));
+  ASSERT_OK(this->RunToDone(group, exec, 0, &statuses));
 
   ASSERT_GE(statuses.size(), 2u);
   EXPECT_TRUE(statuses[0].IsContinue());
@@ -657,17 +740,19 @@ TYPED_TEST(BrokenPipelinePipeExecTest, OnePassDirectFinish) {
   std::vector<Trace> traces;
 
   ScriptedSource source(
-      "Source", {{OutputStep(OpOutput::Finished(std::optional<Batch>(B(1))))}}, &traces);
+      "Source", {{OutputStep(OpOutput::Finished(std::optional<Batch>(B(1))))}}, &traces,
+      this->auto_resume_state_);
 
   ScriptedSink sink(
-      "Sink", {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(1)))}}, &traces);
+      "Sink", {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(1)))}}, &traces,
+      this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
 
   std::vector<TaskStatus> statuses;
-  ASSERT_OK(this->RunToDone(group, &statuses));
+  ASSERT_OK(this->RunToDone(group, exec, 0, &statuses));
 
   ASSERT_GE(statuses.size(), 2u);
   EXPECT_TRUE(statuses[0].IsContinue());
@@ -684,20 +769,21 @@ TYPED_TEST(BrokenPipelinePipeExecTest, OnePassWithPipe) {
   ScriptedSource source("Source",
                         {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1))),
                           OutputStep(OpOutput::Finished())}},
-                        &traces);
+                        &traces, this->auto_resume_state_);
 
   ScriptedPipe pipe(
       "Pipe", {{OutputStep(OpOutput::PipeEven(/*batch=*/B(10)), ExpectInput(B(1)))}},
-      /*drain_steps=*/{}, &traces);
+      /*drain_steps=*/{}, &traces, /*implicit_source=*/nullptr, this->auto_resume_state_);
 
   ScriptedSink sink(
-      "Sink", {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(10)))}}, &traces);
+      "Sink", {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(10)))}}, &traces,
+      this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
 
-  ASSERT_OK(this->RunToDone(group));
+  ASSERT_OK(this->RunToDone(group, exec, 0));
 
   ASSERT_EQ(traces.size(), 4);
   EXPECT_EQ(traces[0], (Trace{"Source", "Source", std::nullopt, "SOURCE_PIPE_HAS_MORE"}));
@@ -712,25 +798,26 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeNeedsMoreGoesBackToSource) {
   ScriptedSource source("Source",
                         {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1))),
                           OutputStep(OpOutput::Finished(std::optional<Batch>(B(2))))}},
-                        &traces);
+                        &traces, this->auto_resume_state_);
 
   ScriptedPipe pipe("Pipe",
                     {{OutputStep(OpOutput::PipeSinkNeedsMore(),
                                  std::optional<std::optional<Batch>>(B(1))),
                       OutputStep(OpOutput::PipeEven(/*batch=*/B(2)),
                                  std::optional<std::optional<Batch>>(B(2)))}},
-                    /*drain_steps=*/{}, &traces);
+                    /*drain_steps=*/{}, &traces, /*implicit_source=*/nullptr,
+                    this->auto_resume_state_);
 
   ScriptedSink sink("Sink",
                     {{OutputStep(OpOutput::PipeSinkNeedsMore(),
                                  std::optional<std::optional<Batch>>(B(2)))}},
-                    &traces);
+                    &traces, this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
 
-  ASSERT_OK(this->RunToDone(group));
+  ASSERT_OK(this->RunToDone(group, exec, 0));
 
   ASSERT_EQ(traces.size(), 5);
   EXPECT_EQ(traces[0], (Trace{"Source", "Source", std::nullopt, "SOURCE_PIPE_HAS_MORE"}));
@@ -746,7 +833,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeHasMoreResumesPipeBeforeSource) {
   ScriptedSource source("Source",
                         {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1))),
                           OutputStep(OpOutput::Finished())}},
-                        &traces);
+                        &traces, this->auto_resume_state_);
 
   ScriptedPipe pipe(
       "Pipe",
@@ -754,20 +841,20 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeHasMoreResumesPipeBeforeSource) {
                    std::optional<std::optional<Batch>>(B(1))),
         OutputStep(OpOutput::PipeEven(/*batch=*/B(11)),
                    std::optional<std::optional<Batch>>(std::optional<Batch>{}))}},
-      /*drain_steps=*/{}, &traces);
+      /*drain_steps=*/{}, &traces, /*implicit_source=*/nullptr, this->auto_resume_state_);
 
   ScriptedSink sink("Sink",
                     {{OutputStep(OpOutput::PipeSinkNeedsMore(),
                                  std::optional<std::optional<Batch>>(B(10))),
                       OutputStep(OpOutput::PipeSinkNeedsMore(),
                                  std::optional<std::optional<Batch>>(B(11)))}},
-                    &traces);
+                    &traces, this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
 
-  ASSERT_OK(this->RunToDone(group));
+  ASSERT_OK(this->RunToDone(group, exec, 0));
 
   ASSERT_EQ(traces.size(), 6);
   EXPECT_EQ(traces[0], (Trace{"Source", "Source", std::nullopt, "SOURCE_PIPE_HAS_MORE"}));
@@ -786,7 +873,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeYieldHandshake) {
   ScriptedSource source("Source",
                         {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1))),
                           OutputStep(OpOutput::Finished())}},
-                        &traces);
+                        &traces, this->auto_resume_state_);
 
   ScriptedPipe pipe(
       "Pipe",
@@ -795,9 +882,9 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeYieldHandshake) {
                    std::optional<std::optional<Batch>>(std::optional<Batch>{})),
         OutputStep(OpOutput::PipeSinkNeedsMore(),
                    std::optional<std::optional<Batch>>(std::optional<Batch>{}))}},
-      /*drain_steps=*/{}, &traces);
+      /*drain_steps=*/{}, &traces, /*implicit_source=*/nullptr, this->auto_resume_state_);
 
-  ScriptedSink sink("Sink", {{}} /*unused*/, &traces);
+  ScriptedSink sink("Sink", {{}} /*unused*/, &traces, this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
@@ -809,7 +896,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeYieldHandshake) {
 
   // Re-enter after yield: yield-back + continue running.
   std::vector<TaskStatus> statuses;
-  ASSERT_OK(this->RunToDone(group, &statuses));
+  ASSERT_OK(this->RunToDone(group, exec, 0, &statuses));
 
   ASSERT_FALSE(traces.empty());
   EXPECT_EQ(traces[0], (Trace{"Source", "Source", std::nullopt, "SOURCE_PIPE_HAS_MORE"}));
@@ -823,21 +910,21 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeAsyncSpill) {
   ScriptedSource source("Source",
                         {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1))),
                           OutputStep(OpOutput::Finished())}},
-                        &traces);
+                        &traces, this->auto_resume_state_);
 
   ScriptedPipe pipe(
       "Pipe",
       {{BlockedStep(ExpectInput(B(1))),
         OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(std::nullopt))}},
-      /*drain_steps=*/{}, &traces);
+      /*drain_steps=*/{}, &traces, /*implicit_source=*/nullptr, this->auto_resume_state_);
 
-  ScriptedSink sink("Sink", {{}} /*unused*/, &traces);
+  ScriptedSink sink("Sink", {{}} /*unused*/, &traces, this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
 
-  ASSERT_OK(this->RunToDone(group));
+  ASSERT_OK(this->RunToDone(group, exec, 0));
 
   ASSERT_EQ(traces.size(), 4);
   EXPECT_EQ(traces[0], (Trace{"Source", "Source", std::nullopt, "SOURCE_PIPE_HAS_MORE"}));
@@ -852,16 +939,16 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeBlockedResumesWithNullInput) {
   ScriptedSource source("Source",
                         {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1))),
                           OutputStep(OpOutput::Finished())}},
-                        &traces);
+                        &traces, this->auto_resume_state_);
 
   ScriptedPipe pipe(
       "Pipe",
       {{BlockedStep(std::optional<std::optional<Batch>>(B(1))),
         OutputStep(OpOutput::PipeSinkNeedsMore(),
                    std::optional<std::optional<Batch>>(std::optional<Batch>{}))}},
-      /*drain_steps=*/{}, &traces);
+      /*drain_steps=*/{}, &traces, /*implicit_source=*/nullptr, this->auto_resume_state_);
 
-  ScriptedSink sink("Sink", {{}} /*unused*/, &traces);
+  ScriptedSink sink("Sink", {{}} /*unused*/, &traces, this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
@@ -882,7 +969,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeBlockedResumesWithNullInput) {
   for (auto& resumer : *resumers) {
     resumer->Resume();
   }
-  ASSERT_OK(this->RunToDone(group));
+  ASSERT_OK(this->RunToDone(group, exec, 0));
 
   ASSERT_GE(traces.size(), 2u);
   EXPECT_EQ(traces[0], (Trace{"Source", "Source", std::nullopt, "SOURCE_PIPE_HAS_MORE"}));
@@ -895,7 +982,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, SinkBackpressureResumesWithNullInput) {
   ScriptedSource source("Source",
                         {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1))),
                           OutputStep(OpOutput::Finished())}},
-                        &traces);
+                        &traces, this->auto_resume_state_);
 
   ScriptedSink sink(
       "Sink",
@@ -903,7 +990,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, SinkBackpressureResumesWithNullInput) {
         BlockedStep(std::optional<std::optional<Batch>>(std::optional<Batch>{})),
         OutputStep(OpOutput::PipeSinkNeedsMore(),
                    std::optional<std::optional<Batch>>(std::optional<Batch>{}))}},
-      &traces);
+      &traces, this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
@@ -920,7 +1007,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, SinkBackpressureResumesWithNullInput) {
     resumer->Resume();
   }
 
-  ASSERT_OK(this->RunToDone(group));
+  ASSERT_OK(this->RunToDone(group, exec, 0));
 
   ASSERT_GE(traces.size(), 2u);
   EXPECT_EQ(traces[0], (Trace{"Source", "Source", std::nullopt, "SOURCE_PIPE_HAS_MORE"}));
@@ -934,27 +1021,28 @@ TYPED_TEST(BrokenPipelinePipeExecTest, SinkBackpressureResumesWithNullInput) {
 TYPED_TEST(BrokenPipelinePipeExecTest, DrainProducesTailOutput) {
   std::vector<Trace> traces;
 
-  ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces);
+  ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces,
+                        this->auto_resume_state_);
 
   ScriptedPipe pipe("Pipe",
                     /*pipe_steps=*/{{}},
                     /*drain_steps=*/
                     {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1))),
                       OutputStep(OpOutput::Finished(std::optional<Batch>(B(2))))}},
-                    &traces);
+                    &traces, /*implicit_source=*/nullptr, this->auto_resume_state_);
 
   ScriptedSink sink("Sink",
                     {{OutputStep(OpOutput::PipeSinkNeedsMore(),
                                  std::optional<std::optional<Batch>>(B(1))),
                       OutputStep(OpOutput::PipeSinkNeedsMore(),
                                  std::optional<std::optional<Batch>>(B(2)))}},
-                    &traces);
+                    &traces, this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
 
-  ASSERT_OK(this->RunToDone(group));
+  ASSERT_OK(this->RunToDone(group, exec, 0));
 
   ASSERT_EQ(traces.size(), 5);
   EXPECT_EQ(traces[0], (Trace{"Source", "Source", std::nullopt, "FINISHED"}));
@@ -970,7 +1058,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, Drain) {
   ScriptedSource source("Source",
                         {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1))),
                           OutputStep(OpOutput::Finished(std::optional<Batch>(B(2))))}},
-                        &traces);
+                        &traces, this->auto_resume_state_);
 
   ScriptedPipe pipe(
       "Pipe",
@@ -982,7 +1070,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, Drain) {
         OutputStep(OpOutput::PipeYield()), OutputStep(OpOutput::PipeYieldBack()),
         OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(31))), BlockedStep(),
         OutputStep(OpOutput::Finished(std::optional<Batch>(B(32))))}},
-      &traces);
+      &traces, /*implicit_source=*/nullptr, this->auto_resume_state_);
 
   ScriptedSink sink("Sink",
                     {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(10))),
@@ -990,14 +1078,14 @@ TYPED_TEST(BrokenPipelinePipeExecTest, Drain) {
                       OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(30))),
                       OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(31))),
                       OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(32)))}},
-                    &traces);
+                    &traces, this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
 
   std::vector<TaskStatus> statuses;
-  ASSERT_OK(this->RunToDone(group, &statuses));
+  ASSERT_OK(this->RunToDone(group, exec, 0, &statuses));
 
   // Draining includes a yield handshake.
   ASSERT_FALSE(statuses.empty());
@@ -1029,20 +1117,22 @@ TYPED_TEST(BrokenPipelinePipeExecTest, ImplicitSource) {
       "ImplicitSource",
       std::vector<std::vector<Step>>{
           {OutputStep(OpOutput::Finished(std::optional<Batch>(B(2))))}},
-      &traces);
+      &traces, this->auto_resume_state_);
   auto* implicit_source = implicit_source_up.get();
 
   ScriptedSource source(
-      "Source", {{OutputStep(OpOutput::Finished(std::optional<Batch>(B(1))))}}, &traces);
+      "Source", {{OutputStep(OpOutput::Finished(std::optional<Batch>(B(1))))}}, &traces,
+      this->auto_resume_state_);
 
   ScriptedPipe pipe(
       "Pipe", {{OutputStep(OpOutput::PipeEven(/*batch=*/B(10)), ExpectInput(B(1)))}},
-      /*drain_steps=*/{}, &traces, std::move(implicit_source_up));
+      /*drain_steps=*/{}, &traces, std::move(implicit_source_up),
+      this->auto_resume_state_);
 
   ScriptedSink sink("Sink",
                     {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(10))),
                       OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(2)))}},
-                    &traces);
+                    &traces, this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
@@ -1050,8 +1140,8 @@ TYPED_TEST(BrokenPipelinePipeExecTest, ImplicitSource) {
   ASSERT_EQ(exec.Pipelinexes()[1].Channels().size(), 1);
   ASSERT_EQ(exec.Pipelinexes()[1].Channels()[0].source_op, implicit_source);
 
-  ASSERT_OK(this->RunToDone(TypeParam::MakeTaskGroup(exec, 0)));
-  ASSERT_OK(this->RunToDone(TypeParam::MakeTaskGroup(exec, 1)));
+  ASSERT_OK(this->RunToDone(exec, 0));
+  ASSERT_OK(this->RunToDone(exec, 1));
 
   ASSERT_EQ(traces.size(), 5);
   EXPECT_EQ(traces[0], (Trace{"Source", "Source", std::nullopt, "FINISHED"}));
@@ -1067,27 +1157,27 @@ TYPED_TEST(BrokenPipelinePipeExecTest, Backpressure) {
   ScriptedSource source("Source",
                         {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1))),
                           OutputStep(OpOutput::Finished(std::optional<Batch>(B(2))))}},
-                        &traces);
+                        &traces, this->auto_resume_state_);
 
   ScriptedPipe pipe(
       "Pipe",
       /*pipe_steps=*/
       {{OutputStep(OpOutput::PipeEven(/*batch=*/B(10)), ExpectInput(B(1))),
         OutputStep(OpOutput::PipeEven(/*batch=*/B(20)), ExpectInput(B(2)))}},
-      /*drain_steps=*/{}, &traces);
+      /*drain_steps=*/{}, &traces, /*implicit_source=*/nullptr, this->auto_resume_state_);
 
   ScriptedSink sink(
       "Sink",
       {{BlockedStep(ExpectInput(B(10))), BlockedStep(ExpectInput(std::nullopt)),
         OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(std::nullopt)),
         OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(20)))}},
-      &traces);
+      &traces, this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
 
-  ASSERT_OK(this->RunToDone(group));
+  ASSERT_OK(this->RunToDone(group, exec, 0));
 
   ASSERT_EQ(traces.size(), 8);
   EXPECT_EQ(traces[0], (Trace{"Source", "Source", std::nullopt, "SOURCE_PIPE_HAS_MORE"}));
@@ -1107,7 +1197,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, MultiPipe) {
                         {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1))),
                           OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(2))),
                           OutputStep(OpOutput::Finished(std::optional<Batch>(B(3))))}},
-                        &traces);
+                        &traces, this->auto_resume_state_);
 
   ScriptedPipe pipe1(
       "Pipe1",
@@ -1116,7 +1206,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, MultiPipe) {
         OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(11)), ExpectInput(B(2))),
         OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(std::nullopt)),
         OutputStep(OpOutput::PipeEven(/*batch=*/B(13)), ExpectInput(B(3)))}},
-      /*drain_steps=*/{}, &traces);
+      /*drain_steps=*/{}, &traces, /*implicit_source=*/nullptr, this->auto_resume_state_);
 
   ScriptedPipe pipe2(
       "Pipe2",
@@ -1128,7 +1218,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, MultiPipe) {
         OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(std::nullopt)),
         OutputStep(OpOutput::PipeEven(/*batch=*/B(200)), ExpectInput(B(11))),
         OutputStep(OpOutput::PipeEven(/*batch=*/B(300)), ExpectInput(B(13)))}},
-      /*drain_steps=*/{}, &traces);
+      /*drain_steps=*/{}, &traces, /*implicit_source=*/nullptr, this->auto_resume_state_);
 
   ScriptedSink sink(
       "Sink",
@@ -1136,14 +1226,14 @@ TYPED_TEST(BrokenPipelinePipeExecTest, MultiPipe) {
         BlockedStep(ExpectInput(B(200))),
         OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(std::nullopt)),
         OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(300)))}},
-      &traces);
+      &traces, this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe1, &pipe2}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
 
   std::vector<TaskStatus> statuses;
-  ASSERT_OK(this->RunToDone(group, &statuses));
+  ASSERT_OK(this->RunToDone(group, exec, 0, &statuses));
   EXPECT_TRUE(std::any_of(statuses.begin(), statuses.end(),
                           [](const TaskStatus& s) { return s.IsYield(); }));
 
@@ -1170,13 +1260,14 @@ TYPED_TEST(BrokenPipelinePipeExecTest, MultiPipe) {
 TYPED_TEST(BrokenPipelinePipeExecTest, MultiDrain) {
   std::vector<Trace> traces;
 
-  ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces);
+  ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces,
+                        this->auto_resume_state_);
 
   ScriptedPipe pipe1("Pipe1", /*pipe_steps=*/{{}},
                      /*drain_steps=*/
                      {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1))),
                        OutputStep(OpOutput::Finished())}},
-                     &traces);
+                     &traces, /*implicit_source=*/nullptr, this->auto_resume_state_);
 
   ScriptedPipe pipe2(
       "Pipe2",
@@ -1186,19 +1277,19 @@ TYPED_TEST(BrokenPipelinePipeExecTest, MultiDrain) {
         OutputStep(OpOutput::PipeEven(/*batch=*/B(10)), ExpectInput(std::nullopt))}},
       /*drain_steps=*/
       {{BlockedStep(), OutputStep(OpOutput::Finished(std::optional<Batch>(B(2))))}},
-      &traces);
+      &traces, /*implicit_source=*/nullptr, this->auto_resume_state_);
 
   ScriptedSink sink("Sink",
                     {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(10))),
                       OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(2)))}},
-                    &traces);
+                    &traces, this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe1, &pipe2}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
 
   std::vector<TaskStatus> statuses;
-  ASSERT_OK(this->RunToDone(group, &statuses));
+  ASSERT_OK(this->RunToDone(group, exec, 0, &statuses));
   EXPECT_TRUE(std::any_of(statuses.begin(), statuses.end(),
                           [](const TaskStatus& s) { return s.IsYield(); }));
 
@@ -1281,7 +1372,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, MultiChannel) {
   ASSERT_EQ(resumers2->size(), 1);
   (*resumers2)[0]->Resume();
 
-  ASSERT_OK(this->RunToDone(group));
+  ASSERT_OK(this->RunToDone(group, exec, 0));
 
   ASSERT_EQ(traces.size(), 12);
   EXPECT_EQ(traces[0], (Trace{"Source1", "Source", std::nullopt, "BLOCKED"}));
@@ -1343,15 +1434,17 @@ TYPED_TEST(BrokenPipelinePipeExecTest, ErrorCancelsSubsequentCalls) {
 TYPED_TEST(BrokenPipelinePipeExecTest, DirectSourceError) {
   std::vector<Trace> traces;
 
-  ScriptedSource source("Source", {{ErrorStep(Status::UnknownError("42"))}}, &traces);
-  ScriptedPipe pipe("Pipe", {{}} /*unused*/, /*drain_steps=*/{}, &traces);
-  ScriptedSink sink("Sink", {{}}, &traces);
+  ScriptedSource source("Source", {{ErrorStep(Status::UnknownError("42"))}}, &traces,
+                        this->auto_resume_state_);
+  ScriptedPipe pipe("Pipe", {{}} /*unused*/, /*drain_steps=*/{}, &traces,
+                    /*implicit_source=*/nullptr, this->auto_resume_state_);
+  ScriptedSink sink("Sink", {{}}, &traces, this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
 
-  auto st = this->RunToDone(group);
+  auto st = this->RunToDone(group, exec, 0);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
@@ -1365,15 +1458,17 @@ TYPED_TEST(BrokenPipelinePipeExecTest, SourceErrorAfterBlocked) {
   std::vector<Trace> traces;
 
   ScriptedSource source(
-      "Source", {{BlockedStep(), ErrorStep(Status::UnknownError("42"))}}, &traces);
-  ScriptedPipe pipe("Pipe", {{}} /*unused*/, /*drain_steps=*/{}, &traces);
-  ScriptedSink sink("Sink", {{}}, &traces);
+      "Source", {{BlockedStep(), ErrorStep(Status::UnknownError("42"))}}, &traces,
+      this->auto_resume_state_);
+  ScriptedPipe pipe("Pipe", {{}} /*unused*/, /*drain_steps=*/{}, &traces,
+                    /*implicit_source=*/nullptr, this->auto_resume_state_);
+  ScriptedSink sink("Sink", {{}}, &traces, this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
 
-  auto st = this->RunToDone(group);
+  auto st = this->RunToDone(group, exec, 0);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
@@ -1389,16 +1484,17 @@ TYPED_TEST(BrokenPipelinePipeExecTest, SourceError) {
   ScriptedSource source("Source",
                         {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1))),
                           ErrorStep(Status::UnknownError("42"))}},
-                        &traces);
+                        &traces, this->auto_resume_state_);
 
   ScriptedSink sink(
-      "Sink", {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(1)))}}, &traces);
+      "Sink", {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(1)))}}, &traces,
+      this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
 
-  auto st = this->RunToDone(group);
+  auto st = this->RunToDone(group, exec, 0);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
@@ -1412,18 +1508,20 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeError) {
   std::vector<Trace> traces;
 
   ScriptedSource source(
-      "Source", {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1)))}}, &traces);
+      "Source", {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1)))}}, &traces,
+      this->auto_resume_state_);
 
   ScriptedPipe pipe("Pipe", {{ErrorStep(Status::UnknownError("42"), ExpectInput(B(1)))}},
-                    /*drain_steps=*/{}, &traces);
+                    /*drain_steps=*/{}, &traces, /*implicit_source=*/nullptr,
+                    this->auto_resume_state_);
 
-  ScriptedSink sink("Sink", {{}} /*unused*/, &traces);
+  ScriptedSink sink("Sink", {{}} /*unused*/, &traces, this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
 
-  auto st = this->RunToDone(group);
+  auto st = this->RunToDone(group, exec, 0);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
@@ -1439,21 +1537,23 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeErrorAfterEven) {
   ScriptedSource source("Source",
                         {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1))),
                           OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(2)))}},
-                        &traces);
+                        &traces, this->auto_resume_state_);
 
   ScriptedPipe pipe("Pipe",
                     {{OutputStep(OpOutput::PipeEven(/*batch=*/B(10)), ExpectInput(B(1))),
                       ErrorStep(Status::UnknownError("42"), ExpectInput(B(2)))}},
-                    /*drain_steps=*/{}, &traces);
+                    /*drain_steps=*/{}, &traces, /*implicit_source=*/nullptr,
+                    this->auto_resume_state_);
 
   ScriptedSink sink(
-      "Sink", {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(10)))}}, &traces);
+      "Sink", {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(10)))}}, &traces,
+      this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
 
-  auto st = this->RunToDone(group);
+  auto st = this->RunToDone(group, exec, 0);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
@@ -1469,20 +1569,21 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeErrorAfterNeedsMore) {
   ScriptedSource source("Source",
                         {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1))),
                           OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(2)))}},
-                        &traces);
+                        &traces, this->auto_resume_state_);
 
   ScriptedPipe pipe("Pipe",
                     {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(1))),
                       ErrorStep(Status::UnknownError("42"), ExpectInput(B(2)))}},
-                    /*drain_steps=*/{}, &traces);
+                    /*drain_steps=*/{}, &traces, /*implicit_source=*/nullptr,
+                    this->auto_resume_state_);
 
-  ScriptedSink sink("Sink", {{}} /*unused*/, &traces);
+  ScriptedSink sink("Sink", {{}} /*unused*/, &traces, this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
 
-  auto st = this->RunToDone(group);
+  auto st = this->RunToDone(group, exec, 0);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
@@ -1496,22 +1597,24 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeErrorAfterHasMore) {
   std::vector<Trace> traces;
 
   ScriptedSource source(
-      "Source", {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1)))}}, &traces);
+      "Source", {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1)))}}, &traces,
+      this->auto_resume_state_);
 
   ScriptedPipe pipe(
       "Pipe",
       {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(10)), ExpectInput(B(1))),
         ErrorStep(Status::UnknownError("42"), ExpectInput(std::nullopt))}},
-      /*drain_steps=*/{}, &traces);
+      /*drain_steps=*/{}, &traces, /*implicit_source=*/nullptr, this->auto_resume_state_);
 
   ScriptedSink sink(
-      "Sink", {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(10)))}}, &traces);
+      "Sink", {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(10)))}}, &traces,
+      this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
 
-  auto st = this->RunToDone(group);
+  auto st = this->RunToDone(group, exec, 0);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
@@ -1525,21 +1628,23 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeErrorAfterYieldBack) {
   std::vector<Trace> traces;
 
   ScriptedSource source(
-      "Source", {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1)))}}, &traces);
+      "Source", {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1)))}}, &traces,
+      this->auto_resume_state_);
 
   ScriptedPipe pipe("Pipe",
                     {{OutputStep(OpOutput::PipeYield(), ExpectInput(B(1))),
                       OutputStep(OpOutput::PipeYieldBack(), ExpectInput(std::nullopt)),
                       ErrorStep(Status::UnknownError("42"), ExpectInput(std::nullopt))}},
-                    /*drain_steps=*/{}, &traces);
+                    /*drain_steps=*/{}, &traces, /*implicit_source=*/nullptr,
+                    this->auto_resume_state_);
 
-  ScriptedSink sink("Sink", {{}} /*unused*/, &traces);
+  ScriptedSink sink("Sink", {{}} /*unused*/, &traces, this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
 
-  auto st = this->RunToDone(group);
+  auto st = this->RunToDone(group, exec, 0);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
@@ -1553,20 +1658,22 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeErrorAfterBlocked) {
   std::vector<Trace> traces;
 
   ScriptedSource source(
-      "Source", {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1)))}}, &traces);
+      "Source", {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1)))}}, &traces,
+      this->auto_resume_state_);
 
   ScriptedPipe pipe("Pipe",
                     {{BlockedStep(ExpectInput(B(1))),
                       ErrorStep(Status::UnknownError("42"), ExpectInput(std::nullopt))}},
-                    /*drain_steps=*/{}, &traces);
+                    /*drain_steps=*/{}, &traces, /*implicit_source=*/nullptr,
+                    this->auto_resume_state_);
 
-  ScriptedSink sink("Sink", {{}} /*unused*/, &traces);
+  ScriptedSink sink("Sink", {{}} /*unused*/, &traces, this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
 
-  auto st = this->RunToDone(group);
+  auto st = this->RunToDone(group, exec, 0);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
@@ -1579,18 +1686,20 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeErrorAfterBlocked) {
 TYPED_TEST(BrokenPipelinePipeExecTest, DrainError) {
   std::vector<Trace> traces;
 
-  ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces);
+  ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces,
+                        this->auto_resume_state_);
 
   ScriptedPipe pipe("Pipe", /*pipe_steps=*/{{}},
-                    {{ErrorStep(Status::UnknownError("42"))}}, &traces);
+                    {{ErrorStep(Status::UnknownError("42"))}}, &traces,
+                    /*implicit_source=*/nullptr, this->auto_resume_state_);
 
-  ScriptedSink sink("Sink", {{}} /*unused*/, &traces);
+  ScriptedSink sink("Sink", {{}} /*unused*/, &traces, this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
 
-  auto st = this->RunToDone(group);
+  auto st = this->RunToDone(group, exec, 0);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
@@ -1603,21 +1712,23 @@ TYPED_TEST(BrokenPipelinePipeExecTest, DrainError) {
 TYPED_TEST(BrokenPipelinePipeExecTest, DrainErrorAfterHasMore) {
   std::vector<Trace> traces;
 
-  ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces);
+  ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces,
+                        this->auto_resume_state_);
 
   ScriptedPipe pipe("Pipe", /*pipe_steps=*/{{}},
                     {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1))),
                       ErrorStep(Status::UnknownError("42"))}},
-                    &traces);
+                    &traces, /*implicit_source=*/nullptr, this->auto_resume_state_);
 
   ScriptedSink sink(
-      "Sink", {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(1)))}}, &traces);
+      "Sink", {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(1)))}}, &traces,
+      this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
 
-  auto st = this->RunToDone(group);
+  auto st = this->RunToDone(group, exec, 0);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
@@ -1630,21 +1741,22 @@ TYPED_TEST(BrokenPipelinePipeExecTest, DrainErrorAfterHasMore) {
 TYPED_TEST(BrokenPipelinePipeExecTest, DrainErrorAfterYieldBack) {
   std::vector<Trace> traces;
 
-  ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces);
+  ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces,
+                        this->auto_resume_state_);
 
   ScriptedPipe pipe(
       "Pipe", /*pipe_steps=*/{{}},
       {{OutputStep(OpOutput::PipeYield()), OutputStep(OpOutput::PipeYieldBack()),
         ErrorStep(Status::UnknownError("42"))}},
-      &traces);
+      &traces, /*implicit_source=*/nullptr, this->auto_resume_state_);
 
-  ScriptedSink sink("Sink", {{}} /*unused*/, &traces);
+  ScriptedSink sink("Sink", {{}} /*unused*/, &traces, this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
 
-  auto st = this->RunToDone(group);
+  auto st = this->RunToDone(group, exec, 0);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
@@ -1657,18 +1769,20 @@ TYPED_TEST(BrokenPipelinePipeExecTest, DrainErrorAfterYieldBack) {
 TYPED_TEST(BrokenPipelinePipeExecTest, DrainErrorAfterBlocked) {
   std::vector<Trace> traces;
 
-  ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces);
+  ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces,
+                        this->auto_resume_state_);
 
   ScriptedPipe pipe("Pipe", /*pipe_steps=*/{{}},
-                    {{BlockedStep(), ErrorStep(Status::UnknownError("42"))}}, &traces);
+                    {{BlockedStep(), ErrorStep(Status::UnknownError("42"))}}, &traces,
+                    /*implicit_source=*/nullptr, this->auto_resume_state_);
 
-  ScriptedSink sink("Sink", {{}} /*unused*/, &traces);
+  ScriptedSink sink("Sink", {{}} /*unused*/, &traces, this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
 
-  auto st = this->RunToDone(group);
+  auto st = this->RunToDone(group, exec, 0);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
@@ -1682,18 +1796,19 @@ TYPED_TEST(BrokenPipelinePipeExecTest, SinkError) {
   std::vector<Trace> traces;
 
   ScriptedSource source(
-      "Source", {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1)))}}, &traces);
+      "Source", {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1)))}}, &traces,
+      this->auto_resume_state_);
   ScriptedPipe pipe(
       "Pipe", {{OutputStep(OpOutput::PipeEven(/*batch=*/B(10)), ExpectInput(B(1)))}},
-      /*drain_steps=*/{}, &traces);
+      /*drain_steps=*/{}, &traces, /*implicit_source=*/nullptr, this->auto_resume_state_);
   ScriptedSink sink("Sink", {{ErrorStep(Status::UnknownError("42"), ExpectInput(B(10)))}},
-                    &traces);
+                    &traces, this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
 
-  auto st = this->RunToDone(group);
+  auto st = this->RunToDone(group, exec, 0);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
@@ -1709,22 +1824,22 @@ TYPED_TEST(BrokenPipelinePipeExecTest, SinkErrorAfterNeedsMore) {
   ScriptedSource source("Source",
                         {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1))),
                           OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(2)))}},
-                        &traces);
+                        &traces, this->auto_resume_state_);
   ScriptedPipe pipe(
       "Pipe",
       {{OutputStep(OpOutput::PipeEven(/*batch=*/B(10)), ExpectInput(B(1))),
         OutputStep(OpOutput::PipeEven(/*batch=*/B(20)), ExpectInput(B(2)))}},
-      /*drain_steps=*/{}, &traces);
+      /*drain_steps=*/{}, &traces, /*implicit_source=*/nullptr, this->auto_resume_state_);
   ScriptedSink sink("Sink",
                     {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(10))),
                       ErrorStep(Status::UnknownError("42"), ExpectInput(B(20)))}},
-                    &traces);
+                    &traces, this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
 
-  auto st = this->RunToDone(group);
+  auto st = this->RunToDone(group, exec, 0);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");
@@ -1738,20 +1853,21 @@ TYPED_TEST(BrokenPipelinePipeExecTest, SinkErrorAfterBlocked) {
   std::vector<Trace> traces;
 
   ScriptedSource source(
-      "Source", {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1)))}}, &traces);
+      "Source", {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1)))}}, &traces,
+      this->auto_resume_state_);
   ScriptedPipe pipe(
       "Pipe", {{OutputStep(OpOutput::PipeEven(/*batch=*/B(10)), ExpectInput(B(1)))}},
-      /*drain_steps=*/{}, &traces);
+      /*drain_steps=*/{}, &traces, /*implicit_source=*/nullptr, this->auto_resume_state_);
   ScriptedSink sink("Sink",
                     {{BlockedStep(ExpectInput(B(10))),
                       ErrorStep(Status::UnknownError("42"), ExpectInput(std::nullopt))}},
-                    &traces);
+                    &traces, this->auto_resume_state_);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
   auto group = TypeParam::MakeTaskGroup(exec, 0);
 
-  auto st = this->RunToDone(group);
+  auto st = this->RunToDone(group, exec, 0);
   ASSERT_FALSE(st.ok());
   ASSERT_TRUE(st.IsUnknownError());
   ASSERT_EQ(st.message(), "42");

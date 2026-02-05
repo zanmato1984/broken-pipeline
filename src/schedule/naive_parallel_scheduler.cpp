@@ -38,12 +38,10 @@ TaskContext NaiveParallelScheduler::MakeTaskContext(const Traits::Context* conte
 
 NaiveParallelScheduler::ConcreteTask NaiveParallelScheduler::MakeTask(
     const Task& task, const TaskContext& task_ctx, TaskId task_id,
-    std::shared_ptr<std::mutex> statuses_mutex,
-    std::shared_ptr<std::vector<TaskStatus>> statuses) const {
+    std::shared_ptr<std::vector<TaskStatus>> status_log) const {
   return std::async(std::launch::async,
                     [this, task, task_ctx, task_id,
-                     statuses_mutex = std::move(statuses_mutex),
-                     statuses = std::move(statuses)]() -> Result<TaskStatus> {
+                     status_log = std::move(status_log)]() -> Result<TaskStatus> {
                       Result<TaskStatus> result = TaskStatus::Continue();
                       std::size_t steps = 0;
                       while (result.ok() && !result->IsFinished() &&
@@ -66,9 +64,8 @@ NaiveParallelScheduler::ConcreteTask NaiveParallelScheduler::MakeTask(
                         }
 
                         result = task(task_ctx, task_id);
-                        if (result.ok() && statuses != nullptr) {
-                          std::lock_guard<std::mutex> lock(*statuses_mutex);
-                          statuses->push_back(result.ValueOrDie());
+                        if (result.ok() && status_log != nullptr) {
+                          status_log->push_back(result.ValueOrDie());
                         }
                       }
                       return result;
@@ -77,7 +74,6 @@ NaiveParallelScheduler::ConcreteTask NaiveParallelScheduler::MakeTask(
 
 NaiveParallelScheduler::TaskGroupHandle NaiveParallelScheduler::ScheduleTaskGroup(
     const TaskGroup& group, TaskContext task_ctx, std::vector<TaskStatus>* statuses) const {
-  auto statuses_mutex = std::make_shared<std::mutex>();
   auto statuses_shared =
       statuses != nullptr ? std::shared_ptr<std::vector<TaskStatus>>(statuses, [](auto*) {})
                           : std::make_shared<std::vector<TaskStatus>>();
@@ -86,24 +82,51 @@ NaiveParallelScheduler::TaskGroupHandle NaiveParallelScheduler::ScheduleTaskGrou
   const auto num_tasks = group.NumTasks();
   const auto& cont = group.Continuation();
 
+  std::vector<std::shared_ptr<std::vector<TaskStatus>>> task_statuses;
+  task_statuses.reserve(num_tasks);
+  for (std::size_t i = 0; i < num_tasks; ++i) {
+    task_statuses.push_back(std::make_shared<std::vector<TaskStatus>>());
+  }
+
   std::vector<ConcreteTask> tasks;
   tasks.reserve(num_tasks);
   for (std::size_t i = 0; i < num_tasks; ++i) {
-    tasks.push_back(MakeTask(task, task_ctx, i, statuses_mutex, statuses_shared));
+    tasks.push_back(MakeTask(task, task_ctx, i, task_statuses[i]));
   }
 
   auto fut = std::async(std::launch::async,
-                        [tasks = std::move(tasks), cont, task_ctx]() mutable
+                        [tasks = std::move(tasks), cont, task_ctx,
+                         statuses = statuses_shared,
+                         task_statuses = std::move(task_statuses)]() mutable
                             -> Result<TaskStatus> {
                           bool any_cancelled = false;
+                          bool has_error = false;
+                          Status error_status = Status::OK();
                           for (auto& t : tasks) {
                             auto r = t.get();
                             if (!r.ok()) {
-                              return r.status();
+                              if (!has_error) {
+                                has_error = true;
+                                error_status = r.status();
+                              }
+                              continue;
                             }
                             if (r->IsCancelled()) {
                               any_cancelled = true;
                             }
+                          }
+
+                          if (statuses != nullptr) {
+                            for (const auto& per_task : task_statuses) {
+                              if (per_task != nullptr) {
+                                statuses->insert(statuses->end(), per_task->begin(),
+                                                 per_task->end());
+                              }
+                            }
+                          }
+
+                          if (has_error) {
+                            return error_status;
                           }
                           if (any_cancelled) {
                             return TaskStatus::Cancelled();
@@ -114,8 +137,7 @@ NaiveParallelScheduler::TaskGroupHandle NaiveParallelScheduler::ScheduleTaskGrou
                           return TaskStatus::Finished();
                         });
 
-  return TaskGroupHandle{std::move(fut), std::move(statuses_mutex),
-                         std::move(statuses_shared)};
+  return TaskGroupHandle{std::move(fut), std::move(statuses_shared)};
 }
 
 Result<TaskStatus> NaiveParallelScheduler::WaitTaskGroup(TaskGroupHandle& handle) const {
