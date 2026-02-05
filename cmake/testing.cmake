@@ -20,13 +20,6 @@ find_package(Threads REQUIRED)
 enable_testing()
 
 function(add_broken_pipeline_test TEST_NAME TEST_SRC)
-  if(NOT TARGET broken_pipeline::schedule)
-    message(FATAL_ERROR
-      "add_broken_pipeline_test requires broken_pipeline::schedule. "
-      "Set BROKEN_PIPELINE_BUILD_SCHEDULE=ON (and build schedule before tests)."
-    )
-  endif()
-
   add_executable(${TEST_NAME} ${TEST_SRC})
   target_link_libraries(
     ${TEST_NAME}

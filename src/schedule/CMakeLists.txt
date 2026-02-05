@@ -25,13 +25,9 @@ else()
   message(FATAL_ERROR "Expected Arrow::arrow_shared or Arrow::arrow_static")
 endif()
 
-if(NOT TARGET Folly::folly)
-  find_package(folly CONFIG REQUIRED)
-endif()
+find_package(folly CONFIG REQUIRED)
 
-if(NOT TARGET glog::glog)
-  find_package(glog CONFIG REQUIRED)
-endif()
+find_package(glog CONFIG REQUIRED)
 
 add_library(broken_pipeline_schedule
   async_awaiter.cpp

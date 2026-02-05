@@ -15,10 +15,12 @@
 include("${PROJECT_SOURCE_DIR}/cmake/testing.cmake")
 
 add_broken_pipeline_test(
-  broken-pipeline-task-test "${CMAKE_CURRENT_SOURCE_DIR}/task_test.cpp")
+  broken-pipeline-pipe-exec-test "${CMAKE_CURRENT_SOURCE_DIR}/pipe_exec_test.cpp")
+
 add_broken_pipeline_test(
   broken-pipeline-pipeline-compile-test "${CMAKE_CURRENT_SOURCE_DIR}/pipeline_compile_test.cpp")
+
 add_broken_pipeline_test(
-  broken-pipeline-pipe-exec-test "${CMAKE_CURRENT_SOURCE_DIR}/pipe_exec_test.cpp")
+  broken-pipeline-task-test "${CMAKE_CURRENT_SOURCE_DIR}/task_test.cpp")
 
 add_subdirectory(schedule)
