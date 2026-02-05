@@ -14,7 +14,7 @@
 
 #pragma once
 
-/// @file arrow_traits.h
+/// @file traits.h
 ///
 /// @brief Broken Pipeline Traits implementation backed by Apache Arrow.
 ///

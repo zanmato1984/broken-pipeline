@@ -1,3 +1,17 @@
+// Copyright 2026 Rossi Sun
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <broken_pipeline/schedule/naive_parallel_scheduler.h>
 
 #include <future>
@@ -5,14 +19,17 @@
 
 namespace bp::schedule {
 
-TaskContext NaiveParallelScheduler::MakeTaskContext(const void* context) const {
+TaskContext NaiveParallelScheduler::MakeTaskContext(const Traits::Context* context) const {
   TaskContext task_ctx;
   task_ctx.context = context;
   task_ctx.resumer_factory = []() -> Result<std::shared_ptr<Resumer>> {
     return std::make_shared<SyncResumer>();
   };
   task_ctx.awaiter_factory = [](Resumers resumers) -> Result<std::shared_ptr<Awaiter>> {
-    return SyncAwaiter::Make(std::move(resumers));
+    ARROW_ASSIGN_OR_RAISE(auto awaiter,
+                          SyncAwaiter::MakeSyncAwaiter(/*num_readies=*/1,
+                                                       std::move(resumers)));
+    return std::static_pointer_cast<Awaiter>(std::move(awaiter));
   };
   return task_ctx;
 }
@@ -105,7 +122,7 @@ Result<TaskStatus> NaiveParallelScheduler::WaitTaskGroup(TaskGroupHandle& handle
 }
 
 Result<TaskStatus> NaiveParallelScheduler::ScheduleAndWait(const TaskGroup& group,
-                                                           const void* context,
+                                                           const Traits::Context* context,
                                                            std::vector<TaskStatus>* statuses) const {
   auto task_ctx = MakeTaskContext(context);
   auto handle = ScheduleTaskGroup(group, std::move(task_ctx), statuses);

@@ -1,3 +1,17 @@
+// Copyright 2026 Rossi Sun
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <broken_pipeline/schedule/async_awaiter.h>
 #include <broken_pipeline/schedule/async_resumer.h>
 
@@ -18,11 +32,6 @@ namespace {
 constexpr std::size_t kRaceRounds = 2000;
 constexpr std::size_t kManyResumers = 256;
 
-std::shared_ptr<sched::AsyncAwaiter> CastAsyncAwaiter(
-    const std::shared_ptr<bp::Awaiter>& awaiter) {
-  return std::dynamic_pointer_cast<sched::AsyncAwaiter>(awaiter);
-}
-
 }  // namespace
 
 TEST(AsyncResumerTest, Basic) {
@@ -34,9 +43,8 @@ TEST(AsyncResumerTest, Basic) {
 
 TEST(AsyncAwaiterTest, SingleWaitFirst) {
   sched::ResumerPtr resumer = std::make_shared<sched::AsyncResumer>();
-  ASSERT_OK_AND_ASSIGN(auto awaiter_base, sched::AsyncAwaiter::Make({resumer}));
-  auto awaiter = CastAsyncAwaiter(awaiter_base);
-  ASSERT_NE(awaiter, nullptr);
+  ASSERT_OK_AND_ASSIGN(auto awaiter,
+                       sched::AsyncAwaiter::MakeAsyncAwaiter(/*num_readies=*/1, {resumer}));
 
   std::atomic_bool finished = false;
   auto future = std::async(std::launch::async, [&]() {
@@ -53,9 +61,8 @@ TEST(AsyncAwaiterTest, SingleWaitFirst) {
 
 TEST(AsyncAwaiterTest, SingleResumeFirst) {
   sched::ResumerPtr resumer = std::make_shared<sched::AsyncResumer>();
-  ASSERT_OK_AND_ASSIGN(auto awaiter_base, sched::AsyncAwaiter::Make({resumer}));
-  auto awaiter = CastAsyncAwaiter(awaiter_base);
-  ASSERT_NE(awaiter, nullptr);
+  ASSERT_OK_AND_ASSIGN(auto awaiter,
+                       sched::AsyncAwaiter::MakeAsyncAwaiter(/*num_readies=*/1, {resumer}));
 
   resumer->Resume();
   auto future = std::async(std::launch::async, [&]() -> bool {
@@ -71,9 +78,8 @@ TEST(AsyncAwaiterTest, Race) {
   folly::CPUThreadPoolExecutor executor(4);
   for (std::size_t i = 0; i < kRaceRounds; ++i) {
     sched::ResumerPtr resumer = std::make_shared<sched::AsyncResumer>();
-    ASSERT_OK_AND_ASSIGN(auto awaiter_base, sched::AsyncAwaiter::Make({resumer}));
-    auto awaiter = CastAsyncAwaiter(awaiter_base);
-    ASSERT_NE(awaiter, nullptr);
+    ASSERT_OK_AND_ASSIGN(auto awaiter,
+                         sched::AsyncAwaiter::MakeAsyncAwaiter(/*num_readies=*/1, {resumer}));
 
     std::atomic_bool resumer_ready = false, awaiter_ready = false, kickoff = false;
     auto resume_future = std::async(std::launch::async, [&]() {
@@ -105,9 +111,8 @@ TEST(AsyncAwaiterTest, AnyWaitFirst) {
   for (auto& resumer : resumers) {
     resumer = std::make_shared<sched::AsyncResumer>();
   }
-  ASSERT_OK_AND_ASSIGN(auto awaiter_base, sched::AsyncAwaiter::Make(resumers));
-  auto awaiter = CastAsyncAwaiter(awaiter_base);
-  ASSERT_NE(awaiter, nullptr);
+  ASSERT_OK_AND_ASSIGN(auto awaiter,
+                       sched::AsyncAwaiter::MakeAsyncAwaiter(/*num_readies=*/1, resumers));
 
   std::atomic_bool finished = false;
   auto future = std::async(std::launch::async, [&]() {
@@ -135,9 +140,8 @@ TEST(AsyncAwaiterTest, AnyReentrantWait) {
     resumer = std::make_shared<sched::AsyncResumer>();
   }
 
-  ASSERT_OK_AND_ASSIGN(auto awaiter1_base, sched::AsyncAwaiter::Make(resumers));
-  auto awaiter1 = CastAsyncAwaiter(awaiter1_base);
-  ASSERT_NE(awaiter1, nullptr);
+  ASSERT_OK_AND_ASSIGN(auto awaiter1,
+                       sched::AsyncAwaiter::MakeAsyncAwaiter(/*num_readies=*/1, resumers));
   resumers[lucky]->Resume();
   std::move(awaiter1->GetFuture()).via(&executor).wait();
   for (std::size_t i = 0; i < kManyResumers; ++i) {
@@ -149,9 +153,8 @@ TEST(AsyncAwaiterTest, AnyReentrantWait) {
   }
 
   resumers[lucky] = std::make_shared<sched::AsyncResumer>();
-  ASSERT_OK_AND_ASSIGN(auto awaiter2_base, sched::AsyncAwaiter::Make(resumers));
-  auto awaiter2 = CastAsyncAwaiter(awaiter2_base);
-  ASSERT_NE(awaiter2, nullptr);
+  ASSERT_OK_AND_ASSIGN(auto awaiter2,
+                       sched::AsyncAwaiter::MakeAsyncAwaiter(/*num_readies=*/1, resumers));
   resumers[lucky]->Resume();
   std::move(awaiter2->GetFuture()).via(&executor).wait();
   for (std::size_t i = 0; i < kManyResumers; ++i) {
@@ -170,9 +173,8 @@ TEST(AsyncAwaiterTest, AnyResumeFirst) {
     resumer = std::make_shared<sched::AsyncResumer>();
     resumer->Resume();
   }
-  ASSERT_OK_AND_ASSIGN(auto awaiter_base, sched::AsyncAwaiter::Make(resumers));
-  auto awaiter = CastAsyncAwaiter(awaiter_base);
-  ASSERT_NE(awaiter, nullptr);
+  ASSERT_OK_AND_ASSIGN(auto awaiter,
+                       sched::AsyncAwaiter::MakeAsyncAwaiter(/*num_readies=*/1, resumers));
 
   auto future = std::async(std::launch::async, [&]() -> bool {
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -192,9 +194,8 @@ TEST(AsyncAwaiterTest, LifeSpan) {
   for (auto& resumer : resumers) {
     resumer = std::make_shared<sched::AsyncResumer>();
   }
-  ASSERT_OK_AND_ASSIGN(auto awaiter_base, sched::AsyncAwaiter::Make(resumers));
-  auto awaiter = CastAsyncAwaiter(awaiter_base);
-  ASSERT_NE(awaiter, nullptr);
+  ASSERT_OK_AND_ASSIGN(auto awaiter,
+                       sched::AsyncAwaiter::MakeAsyncAwaiter(/*num_readies=*/1, resumers));
 
   std::atomic_bool finished = false;
   auto future = std::async(std::launch::async, [&]() {

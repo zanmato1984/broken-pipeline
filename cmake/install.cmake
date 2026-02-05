@@ -49,20 +49,6 @@ install(
   DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/broken_pipeline"
 )
 
-if(BROKEN_PIPELINE_BUILD_SCHEDULE)
-  configure_file(
-    "${CMAKE_CURRENT_LIST_DIR}/arrow_targets.cmake"
-    "${PROJECT_BINARY_DIR}/arrow_targets.cmake"
-    COPYONLY
-  )
-
-  install(
-    FILES
-      "${PROJECT_BINARY_DIR}/arrow_targets.cmake"
-    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/broken_pipeline"
-  )
-endif()
-
 set(BROKEN_PIPELINE_SCHEDULE_ENABLED "${BROKEN_PIPELINE_BUILD_SCHEDULE}")
 configure_package_config_file(
   "${CMAKE_CURRENT_LIST_DIR}/package_config.cmake.in"

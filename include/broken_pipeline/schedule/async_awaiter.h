@@ -1,3 +1,17 @@
+// Copyright 2026 Rossi Sun
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include "async_resumer.h"
@@ -19,14 +33,12 @@ class AsyncAwaiter final : public ResumersAwaiter,
   Future& GetFuture() { return future_; }
   const Resumers& GetResumers() const override { return resumers_; }
 
-  static Result<std::shared_ptr<Awaiter>> Make(Resumers resumers);
+  static Result<std::shared_ptr<AsyncAwaiter>> MakeAsyncAwaiter(std::size_t num_readies,
+                                                                Resumers resumers);
 
  private:
   AsyncAwaiter(std::size_t num_readies, Resumers resumers,
                std::shared_ptr<folly::Promise<folly::Unit>> promise, Future future);
-
-  static Result<std::shared_ptr<AsyncAwaiter>> MakeAsyncAwaiter(std::size_t num_readies,
-                                                                Resumers resumers);
 
   void OnResumed();
 

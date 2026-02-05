@@ -1,3 +1,17 @@
+// Copyright 2026 Rossi Sun
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include "scheduler.h"
@@ -18,22 +32,7 @@ class NaiveParallelScheduler {
   explicit NaiveParallelScheduler(SchedulerOptions options = {})
       : options_(std::move(options)) {}
 
-  TaskContext MakeTaskContext(const void* context = nullptr) const;
-
-  template <ArrowBrokenPipelineTraits Traits>
-  bp::TaskContext<Traits> MakeTaskContext(const typename Traits::Context* context = nullptr) const {
-    bp::TaskContext<Traits> task_ctx;
-    task_ctx.context = context;
-    task_ctx.resumer_factory = []() -> bp::Result<Traits, std::shared_ptr<bp::Resumer>> {
-      return std::make_shared<SyncResumer>();
-    };
-    task_ctx.awaiter_factory =
-        [](std::vector<std::shared_ptr<bp::Resumer>> resumers)
-            -> bp::Result<Traits, std::shared_ptr<bp::Awaiter>> {
-      return SyncAwaiter::Make(std::move(resumers));
-    };
-    return task_ctx;
-  }
+  TaskContext MakeTaskContext(const Traits::Context* context = nullptr) const;
 
   struct TaskGroupHandle {
     std::future<Result<TaskStatus>> future;
@@ -44,26 +43,11 @@ class NaiveParallelScheduler {
   TaskGroupHandle ScheduleTaskGroup(const TaskGroup& group, TaskContext task_ctx,
                                     std::vector<TaskStatus>* statuses = nullptr) const;
 
-  template <ArrowBrokenPipelineTraits Traits>
-  TaskGroupHandle ScheduleTaskGroup(const bp::TaskGroup<Traits>& group,
-                                    bp::TaskContext<Traits> task_ctx,
-                                    std::vector<TaskStatus>* statuses = nullptr) const {
-    return ScheduleTaskGroup(WrapTaskGroup(group, std::move(task_ctx)), TaskContext{}, statuses);
-  }
-
   Result<TaskStatus> WaitTaskGroup(TaskGroupHandle& handle) const;
 
-  Result<TaskStatus> ScheduleAndWait(const TaskGroup& group, const void* context = nullptr,
+  Result<TaskStatus> ScheduleAndWait(const TaskGroup& group,
+                                     const Traits::Context* context = nullptr,
                                      std::vector<TaskStatus>* statuses = nullptr) const;
-
-  template <ArrowBrokenPipelineTraits Traits>
-  Result<TaskStatus> ScheduleAndWait(const bp::TaskGroup<Traits>& group,
-                                     const typename Traits::Context* context = nullptr,
-                                     std::vector<TaskStatus>* statuses = nullptr) const {
-    auto task_ctx = MakeTaskContext<Traits>(context);
-    auto handle = ScheduleTaskGroup(group, std::move(task_ctx), statuses);
-    return WaitTaskGroup(handle);
-  }
 
  private:
   using ConcreteTask = std::future<Result<TaskStatus>>;

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <broken_pipeline/schedule/arrow_traits.h>
+#include <broken_pipeline/schedule/traits.h>
 
 #include <broken_pipeline/schedule/async_dual_pool_scheduler.h>
 #include <broken_pipeline/schedule/naive_parallel_scheduler.h>
@@ -389,7 +389,7 @@ class BrokenPipelinePipeExecTest : public ::testing::Test {
   }
 
   Scheduler scheduler_;
-  TaskContext task_ctx_ = scheduler_.template MakeTaskContext<Traits>();
+  TaskContext task_ctx_ = scheduler_.MakeTaskContext();
 };
 
 TYPED_TEST_SUITE(BrokenPipelinePipeExecTest, PipeExecTestTypes);

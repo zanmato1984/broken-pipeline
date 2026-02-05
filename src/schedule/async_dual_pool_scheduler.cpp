@@ -1,3 +1,17 @@
+// Copyright 2026 Rossi Sun
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <broken_pipeline/schedule/async_dual_pool_scheduler.h>
 
 #include <folly/executors/CPUThreadPoolExecutor.h>
@@ -50,14 +64,17 @@ AsyncDualPoolScheduler::AsyncDualPoolScheduler(folly::Executor* cpu_executor,
       cpu_executor_(cpu_executor),
       io_executor_(io_executor) {}
 
-TaskContext AsyncDualPoolScheduler::MakeTaskContext(const void* context) const {
+TaskContext AsyncDualPoolScheduler::MakeTaskContext(const Traits::Context* context) const {
   TaskContext task_ctx;
   task_ctx.context = context;
   task_ctx.resumer_factory = []() -> Result<std::shared_ptr<Resumer>> {
     return std::make_shared<AsyncResumer>();
   };
   task_ctx.awaiter_factory = [](Resumers resumers) -> Result<std::shared_ptr<Awaiter>> {
-    return AsyncAwaiter::Make(std::move(resumers));
+    ARROW_ASSIGN_OR_RAISE(auto awaiter,
+                          AsyncAwaiter::MakeAsyncAwaiter(/*num_readies=*/1,
+                                                        std::move(resumers)));
+    return std::static_pointer_cast<Awaiter>(std::move(awaiter));
   };
   return task_ctx;
 }
@@ -178,7 +195,7 @@ Result<TaskStatus> AsyncDualPoolScheduler::WaitTaskGroup(TaskGroupHandle& handle
 }
 
 Result<TaskStatus> AsyncDualPoolScheduler::ScheduleAndWait(const TaskGroup& group,
-                                                           const void* context,
+                                                           const Traits::Context* context,
                                                            std::vector<TaskStatus>* statuses) {
   auto task_ctx = MakeTaskContext(context);
   auto handle = ScheduleTaskGroup(group, std::move(task_ctx), statuses);
