@@ -23,10 +23,14 @@
 
 #include <algorithm>
 #include <atomic>
+#include <condition_variable>
 #include <cstddef>
+#include <deque>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -42,15 +46,15 @@ using bp::schedule::Continuation;
 using bp::schedule::NaiveParallelScheduler;
 using bp::schedule::OpOutput;
 using bp::schedule::OpResult;
-using bp::schedule::PipeOp;
 using bp::schedule::Pipeline;
 using bp::schedule::PipelineChannel;
 using bp::schedule::PipelineDrain;
 using bp::schedule::PipelinePipe;
 using bp::schedule::PipelineSink;
 using bp::schedule::PipelineSource;
-using bp::schedule::Resumer;
+using bp::schedule::PipeOp;
 using bp::schedule::Result;
+using bp::schedule::Resumer;
 using bp::schedule::SinkOp;
 using bp::schedule::SourceOp;
 using bp::schedule::Status;
@@ -418,51 +422,106 @@ class BrokenPipelinePipeExecTest : public ::testing::Test {
  public:
   using Scheduler = typename Param::Scheduler;
 
- protected:
-  Status RunToDone(const TaskGroup& group, std::vector<TaskStatus>* statuses = nullptr) {
-    const auto& task = group.Task();
-    const auto cont = group.Continuation();
-
-    Result<TaskStatus> result = TaskStatus::Continue();
-    std::size_t steps = 0;
-    while (result.ok() && !result->IsFinished() && !result->IsCancelled()) {
-      if (++steps > Scheduler::kDefaultStepLimit) {
-        return Status::Invalid("PipeExecTest: task step limit exceeded");
-      }
-
-      if (result->IsBlocked()) {
-        const auto* resumers = GetResumers(result->GetAwaiter().get());
-        if (resumers == nullptr) {
-          return Status::Invalid("PipeExecTest: unexpected awaiter type");
+  BrokenPipelinePipeExecTest() {
+    task_ctx_ = scheduler_.MakeTaskContext();
+    const auto orig_resumer_factory = task_ctx_.resumer_factory;
+    auto mailbox = resumer_mailbox_;
+    task_ctx_.resumer_factory = [orig_resumer_factory,
+                                 mailbox]() -> Result<std::shared_ptr<Resumer>> {
+      auto resumer_r = orig_resumer_factory();
+      if (resumer_r.ok() && mailbox != nullptr) {
+        {
+          std::lock_guard<std::mutex> lock(mailbox->mutex);
+          mailbox->queue.push_back(resumer_r.ValueOrDie());
         }
-        for (auto& resumer : *resumers) {
-          if (resumer) {
-            resumer->Resume();
-          }
-        }
+        mailbox->cv.notify_one();
       }
+      return resumer_r;
+    };
+  }
 
-      result = task(task_ctx_, 0);
-      if (result.ok() && statuses != nullptr) {
-        statuses->push_back(result.ValueOrDie());
+ private:
+  struct ResumerMailbox {
+    std::mutex mutex;
+    std::condition_variable cv;
+    std::deque<std::shared_ptr<Resumer>> queue;
+  };
+
+  class AutoResumerDriver {
+   public:
+    explicit AutoResumerDriver(std::shared_ptr<ResumerMailbox> mailbox)
+        : mailbox_(std::move(mailbox)), thread_([this]() { Run(); }) {}
+
+    AutoResumerDriver(const AutoResumerDriver&) = delete;
+    AutoResumerDriver& operator=(const AutoResumerDriver&) = delete;
+
+    ~AutoResumerDriver() { Stop(); }
+
+    void Stop() {
+      stopped_.store(true, std::memory_order_release);
+      if (mailbox_ != nullptr) {
+        mailbox_->cv.notify_all();
+      }
+      if (thread_.joinable()) {
+        thread_.join();
       }
     }
+
+   private:
+    void Run() {
+      if (mailbox_ == nullptr) {
+        return;
+      }
+
+      while (true) {
+        std::shared_ptr<Resumer> resumer;
+        {
+          std::unique_lock<std::mutex> lock(mailbox_->mutex);
+          mailbox_->cv.wait(lock, [this]() {
+            return stopped_.load(std::memory_order_acquire) || !mailbox_->queue.empty();
+          });
+          if (mailbox_->queue.empty()) {
+            if (stopped_.load(std::memory_order_acquire)) {
+              return;
+            }
+            continue;
+          }
+          resumer = std::move(mailbox_->queue.front());
+          mailbox_->queue.pop_front();
+        }
+
+        if (resumer != nullptr && !resumer->IsResumed()) {
+          resumer->Resume();
+        }
+      }
+    }
+
+    std::shared_ptr<ResumerMailbox> mailbox_;
+    std::atomic_bool stopped_{false};
+    std::thread thread_;
+  };
+
+ protected:
+  Status RunToDone(const TaskGroup& group, std::vector<TaskStatus>* statuses = nullptr) {
+    AutoResumerDriver resumer_driver(resumer_mailbox_);
+
+    auto handle = scheduler_.ScheduleTaskGroup(group, task_ctx_, statuses);
+    auto result = scheduler_.WaitTaskGroup(handle);
 
     if (!result.ok()) {
       return result.status();
     }
 
-    if (result.ok() && result->IsFinished() && cont.has_value()) {
-      auto cont_result = cont.value()(task_ctx_);
-      if (!cont_result.ok()) {
-        return cont_result.status();
-      }
+    if (!result->IsFinished() && !result->IsCancelled()) {
+      return Status::Invalid("PipeExecTest: unexpected final status: " +
+                             result->ToString());
     }
     return Status::OK();
   }
 
+  std::shared_ptr<ResumerMailbox> resumer_mailbox_ = std::make_shared<ResumerMailbox>();
   Scheduler scheduler_;
-  TaskContext task_ctx_ = scheduler_.MakeTaskContext();
+  TaskContext task_ctx_;
 };
 
 TYPED_TEST_SUITE(BrokenPipelinePipeExecTest, PipeExecTestTypes);
