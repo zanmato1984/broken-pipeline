@@ -43,11 +43,11 @@ constexpr auto kShortSleep = std::chrono::milliseconds(50);
 struct AsyncDualPoolSchedulerHolder {
   folly::CPUThreadPoolExecutor cpu_executor{kCpuThreadPoolSize};
   folly::IOThreadPoolExecutor io_executor{kIoThreadPoolSize};
-  bp::schedule::AsyncDualPoolScheduler scheduler{&cpu_executor, &io_executor};
+  AsyncDualPoolScheduler scheduler{&cpu_executor, &io_executor};
 };
 
 struct NaiveParallelSchedulerHolder {
-  bp::schedule::NaiveParallelScheduler scheduler;
+  NaiveParallelScheduler scheduler;
 };
 
 template <typename SchedulerHolder>
@@ -169,38 +169,37 @@ TYPED_TEST(ScheduleTest, BlockedTask) {
   std::vector<std::shared_ptr<bp::Resumer>> resumers(num_tasks);
   std::atomic<std::size_t> num_resumers_set = 0;
 
-  Task blocked_task("BlockedTask",
-                    [&](const TaskContext& task_ctx, TaskId task_id) -> Result<TaskStatus> {
-                      if (resumers[task_id] == nullptr) {
-                        ARROW_ASSIGN_OR_RAISE(auto resumer, task_ctx.resumer_factory());
-                        std::vector<std::shared_ptr<bp::Resumer>> one{resumer};
-                        ARROW_ASSIGN_OR_RAISE(auto awaiter,
-                                              task_ctx.awaiter_factory(std::move(one)));
-                        resumers[task_id] = std::move(resumer);
-                        num_resumers_set++;
-                        return TaskStatus::Blocked(std::move(awaiter));
-                      }
-                      counter++;
-                      return TaskStatus::Finished();
-                    });
-
-  Task resumer_task(
-      "ResumerTask",
-      [&](const TaskContext&, TaskId) -> Result<TaskStatus> {
-        if (num_resumers_set != num_tasks) {
-          std::this_thread::sleep_for(kTinySleep);
-          return TaskStatus::Continue();
+  Task blocked_task(
+      "BlockedTask",
+      [&](const TaskContext& task_ctx, TaskId task_id) -> Result<TaskStatus> {
+        if (resumers[task_id] == nullptr) {
+          ARROW_ASSIGN_OR_RAISE(auto resumer, task_ctx.resumer_factory());
+          std::vector<std::shared_ptr<bp::Resumer>> one{resumer};
+          ARROW_ASSIGN_OR_RAISE(auto awaiter, task_ctx.awaiter_factory(std::move(one)));
+          resumers[task_id] = std::move(resumer);
+          num_resumers_set++;
+          return TaskStatus::Blocked(std::move(awaiter));
         }
-        std::this_thread::sleep_for(kShortSleep);
-        for (auto& resumer : resumers) {
-          if (resumer == nullptr) {
-            return Status::UnknownError("BlockedTask: missing resumer");
-          }
-          resumer->Resume();
-        }
+        counter++;
         return TaskStatus::Finished();
-      },
-      {TaskHint::Type::IO});
+      });
+
+  Task resumer_task("ResumerTask",
+                    [&](const TaskContext&, TaskId) -> Result<TaskStatus> {
+                      if (num_resumers_set != num_tasks) {
+                        std::this_thread::sleep_for(kTinySleep);
+                        return TaskStatus::Continue();
+                      }
+                      std::this_thread::sleep_for(kShortSleep);
+                      for (auto& resumer : resumers) {
+                        if (resumer == nullptr) {
+                          return Status::UnknownError("BlockedTask: missing resumer");
+                        }
+                        resumer->Resume();
+                      }
+                      return TaskStatus::Finished();
+                    },
+                    {TaskHint::Type::IO});
 
   auto blocked_task_future = std::async(std::launch::async, [&]() -> Result<TaskStatus> {
     return this->ScheduleTask(std::move(blocked_task), num_tasks);
@@ -234,42 +233,40 @@ TYPED_TEST(ScheduleTest, BlockedTaskResumerErrorNotify) {
   std::atomic_bool resumer_task_errored = false;
   std::atomic_bool unblock_requested = false;
 
-  Task blocked_task("BlockedTask",
-                    [&](const TaskContext& task_ctx, TaskId task_id) -> Result<TaskStatus> {
-                      {
-                        std::lock_guard<std::mutex> lock(resumers_mutex);
-                        if (resumers[task_id] == nullptr) {
-                          ARROW_ASSIGN_OR_RAISE(auto resumer, task_ctx.resumer_factory());
-                          std::vector<std::shared_ptr<bp::Resumer>> one{resumer};
-                          ARROW_ASSIGN_OR_RAISE(
-                              auto awaiter, task_ctx.awaiter_factory(std::move(one)));
-                          resumers[task_id] = resumer;
-                          num_resumers_set++;
-                          if (unblock_requested.load() && !resumer->IsResumed()) {
-                            resumer->Resume();
-                          }
-                          return TaskStatus::Blocked(std::move(awaiter));
-                        }
-                      }
-                      if (!resumer_task_errored.load()) {
-                        return Status::UnknownError(
-                            "Blocked task resumed before resumer task errored");
-                      }
-                      counter++;
-                      return TaskStatus::Finished();
-                    });
-
-  Task resumer_task(
-      "ResumerTask",
-      [&](const TaskContext&, TaskId) -> Result<TaskStatus> {
-        if (num_resumers_set != num_tasks) {
-          std::this_thread::sleep_for(kTinySleep);
-          return TaskStatus::Continue();
+  Task blocked_task(
+      "BlockedTask",
+      [&](const TaskContext& task_ctx, TaskId task_id) -> Result<TaskStatus> {
+        {
+          std::lock_guard<std::mutex> lock(resumers_mutex);
+          if (resumers[task_id] == nullptr) {
+            ARROW_ASSIGN_OR_RAISE(auto resumer, task_ctx.resumer_factory());
+            std::vector<std::shared_ptr<bp::Resumer>> one{resumer};
+            ARROW_ASSIGN_OR_RAISE(auto awaiter, task_ctx.awaiter_factory(std::move(one)));
+            resumers[task_id] = resumer;
+            num_resumers_set++;
+            if (unblock_requested.load() && !resumer->IsResumed()) {
+              resumer->Resume();
+            }
+            return TaskStatus::Blocked(std::move(awaiter));
+          }
         }
-        resumer_task_errored = true;
-        return Status::UnknownError("ResumerTaskError");
-      },
-      {TaskHint::Type::IO});
+        if (!resumer_task_errored.load()) {
+          return Status::UnknownError("Blocked task resumed before resumer task errored");
+        }
+        counter++;
+        return TaskStatus::Finished();
+      });
+
+  Task resumer_task("ResumerTask",
+                    [&](const TaskContext&, TaskId) -> Result<TaskStatus> {
+                      if (num_resumers_set != num_tasks) {
+                        std::this_thread::sleep_for(kTinySleep);
+                        return TaskStatus::Continue();
+                      }
+                      resumer_task_errored = true;
+                      return Status::UnknownError("ResumerTaskError");
+                    },
+                    {TaskHint::Type::IO});
 
   auto blocked_task_future = std::async(std::launch::async, [&]() -> Result<TaskStatus> {
     return this->ScheduleTask(std::move(blocked_task), num_tasks);

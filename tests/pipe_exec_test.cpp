@@ -113,10 +113,10 @@ const std::vector<std::shared_ptr<bp::Resumer>>* GetResumers(const bp::Awaiter* 
   if (awaiter == nullptr) {
     return nullptr;
   }
-  if (auto* sync_awaiter = dynamic_cast<const bp::schedule::SyncAwaiter*>(awaiter)) {
+  if (auto* sync_awaiter = dynamic_cast<const SyncAwaiter*>(awaiter)) {
     return &sync_awaiter->GetResumers();
   }
-  if (auto* async_awaiter = dynamic_cast<const bp::schedule::AsyncAwaiter*>(awaiter)) {
+  if (auto* async_awaiter = dynamic_cast<const AsyncAwaiter*>(awaiter)) {
     return &async_awaiter->GetResumers();
   }
   return nullptr;
@@ -378,11 +378,11 @@ struct PipeExecTestType {
   }
 };
 
-using PipeExecTestTypes = ::testing::Types<
-    PipeExecTestType<LegacyPipeExecRunner, bp::schedule::NaiveParallelScheduler>,
-    PipeExecTestType<LegacyPipeExecRunner, bp::schedule::AsyncDualPoolScheduler>,
-    PipeExecTestType<CoroPipeExecRunner, bp::schedule::NaiveParallelScheduler>,
-    PipeExecTestType<CoroPipeExecRunner, bp::schedule::AsyncDualPoolScheduler>>;
+using PipeExecTestTypes =
+    ::testing::Types<PipeExecTestType<LegacyPipeExecRunner, NaiveParallelScheduler>,
+                     PipeExecTestType<LegacyPipeExecRunner, AsyncDualPoolScheduler>,
+                     PipeExecTestType<CoroPipeExecRunner, NaiveParallelScheduler>,
+                     PipeExecTestType<CoroPipeExecRunner, AsyncDualPoolScheduler>>;
 
 template <class Param>
 class BrokenPipelinePipeExecTest : public ::testing::Test {
@@ -571,9 +571,8 @@ TYPED_TEST(BrokenPipelinePipeExecTest, OnePassDirectFinish) {
   ScriptedSource source(
       "Source", {{OutputStep(OpOutput::Finished(std::optional<Batch>(B(1))))}}, &traces);
 
-  ScriptedSink sink("Sink",
-                    {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(1)))}},
-                    &traces);
+  ScriptedSink sink(
+      "Sink", {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(1)))}}, &traces);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
@@ -603,9 +602,8 @@ TYPED_TEST(BrokenPipelinePipeExecTest, OnePassWithPipe) {
       "Pipe", {{OutputStep(OpOutput::PipeEven(/*batch=*/B(10)), ExpectInput(B(1)))}},
       /*drain_steps=*/{}, &traces);
 
-  ScriptedSink sink("Sink",
-                    {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(10)))}},
-                    &traces);
+  ScriptedSink sink(
+      "Sink", {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(10)))}}, &traces);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
@@ -1037,7 +1035,8 @@ TYPED_TEST(BrokenPipelinePipeExecTest, MultiPipe) {
       /*pipe_steps=*/
       {{OutputStep(OpOutput::PipeYield(), ExpectInput(B(10))),
         OutputStep(OpOutput::PipeYieldBack(), ExpectInput(std::nullopt)),
-        OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(100)), ExpectInput(std::nullopt)),
+        OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(100)),
+                   ExpectInput(std::nullopt)),
         OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(std::nullopt)),
         OutputStep(OpOutput::PipeEven(/*batch=*/B(200)), ExpectInput(B(11))),
         OutputStep(OpOutput::PipeEven(/*batch=*/B(300)), ExpectInput(B(13)))}},
@@ -1304,9 +1303,8 @@ TYPED_TEST(BrokenPipelinePipeExecTest, SourceError) {
                           ErrorStep(Status::UnknownError("42"))}},
                         &traces);
 
-  ScriptedSink sink("Sink",
-                    {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(1)))}},
-                    &traces);
+  ScriptedSink sink(
+      "Sink", {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(1)))}}, &traces);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
@@ -1328,8 +1326,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeError) {
   ScriptedSource source(
       "Source", {{OutputStep(OpOutput::SourcePipeHasMore(/*batch=*/B(1)))}}, &traces);
 
-  ScriptedPipe pipe("Pipe",
-                    {{ErrorStep(Status::UnknownError("42"), ExpectInput(B(1)))}},
+  ScriptedPipe pipe("Pipe", {{ErrorStep(Status::UnknownError("42"), ExpectInput(B(1)))}},
                     /*drain_steps=*/{}, &traces);
 
   ScriptedSink sink("Sink", {{}} /*unused*/, &traces);
@@ -1361,9 +1358,8 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeErrorAfterEven) {
                       ErrorStep(Status::UnknownError("42"), ExpectInput(B(2)))}},
                     /*drain_steps=*/{}, &traces);
 
-  ScriptedSink sink("Sink",
-                    {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(10)))}},
-                    &traces);
+  ScriptedSink sink(
+      "Sink", {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(10)))}}, &traces);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
@@ -1420,9 +1416,8 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeErrorAfterHasMore) {
         ErrorStep(Status::UnknownError("42"), ExpectInput(std::nullopt))}},
       /*drain_steps=*/{}, &traces);
 
-  ScriptedSink sink("Sink",
-                    {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(10)))}},
-                    &traces);
+  ScriptedSink sink(
+      "Sink", {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(10)))}}, &traces);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
@@ -1527,9 +1522,8 @@ TYPED_TEST(BrokenPipelinePipeExecTest, DrainErrorAfterHasMore) {
                       ErrorStep(Status::UnknownError("42"))}},
                     &traces);
 
-  ScriptedSink sink("Sink",
-                    {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(1)))}},
-                    &traces);
+  ScriptedSink sink(
+      "Sink", {{OutputStep(OpOutput::PipeSinkNeedsMore(), ExpectInput(B(1)))}}, &traces);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
@@ -1604,8 +1598,8 @@ TYPED_TEST(BrokenPipelinePipeExecTest, SinkError) {
   ScriptedPipe pipe(
       "Pipe", {{OutputStep(OpOutput::PipeEven(/*batch=*/B(10)), ExpectInput(B(1)))}},
       /*drain_steps=*/{}, &traces);
-  ScriptedSink sink(
-      "Sink", {{ErrorStep(Status::UnknownError("42"), ExpectInput(B(10)))}}, &traces);
+  ScriptedSink sink("Sink", {{ErrorStep(Status::UnknownError("42"), ExpectInput(B(10)))}},
+                    &traces);
 
   Pipeline pipeline("P", {PipelineChannel{&source, {&pipe}}}, &sink);
   auto exec = Compile(pipeline, /*dop=*/1);
