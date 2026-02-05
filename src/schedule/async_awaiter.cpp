@@ -20,9 +20,10 @@
 #include <mutex>
 #include <utility>
 
-namespace broken_pipeline::schedule {
+namespace bp::schedule {
 
-AsyncAwaiter::AsyncAwaiter(std::size_t num_readies, Resumers resumers,
+AsyncAwaiter::AsyncAwaiter(std::size_t num_readies,
+                           std::vector<std::shared_ptr<Resumer>> resumers,
                            std::shared_ptr<folly::Promise<folly::Unit>> promise,
                            Future future)
     : num_readies_(num_readies),
@@ -31,7 +32,8 @@ AsyncAwaiter::AsyncAwaiter(std::size_t num_readies, Resumers resumers,
       future_(std::move(future)) {}
 
 Result<std::shared_ptr<AsyncAwaiter>> AsyncAwaiter::MakeAsyncAwaiter(std::size_t num_readies,
-                                                                    Resumers resumers) {
+                                                                    std::vector<std::shared_ptr<Resumer>>
+                                                                        resumers) {
   if (resumers.empty()) {
     return Status::Invalid("AsyncAwaiter: empty resumers");
   }
@@ -42,10 +44,10 @@ Result<std::shared_ptr<AsyncAwaiter>> AsyncAwaiter::MakeAsyncAwaiter(std::size_t
   auto [p, f] = folly::makePromiseContract<folly::Unit>();
   auto promise = std::make_shared<folly::Promise<folly::Unit>>(std::move(p));
 
-  auto awaiter = std::shared_ptr<AsyncAwaiter>(
-      new AsyncAwaiter(num_readies, resumers, std::move(promise), std::move(f)));
+  auto awaiter = std::shared_ptr<AsyncAwaiter>(new AsyncAwaiter(
+      num_readies, std::move(resumers), std::move(promise), std::move(f)));
 
-  for (auto& resumer : resumers) {
+  for (auto& resumer : awaiter->resumers_) {
     auto casted = std::dynamic_pointer_cast<AsyncResumer>(resumer);
     if (casted == nullptr) {
       assert(false && "AsyncAwaiter expects resumer type AsyncResumer");
@@ -75,4 +77,4 @@ void AsyncAwaiter::OnResumed() {
   }
 }
 
-}  // namespace broken_pipeline::schedule
+}  // namespace bp::schedule

@@ -20,30 +20,32 @@
 #include <cstddef>
 #include <memory>
 #include <mutex>
+#include <vector>
 
 #include <folly/futures/Future.h>
 
-namespace broken_pipeline::schedule {
+namespace bp::schedule {
 
-class AsyncAwaiter final : public ResumersAwaiter,
+class AsyncAwaiter final : public Awaiter,
                            public std::enable_shared_from_this<AsyncAwaiter> {
  public:
   using Future = folly::SemiFuture<folly::Unit>;
 
   Future& GetFuture() { return future_; }
-  const Resumers& GetResumers() const override { return resumers_; }
+  const std::vector<std::shared_ptr<Resumer>>& GetResumers() const { return resumers_; }
 
   static Result<std::shared_ptr<AsyncAwaiter>> MakeAsyncAwaiter(std::size_t num_readies,
-                                                                Resumers resumers);
+                                                                std::vector<std::shared_ptr<Resumer>>
+                                                                    resumers);
 
  private:
-  AsyncAwaiter(std::size_t num_readies, Resumers resumers,
+  AsyncAwaiter(std::size_t num_readies, std::vector<std::shared_ptr<Resumer>> resumers,
                std::shared_ptr<folly::Promise<folly::Unit>> promise, Future future);
 
   void OnResumed();
 
   std::size_t num_readies_;
-  Resumers resumers_;
+  std::vector<std::shared_ptr<Resumer>> resumers_;
 
   mutable std::mutex mutex_;
   std::size_t readies_{0};
@@ -51,4 +53,4 @@ class AsyncAwaiter final : public ResumersAwaiter,
   Future future_;
 };
 
-}  // namespace broken_pipeline::schedule
+}  // namespace bp::schedule

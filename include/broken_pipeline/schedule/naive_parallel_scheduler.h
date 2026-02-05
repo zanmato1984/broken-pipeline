@@ -24,7 +24,7 @@
 #include <mutex>
 #include <vector>
 
-namespace broken_pipeline::schedule {
+namespace bp::schedule {
 
 class NaiveParallelScheduler {
  public:
@@ -60,4 +60,4 @@ class NaiveParallelScheduler {
   std::size_t step_limit_;
 };
 
-}  // namespace broken_pipeline::schedule
+}  // namespace bp::schedule

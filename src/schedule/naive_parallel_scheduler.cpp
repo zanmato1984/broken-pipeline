@@ -18,7 +18,7 @@
 #include <future>
 #include <utility>
 
-namespace broken_pipeline::schedule {
+namespace bp::schedule {
 
 TaskContext NaiveParallelScheduler::MakeTaskContext(const Traits::Context* context) const {
   TaskContext task_ctx;
@@ -26,7 +26,8 @@ TaskContext NaiveParallelScheduler::MakeTaskContext(const Traits::Context* conte
   task_ctx.resumer_factory = []() -> Result<std::shared_ptr<Resumer>> {
     return std::make_shared<SyncResumer>();
   };
-  task_ctx.awaiter_factory = [](Resumers resumers) -> Result<std::shared_ptr<Awaiter>> {
+  task_ctx.awaiter_factory =
+      [](std::vector<std::shared_ptr<Resumer>> resumers) -> Result<std::shared_ptr<Awaiter>> {
     ARROW_ASSIGN_OR_RAISE(auto awaiter,
                           SyncAwaiter::MakeSyncAwaiter(/*num_readies=*/1,
                                                        std::move(resumers)));
@@ -129,4 +130,4 @@ Result<TaskStatus> NaiveParallelScheduler::ScheduleAndWait(const TaskGroup& grou
   return WaitTaskGroup(handle);
 }
 
-}  // namespace broken_pipeline::schedule
+}  // namespace bp::schedule

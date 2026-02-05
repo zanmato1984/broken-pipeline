@@ -23,26 +23,27 @@
 #include <mutex>
 #include <vector>
 
-namespace broken_pipeline::schedule {
+namespace bp::schedule {
 
-class SyncAwaiter final : public ResumersAwaiter,
+class SyncAwaiter final : public Awaiter,
                           public std::enable_shared_from_this<SyncAwaiter> {
  public:
   void Wait();
-  const Resumers& GetResumers() const override { return resumers_; }
+  const std::vector<std::shared_ptr<Resumer>>& GetResumers() const { return resumers_; }
 
   static Result<std::shared_ptr<SyncAwaiter>> MakeSyncAwaiter(std::size_t num_readies,
-                                                              Resumers resumers);
+                                                              std::vector<std::shared_ptr<Resumer>>
+                                                                  resumers);
 
  private:
-  SyncAwaiter(std::size_t num_readies, Resumers resumers);
+  SyncAwaiter(std::size_t num_readies, std::vector<std::shared_ptr<Resumer>> resumers);
 
   std::size_t num_readies_;
-  Resumers resumers_;
+  std::vector<std::shared_ptr<Resumer>> resumers_;
 
   std::mutex mutex_;
   std::condition_variable cv_;
   std::size_t readies_{0};
 };
 
-}  // namespace broken_pipeline::schedule
+}  // namespace bp::schedule

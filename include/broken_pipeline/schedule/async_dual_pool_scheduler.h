@@ -32,7 +32,7 @@ class CPUThreadPoolExecutor;
 class IOThreadPoolExecutor;
 }  // namespace folly
 
-namespace broken_pipeline::schedule {
+namespace bp::schedule {
 
 class AsyncDualPoolScheduler {
  public:
@@ -85,4 +85,4 @@ class AsyncDualPoolScheduler {
   folly::Executor* io_executor_;
 };
 
-}  // namespace broken_pipeline::schedule
+}  // namespace bp::schedule

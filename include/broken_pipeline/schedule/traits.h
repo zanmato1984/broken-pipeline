@@ -25,7 +25,6 @@
 /// - `Batch` maps to `std::shared_ptr<arrow::RecordBatch>`
 
 #include <memory>
-#include <vector>
 
 #include <arrow/record_batch.h>
 #include <arrow/result.h>
@@ -33,7 +32,7 @@
 
 #include <broken_pipeline/broken_pipeline.h>
 
-namespace broken_pipeline::schedule {
+namespace bp::schedule {
 
 struct Context {
   const char* query_name = "broken-pipeline";
@@ -41,7 +40,7 @@ struct Context {
 
 struct Traits {
   using Batch = std::shared_ptr<::arrow::RecordBatch>;
-  using Context = broken_pipeline::schedule::Context;
+  using Context = bp::schedule::Context;
   using Status = ::arrow::Status;
 
   template <class T>
@@ -67,15 +66,6 @@ using TaskHint = bp::TaskHint;
 using Resumer = bp::Resumer;
 using Awaiter = bp::Awaiter;
 
-using ResumerPtr = std::shared_ptr<Resumer>;
-using Resumers = std::vector<ResumerPtr>;
-
-class ResumersAwaiter : public Awaiter {
- public:
-  ~ResumersAwaiter() override = default;
-  virtual const Resumers& GetResumers() const = 0;
-};
-
 using OpOutput = bp::OpOutput<Traits>;
 using OpResult = bp::OpResult<Traits>;
 using PipelineSource = bp::PipelineSource<Traits>;
@@ -92,4 +82,4 @@ using PipelineChannel = Pipeline::Channel;
 
 using bp::Compile;
 
-}  // namespace broken_pipeline::schedule
+}  // namespace bp::schedule

@@ -16,13 +16,15 @@
 
 #include <cassert>
 
-namespace broken_pipeline::schedule {
+namespace bp::schedule {
 
-SyncAwaiter::SyncAwaiter(std::size_t num_readies, Resumers resumers)
+SyncAwaiter::SyncAwaiter(std::size_t num_readies,
+                         std::vector<std::shared_ptr<Resumer>> resumers)
     : num_readies_(num_readies), resumers_(std::move(resumers)) {}
 
 Result<std::shared_ptr<SyncAwaiter>> SyncAwaiter::MakeSyncAwaiter(std::size_t num_readies,
-                                                                  Resumers resumers) {
+                                                                  std::vector<std::shared_ptr<Resumer>>
+                                                                      resumers) {
   if (resumers.empty()) {
     return Status::Invalid("SyncAwaiter: empty resumers");
   }
@@ -30,8 +32,9 @@ Result<std::shared_ptr<SyncAwaiter>> SyncAwaiter::MakeSyncAwaiter(std::size_t nu
     return Status::Invalid("SyncAwaiter: num_readies must be > 0");
   }
 
-  auto awaiter = std::shared_ptr<SyncAwaiter>(new SyncAwaiter(num_readies, resumers));
-  for (auto& resumer : resumers) {
+  auto awaiter =
+      std::shared_ptr<SyncAwaiter>(new SyncAwaiter(num_readies, std::move(resumers)));
+  for (auto& resumer : awaiter->resumers_) {
     auto casted = std::dynamic_pointer_cast<SyncResumer>(resumer);
     if (casted == nullptr) {
       assert(false && "SyncAwaiter expects resumer type SyncResumer");
@@ -53,4 +56,4 @@ void SyncAwaiter::Wait() {
   }
 }
 
-}  // namespace broken_pipeline::schedule
+}  // namespace bp::schedule

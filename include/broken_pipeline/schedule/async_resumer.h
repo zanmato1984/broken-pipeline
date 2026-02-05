@@ -16,8 +16,8 @@
 
 #include "sync_resumer.h"
 
-namespace broken_pipeline::schedule {
+namespace bp::schedule {
 
 class AsyncResumer final : public CallbackResumer {};
 
-}  // namespace broken_pipeline::schedule
+}  // namespace bp::schedule

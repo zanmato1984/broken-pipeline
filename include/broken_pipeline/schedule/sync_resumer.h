@@ -21,7 +21,7 @@
 #include <mutex>
 #include <vector>
 
-namespace broken_pipeline::schedule {
+namespace bp::schedule {
 
 class CallbackResumer : public bp::Resumer {
  public:
@@ -70,4 +70,4 @@ class CallbackResumer : public bp::Resumer {
 
 class SyncResumer final : public CallbackResumer {};
 
-}  // namespace broken_pipeline::schedule
+}  // namespace bp::schedule

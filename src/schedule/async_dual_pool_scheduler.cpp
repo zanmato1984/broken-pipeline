@@ -22,7 +22,7 @@
 #include <exception>
 #include <utility>
 
-namespace broken_pipeline::schedule {
+namespace bp::schedule {
 
 struct AsyncDualPoolScheduler::TaskState {
   Task task;
@@ -70,7 +70,8 @@ TaskContext AsyncDualPoolScheduler::MakeTaskContext(const Traits::Context* conte
   task_ctx.resumer_factory = []() -> Result<std::shared_ptr<Resumer>> {
     return std::make_shared<AsyncResumer>();
   };
-  task_ctx.awaiter_factory = [](Resumers resumers) -> Result<std::shared_ptr<Awaiter>> {
+  task_ctx.awaiter_factory =
+      [](std::vector<std::shared_ptr<Resumer>> resumers) -> Result<std::shared_ptr<Awaiter>> {
     ARROW_ASSIGN_OR_RAISE(auto awaiter,
                           AsyncAwaiter::MakeAsyncAwaiter(/*num_readies=*/1,
                                                         std::move(resumers)));
@@ -200,4 +201,4 @@ Result<TaskStatus> AsyncDualPoolScheduler::ScheduleAndWait(const TaskGroup& grou
   return WaitTaskGroup(handle);
 }
 
-}  // namespace broken_pipeline::schedule
+}  // namespace bp::schedule

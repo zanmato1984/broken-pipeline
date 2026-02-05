@@ -33,9 +33,7 @@
 
 namespace bp_test {
 
-using namespace broken_pipeline::schedule;
-
-namespace sched = broken_pipeline::schedule;
+using namespace bp::schedule;
 
 namespace {
 
@@ -109,6 +107,19 @@ Step ErrorStep(Status status, std::optional<std::optional<Batch>> expected_input
 
 std::optional<std::optional<Batch>> ExpectInput(std::optional<Batch> input) {
   return std::optional<std::optional<Batch>>(std::move(input));
+}
+
+const std::vector<std::shared_ptr<bp::Resumer>>* GetResumers(const bp::Awaiter* awaiter) {
+  if (awaiter == nullptr) {
+    return nullptr;
+  }
+  if (auto* sync_awaiter = dynamic_cast<const bp::schedule::SyncAwaiter*>(awaiter)) {
+    return &sync_awaiter->GetResumers();
+  }
+  if (auto* async_awaiter = dynamic_cast<const bp::schedule::AsyncAwaiter*>(awaiter)) {
+    return &async_awaiter->GetResumers();
+  }
+  return nullptr;
 }
 
 class ScriptedSource final : public SourceOp {
@@ -368,10 +379,10 @@ struct PipeExecTestType {
 };
 
 using PipeExecTestTypes = ::testing::Types<
-    PipeExecTestType<LegacyPipeExecRunner, sched::NaiveParallelScheduler>,
-    PipeExecTestType<LegacyPipeExecRunner, sched::AsyncDualPoolScheduler>,
-    PipeExecTestType<CoroPipeExecRunner, sched::NaiveParallelScheduler>,
-    PipeExecTestType<CoroPipeExecRunner, sched::AsyncDualPoolScheduler>>;
+    PipeExecTestType<LegacyPipeExecRunner, bp::schedule::NaiveParallelScheduler>,
+    PipeExecTestType<LegacyPipeExecRunner, bp::schedule::AsyncDualPoolScheduler>,
+    PipeExecTestType<CoroPipeExecRunner, bp::schedule::NaiveParallelScheduler>,
+    PipeExecTestType<CoroPipeExecRunner, bp::schedule::AsyncDualPoolScheduler>>;
 
 template <class Param>
 class BrokenPipelinePipeExecTest : public ::testing::Test {
@@ -391,11 +402,11 @@ class BrokenPipelinePipeExecTest : public ::testing::Test {
       }
 
       if (result->IsBlocked()) {
-        auto* awaiter = dynamic_cast<sched::ResumersAwaiter*>(result->GetAwaiter().get());
-        if (awaiter == nullptr) {
+        const auto* resumers = GetResumers(result->GetAwaiter().get());
+        if (resumers == nullptr) {
           return Status::Invalid("PipeExecTest: unexpected awaiter type");
         }
-        for (auto& resumer : awaiter->GetResumers()) {
+        for (auto& resumer : *resumers) {
           if (resumer) {
             resumer->Resume();
           }
@@ -473,9 +484,9 @@ TYPED_TEST(BrokenPipelinePipeExecTest, EmptySourceNotReady) {
   ASSERT_TRUE(status_r2->IsBlocked());
   ASSERT_EQ(traces.size(), 1);
 
-  auto* awaiter = dynamic_cast<sched::ResumersAwaiter*>(status_r->GetAwaiter().get());
-  ASSERT_NE(awaiter, nullptr);
-  for (auto& resumer : awaiter->GetResumers()) {
+  const auto* resumers = GetResumers(status_r->GetAwaiter().get());
+  ASSERT_NE(resumers, nullptr);
+  for (auto& resumer : *resumers) {
     resumer->Resume();
   }
 
@@ -513,10 +524,10 @@ TYPED_TEST(BrokenPipelinePipeExecTest, TwoSourceOneNotReady) {
   ASSERT_TRUE(status_r2.ok());
   ASSERT_TRUE(status_r2->IsBlocked());
 
-  auto* awaiter = dynamic_cast<sched::ResumersAwaiter*>(status_r2->GetAwaiter().get());
-  ASSERT_NE(awaiter, nullptr);
-  ASSERT_EQ(awaiter->GetResumers().size(), 1);
-  awaiter->GetResumers()[0]->Resume();
+  const auto* resumers = GetResumers(status_r2->GetAwaiter().get());
+  ASSERT_NE(resumers, nullptr);
+  ASSERT_EQ(resumers->size(), 1);
+  (*resumers)[0]->Resume();
 
   ASSERT_OK(this->RunToDone(group));
 
@@ -780,9 +791,9 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeBlockedResumesWithNullInput) {
   ASSERT_TRUE(status_r2->IsBlocked());
 
   // Resume and complete.
-  auto* awaiter = dynamic_cast<sched::ResumersAwaiter*>(status_r->GetAwaiter().get());
-  ASSERT_NE(awaiter, nullptr);
-  for (auto& resumer : awaiter->GetResumers()) {
+  const auto* resumers = GetResumers(status_r->GetAwaiter().get());
+  ASSERT_NE(resumers, nullptr);
+  for (auto& resumer : *resumers) {
     resumer->Resume();
   }
   ASSERT_OK(this->RunToDone(group));
@@ -817,9 +828,9 @@ TYPED_TEST(BrokenPipelinePipeExecTest, SinkBackpressureResumesWithNullInput) {
   ASSERT_TRUE(status_r.ok());
   ASSERT_TRUE(status_r->IsBlocked());
 
-  auto* awaiter = dynamic_cast<sched::ResumersAwaiter*>(status_r->GetAwaiter().get());
-  ASSERT_NE(awaiter, nullptr);
-  for (auto& resumer : awaiter->GetResumers()) {
+  const auto* resumers = GetResumers(status_r->GetAwaiter().get());
+  ASSERT_NE(resumers, nullptr);
+  for (auto& resumer : *resumers) {
     resumer->Resume();
   }
 
@@ -1157,12 +1168,12 @@ TYPED_TEST(BrokenPipelinePipeExecTest, MultiChannel) {
   ASSERT_TRUE(status_r.ok());
   ASSERT_TRUE(status_r->IsBlocked());
 
-  auto* awaiter = dynamic_cast<sched::ResumersAwaiter*>(status_r->GetAwaiter().get());
-  ASSERT_NE(awaiter, nullptr);
-  ASSERT_EQ(awaiter->GetResumers().size(), 2);
+  const auto* resumers = GetResumers(status_r->GetAwaiter().get());
+  ASSERT_NE(resumers, nullptr);
+  ASSERT_EQ(resumers->size(), 2);
 
   // Resume only channel 0 first (leave channel 1 blocked).
-  awaiter->GetResumers()[0]->Resume();
+  (*resumers)[0]->Resume();
 
   // Channel 0 can now run and reach sink.
   auto status_r2 = group.Task()(this->task_ctx_, 0);
@@ -1178,10 +1189,10 @@ TYPED_TEST(BrokenPipelinePipeExecTest, MultiChannel) {
   auto status_r4 = group.Task()(this->task_ctx_, 0);
   ASSERT_TRUE(status_r4.ok());
   ASSERT_TRUE(status_r4->IsBlocked());
-  auto* awaiter2 = dynamic_cast<sched::ResumersAwaiter*>(status_r4->GetAwaiter().get());
-  ASSERT_NE(awaiter2, nullptr);
-  ASSERT_EQ(awaiter2->GetResumers().size(), 1);
-  awaiter2->GetResumers()[0]->Resume();
+  const auto* resumers2 = GetResumers(status_r4->GetAwaiter().get());
+  ASSERT_NE(resumers2, nullptr);
+  ASSERT_EQ(resumers2->size(), 1);
+  (*resumers2)[0]->Resume();
 
   ASSERT_OK(this->RunToDone(group));
 
@@ -1218,9 +1229,9 @@ TYPED_TEST(BrokenPipelinePipeExecTest, MultiChannelAllBlockedReturnsTaskBlocked)
   ASSERT_TRUE(status_r.ok());
   ASSERT_TRUE(status_r->IsBlocked());
 
-  auto* awaiter = dynamic_cast<sched::ResumersAwaiter*>(status_r->GetAwaiter().get());
-  ASSERT_NE(awaiter, nullptr);
-  ASSERT_EQ(awaiter->GetResumers().size(), 2);
+  const auto* resumers = GetResumers(status_r->GetAwaiter().get());
+  ASSERT_NE(resumers, nullptr);
+  ASSERT_EQ(resumers->size(), 2);
 }
 
 TYPED_TEST(BrokenPipelinePipeExecTest, ErrorCancelsSubsequentCalls) {
