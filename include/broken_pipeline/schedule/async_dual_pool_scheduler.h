@@ -14,6 +14,14 @@
 
 #pragma once
 
+/// @file async_dual_pool_scheduler.h
+///
+/// @brief Folly-based dual-pool scheduler for Broken Pipeline task groups.
+///
+/// This scheduler binds to Folly executors, routes CPU-bound work to a CPU pool,
+/// IO-bound work to an IO pool, and integrates with `AsyncResumer`/`AsyncAwaiter`
+/// for blocked tasks.
+
 #include "async_awaiter.h"
 #include "async_resumer.h"
 #include "traits.h"
@@ -33,10 +41,23 @@ class IOThreadPoolExecutor;
 
 namespace bp::schedule {
 
+/// @brief Production-oriented scheduler using separate CPU and IO pools.
+///
+/// Behavior overview:
+/// - Uses `AsyncResumer` and `AsyncAwaiter` to suspend and resume blocked tasks.
+/// - Routes tasks to the IO pool when `TaskHint::Type::IO` is set.
+/// - Treats `TaskStatus::Yield()` as a handoff point to the IO pool for a single
+///   step, then resumes normal scheduling.
+/// - Aggregates per-task results and optionally invokes the TaskGroup continuation.
+///
+/// The scheduler can either own its executors (constructed with thread counts) or
+/// attach to externally managed Folly executors.
 class AsyncDualPoolScheduler {
  public:
+  /// @brief Construct and own CPU/IO thread pools.
   explicit AsyncDualPoolScheduler(std::size_t cpu_threads = 1, std::size_t io_threads = 1);
 
+  /// @brief Bind to externally managed Folly executors.
   AsyncDualPoolScheduler(folly::Executor* cpu_executor, folly::Executor* io_executor);
 
   ~AsyncDualPoolScheduler();
@@ -46,18 +67,28 @@ class AsyncDualPoolScheduler {
   AsyncDualPoolScheduler(AsyncDualPoolScheduler&&) noexcept = default;
   AsyncDualPoolScheduler& operator=(AsyncDualPoolScheduler&&) noexcept = default;
 
+  /// @brief Create a TaskContext configured with async resumers/awaiters.
   TaskContext MakeTaskContext(const Traits::Context* context = nullptr) const;
 
+  /// @brief Handle returned by ScheduleTaskGroup for later waiting or inspection.
+  ///
+  /// - `future` resolves to the TaskGroup's final status.
+  /// - `statuses` points to an optional, accumulated per-task status trace.
   struct TaskGroupHandle {
     folly::SemiFuture<Result<TaskStatus>> future;
     std::shared_ptr<std::vector<TaskStatus>> statuses;
   };
 
+  /// @brief Schedule all tasks in a TaskGroup and return a handle for completion.
+  ///
+  /// If `statuses` is non-null, per-task status traces are appended to it.
   TaskGroupHandle ScheduleTaskGroup(const TaskGroup& group, TaskContext task_ctx,
                                     std::vector<TaskStatus>* statuses = nullptr);
 
+  /// @brief Wait for a scheduled TaskGroup to finish and return its final status.
   Result<TaskStatus> WaitTaskGroup(TaskGroupHandle& handle) const;
 
+  /// @brief Convenience helper to schedule a TaskGroup and wait for completion.
   Result<TaskStatus> ScheduleAndWait(const TaskGroup& group,
                                      const Traits::Context* context = nullptr,
                                      std::vector<TaskStatus>* statuses = nullptr);

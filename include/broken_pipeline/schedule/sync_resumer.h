@@ -14,6 +14,13 @@
 
 #pragma once
 
+/// @file sync_resumer.h
+///
+/// @brief Resumer implementations for synchronous schedulers.
+///
+/// `CallbackResumer` provides a thread-safe, callback-based implementation of
+/// `bp::Resumer` suitable for both blocking and async schedulers.
+
 #include <broken_pipeline/task.h>
 
 #include <atomic>
@@ -23,10 +30,20 @@
 
 namespace bp::schedule {
 
+/// @brief Resumer that executes callbacks exactly once on first resume.
+///
+/// - `Resume()` is idempotent and triggers all registered callbacks once.
+/// - `AddCallback()` registers a callback to fire on resume (or runs it
+///   immediately if the resumer already fired).
+/// - `IsResumed()` is an atomic readiness check.
+///
+/// This class is the concrete primitive used by both `SyncResumer` and
+/// `AsyncResumer`.
 class CallbackResumer : public bp::Resumer {
  public:
   using Callback = std::function<void()>;
 
+  /// @brief Mark the resumer ready and invoke callbacks exactly once.
   void Resume() override {
     std::vector<Callback> callbacks;
     {
@@ -47,6 +64,10 @@ class CallbackResumer : public bp::Resumer {
 
   bool IsResumed() const override { return ready_.load(std::memory_order_acquire); }
 
+  /// @brief Register a callback to run when the resumer becomes ready.
+  ///
+  /// If the resumer has already fired, the callback is invoked immediately on the
+  /// caller thread.
   void AddCallback(Callback cb) {
     bool call_now = false;
     {
@@ -68,6 +89,7 @@ class CallbackResumer : public bp::Resumer {
   std::vector<Callback> callbacks_;
 };
 
+/// @brief Synchronous resumer used by `SyncAwaiter`.
 class SyncResumer final : public CallbackResumer {};
 
 }  // namespace bp::schedule

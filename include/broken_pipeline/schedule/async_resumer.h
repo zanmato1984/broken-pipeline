@@ -14,10 +14,18 @@
 
 #pragma once
 
+/// @file async_resumer.h
+///
+/// @brief Resumer implementation for asynchronous schedulers.
+///
+/// `AsyncResumer` is a thin alias of `CallbackResumer` that pairs with
+/// `AsyncAwaiter` to drive Folly-based scheduling.
+
 #include "sync_resumer.h"
 
 namespace bp::schedule {
 
+/// @brief Asynchronous resumer used by `AsyncAwaiter`.
 class AsyncResumer final : public CallbackResumer {};
 
 }  // namespace bp::schedule

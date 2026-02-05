@@ -20,6 +20,10 @@ This repository contains:
 - Concrete operators
 - A ready-to-run engine loop that orchestrates task groups
 
+Note: the core library stays scheduler-agnostic, but the optional
+`broken_pipeline::schedule` runtime (documented below) provides ready-to-use
+Arrow-based schedulers for host applications that want one.
+
 ## Public API and layout
 
 All public symbols are in namespace bp (no sub-namespaces).
@@ -32,8 +36,16 @@ Headers:
 - `include/broken_pipeline/pipeline.h`
 - `include/broken_pipeline/pipeline_exec.h`
 
+Optional schedule runtime (Apache Arrow + Folly):
+- `include/broken_pipeline/schedule/traits.h`
+- `include/broken_pipeline/schedule/naive_parallel_scheduler.h`
+- `include/broken_pipeline/schedule/async_dual_pool_scheduler.h`
+- `include/broken_pipeline/schedule/sync_awaiter.h`, `include/broken_pipeline/schedule/async_awaiter.h`
+- `include/broken_pipeline/schedule/sync_resumer.h`, `include/broken_pipeline/schedule/async_resumer.h`
+
 CMake target:
 - `broken_pipeline` (INTERFACE)
+- `broken_pipeline::schedule` (optional compiled library; see Schedule runtime)
 
 Include everything:
 
@@ -320,6 +332,40 @@ PipelineExec only provides building blocks. A host scheduler/executor is respons
   after pipelinexes, and backends as IO-readiness tasks typically scheduled ahead).
 - Executing each Pipelinexe PipeExec task group with the desired scheduling policy.
 
+## Schedule runtime (optional)
+
+`broken_pipeline::schedule` is an optional compiled library that specializes Broken
+Pipeline with Apache Arrow and provides schedulers that host projects can use directly.
+It is designed for applications that want a production-ready scheduler without building
+their own Traits binding or resumer/awaiter primitives.
+
+What it provides:
+- Arrow binding (`bp::schedule::Traits`, `bp::schedule::Batch`, `bp::schedule::Status`,
+  `bp::schedule::Result<T>`).
+- Scheduler primitives: `SyncResumer`/`SyncAwaiter` and `AsyncResumer`/`AsyncAwaiter`.
+- Scheduler implementations:
+  - `AsyncDualPoolScheduler`: Folly-based dual CPU/IO pools; routes work using
+    `TaskHint::Type::IO` and honors `TaskStatus::Yield` as an IO handoff point.
+  - `NaiveParallelScheduler`: a minimal `std::async` scheduler intended for tests and
+    reference usage.
+
+Minimal usage:
+
+```cpp
+#include <broken_pipeline/schedule/async_dual_pool_scheduler.h>
+#include <broken_pipeline/schedule/traits.h>
+
+bp::schedule::Context ctx{.query_name = "demo"};
+bp::schedule::AsyncDualPoolScheduler scheduler(8, 2);
+
+bp::schedule::TaskGroup group = /* from PipelineExec / Pipelinexe */;
+auto status = scheduler.ScheduleAndWait(group, &ctx);
+```
+
+Build and link:
+- Configure with `-DBROKEN_PIPELINE_BUILD_SCHEDULE=ON`.
+- Link against `broken_pipeline::schedule` (which pulls in Arrow, Folly, and glog).
+
 ## Build
 
 The core library is header-only. The optional `broken_pipeline::schedule` runtime is a compiled
@@ -329,6 +375,13 @@ Build the interface target:
 
 ```bash
 cmake -S . -B build
+cmake --build build
+```
+
+Build the schedule runtime:
+
+```bash
+cmake -S . -B build -DBROKEN_PIPELINE_BUILD_SCHEDULE=ON
 cmake --build build
 ```
 

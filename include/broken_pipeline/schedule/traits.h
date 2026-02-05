@@ -34,10 +34,20 @@
 
 namespace bp::schedule {
 
+/// @brief Optional query-level context carried through TaskContext.
+///
+/// Schedulers in `bp::schedule` pass a pointer to this struct in
+/// `TaskContext::context`. Host applications can extend or replace it in their own
+/// Traits if needed.
 struct Context {
+  /// @brief Optional human-readable identifier for the running query/plan.
   const char* query_name = "broken-pipeline";
 };
 
+/// @brief Arrow-backed Traits binding for Broken Pipeline.
+///
+/// - `Batch` is an `arrow::RecordBatch`.
+/// - `Status` / `Result<T>` are Arrow's transport types.
 struct Traits {
   using Batch = std::shared_ptr<::arrow::RecordBatch>;
   using Context = bp::schedule::Context;
@@ -54,32 +64,54 @@ using Status = Traits::Status;
 template <class T>
 using Result = Traits::template Result<T>;
 
+/// @brief Task context alias for Arrow-backed Traits.
 using TaskContext = bp::TaskContext<Traits>;
+/// @brief Task group alias for Arrow-backed Traits.
 using TaskGroup = bp::TaskGroup<Traits>;
 
+/// @brief Task alias for Arrow-backed Traits.
 using Task = bp::Task<Traits>;
+/// @brief Continuation alias for Arrow-backed Traits.
 using Continuation = bp::Continuation<Traits>;
+/// @brief TaskId alias.
 using TaskId = bp::TaskId;
+/// @brief ThreadId alias.
 using ThreadId = bp::ThreadId;
+/// @brief TaskStatus alias.
 using TaskStatus = bp::TaskStatus;
+/// @brief TaskHint alias.
 using TaskHint = bp::TaskHint;
+/// @brief Resumer alias.
 using Resumer = bp::Resumer;
+/// @brief Awaiter alias.
 using Awaiter = bp::Awaiter;
 
+/// @brief Operator output alias for Arrow-backed Traits.
 using OpOutput = bp::OpOutput<Traits>;
+/// @brief Operator result alias for Arrow-backed Traits.
 using OpResult = bp::OpResult<Traits>;
+/// @brief Pipeline source alias.
 using PipelineSource = bp::PipelineSource<Traits>;
+/// @brief Pipeline drain alias.
 using PipelineDrain = bp::PipelineDrain<Traits>;
+/// @brief Pipeline pipe alias.
 using PipelinePipe = bp::PipelinePipe<Traits>;
+/// @brief Pipeline sink alias.
 using PipelineSink = bp::PipelineSink<Traits>;
 
+/// @brief Source operator alias.
 using SourceOp = bp::SourceOp<Traits>;
+/// @brief Pipe operator alias.
 using PipeOp = bp::PipeOp<Traits>;
+/// @brief Sink operator alias.
 using SinkOp = bp::SinkOp<Traits>;
 
+/// @brief Pipeline alias.
 using Pipeline = bp::Pipeline<Traits>;
+/// @brief Pipeline channel alias.
 using PipelineChannel = Pipeline::Channel;
 
+/// @brief Compile helper alias for Arrow-backed Traits.
 using bp::Compile;
 
 }  // namespace bp::schedule

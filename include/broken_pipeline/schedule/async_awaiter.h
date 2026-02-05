@@ -14,6 +14,13 @@
 
 #pragma once
 
+/// @file async_awaiter.h
+///
+/// @brief Folly-based Awaiter implementation for Broken Pipeline schedulers.
+///
+/// `AsyncAwaiter` aggregates one or more `AsyncResumer` instances and exposes a
+/// `folly::SemiFuture` that completes when enough resumers have been resumed.
+
 #include "async_resumer.h"
 #include "traits.h"
 
@@ -26,14 +33,31 @@
 
 namespace bp::schedule {
 
+/// @brief Awaiter that completes a Folly future once enough resumers are ready.
+///
+/// `AsyncAwaiter` is intended for asynchronous schedulers built on Folly. It:
+/// - Registers callbacks on each `AsyncResumer`.
+/// - Counts resume signals until `num_readies` are observed.
+/// - Fulfills an internal promise, completing the `SemiFuture`.
+///
+/// The scheduler typically waits on `GetFuture()` and reschedules the task when it
+/// becomes ready.
 class AsyncAwaiter final : public Awaiter,
                            public std::enable_shared_from_this<AsyncAwaiter> {
  public:
   using Future = folly::SemiFuture<folly::Unit>;
 
+  /// @brief Access the future that becomes ready after enough resumers fire.
+  ///
+  /// The returned `SemiFuture` is move-only; callers typically `std::move` it once.
   Future& GetFuture() { return future_; }
+  /// @brief Access the underlying resumers that feed this awaiter.
   const std::vector<std::shared_ptr<Resumer>>& GetResumers() const { return resumers_; }
 
+  /// @brief Build an AsyncAwaiter with the expected number of resumes.
+  ///
+  /// `resumers` must be non-empty and must all be `AsyncResumer` instances. The
+  /// awaiter completes its future once `num_readies` resumers have resumed.
   static Result<std::shared_ptr<AsyncAwaiter>> MakeAsyncAwaiter(std::size_t num_readies,
                                                                 std::vector<std::shared_ptr<Resumer>>
                                                                     resumers);
