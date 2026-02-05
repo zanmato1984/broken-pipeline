@@ -35,13 +35,9 @@ namespace bp::schedule {
 
 class AsyncDualPoolScheduler {
  public:
-  static constexpr std::size_t kDefaultStepLimit = 1'000'000;
+  explicit AsyncDualPoolScheduler(std::size_t cpu_threads = 1, std::size_t io_threads = 1);
 
-  explicit AsyncDualPoolScheduler(std::size_t cpu_threads = 1, std::size_t io_threads = 1,
-                                  std::size_t step_limit = kDefaultStepLimit);
-
-  AsyncDualPoolScheduler(folly::Executor* cpu_executor, folly::Executor* io_executor,
-                         std::size_t step_limit = kDefaultStepLimit);
+  AsyncDualPoolScheduler(folly::Executor* cpu_executor, folly::Executor* io_executor);
 
   ~AsyncDualPoolScheduler();
 
@@ -72,8 +68,6 @@ class AsyncDualPoolScheduler {
 
   TaskFuture MakeTaskFuture(const Task& task, TaskContext task_ctx, TaskId task_id,
                             std::shared_ptr<std::vector<TaskStatus>> status_log) const;
-
-  std::size_t step_limit_;
 
   std::unique_ptr<folly::CPUThreadPoolExecutor> owned_cpu_executor_;
   std::unique_ptr<folly::IOThreadPoolExecutor> owned_io_executor_;

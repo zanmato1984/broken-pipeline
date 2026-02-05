@@ -27,10 +27,7 @@ namespace bp::schedule {
 
 class NaiveParallelScheduler {
  public:
-  static constexpr std::size_t kDefaultStepLimit = 1'000'000;
-
-  explicit NaiveParallelScheduler(std::size_t step_limit = kDefaultStepLimit)
-      : step_limit_(step_limit) {}
+  NaiveParallelScheduler() = default;
 
   TaskContext MakeTaskContext(const Traits::Context* context = nullptr) const;
 
@@ -53,8 +50,6 @@ class NaiveParallelScheduler {
 
   ConcreteTask MakeTask(const Task& task, const TaskContext& task_ctx, TaskId task_id,
                         std::shared_ptr<std::vector<TaskStatus>> status_log) const;
-
-  std::size_t step_limit_;
 };
 
 }  // namespace bp::schedule

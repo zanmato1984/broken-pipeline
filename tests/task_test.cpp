@@ -40,7 +40,7 @@ class NoopAwaiter final : public Awaiter {};
 
 }  // namespace
 
-TEST(BrokenPipelineTaskTest, BasicTask) {
+TEST(TaskTest, BasicTask) {
   Task task("BasicTask",
             [](const TaskContext&, TaskId) { return TaskStatus::Finished(); });
 
@@ -50,7 +50,7 @@ TEST(BrokenPipelineTaskTest, BasicTask) {
   ASSERT_TRUE(res->IsFinished()) << res->ToString();
 }
 
-TEST(BrokenPipelineTaskTest, BasicContinuation) {
+TEST(TaskTest, BasicContinuation) {
   Continuation cont("BasicContinuation",
                     [](const TaskContext&) { return TaskStatus::Finished(); });
 
@@ -60,7 +60,7 @@ TEST(BrokenPipelineTaskTest, BasicContinuation) {
   ASSERT_TRUE(res->IsFinished()) << res->ToString();
 }
 
-TEST(BrokenPipelineTaskTest, TaskStatus) {
+TEST(TaskTest, TaskStatus) {
   EXPECT_TRUE(TaskStatus::Continue().IsContinue());
   EXPECT_TRUE(TaskStatus::Yield().IsYield());
   EXPECT_TRUE(TaskStatus::Finished().IsFinished());
@@ -78,7 +78,7 @@ TEST(BrokenPipelineTaskTest, TaskStatus) {
   EXPECT_EQ(blocked.ToString(), "BLOCKED");
 }
 
-TEST(BrokenPipelineTaskTest, BasicTaskGroup) {
+TEST(TaskTest, BasicTaskGroup) {
   Task task("T", [](const TaskContext&, TaskId) { return TaskStatus::Finished(); });
   Continuation cont("C", [](const TaskContext&) { return TaskStatus::Finished(); });
 
@@ -90,7 +90,7 @@ TEST(BrokenPipelineTaskTest, BasicTaskGroup) {
   ASSERT_EQ(tg.Continuation()->Name(), "C");
 }
 
-TEST(BrokenPipelineTaskTest, TaskHintDefaultsToCpu) {
+TEST(TaskTest, TaskHintDefaultsToCpu) {
   Task t("T", [](const TaskContext&, TaskId) { return TaskStatus::Finished(); });
   EXPECT_EQ(t.Hint().type, TaskHint::Type::CPU);
 }

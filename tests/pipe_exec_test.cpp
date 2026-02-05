@@ -535,11 +535,11 @@ using PipeExecTestTypes =
                      PipeExecTestType<CoroPipeExecRunner, AsyncDualPoolScheduler>>;
 
 template <class Param>
-class BrokenPipelinePipeExecTest : public ::testing::Test {
+class PipeExecTest : public ::testing::Test {
  public:
   using Scheduler = typename Param::Scheduler;
 
-  BrokenPipelinePipeExecTest() {
+  PipeExecTest() {
     task_ctx_ = scheduler_.MakeTaskContext();
   }
 
@@ -587,7 +587,7 @@ class BrokenPipelinePipeExecTest : public ::testing::Test {
 
  private:
   std::vector<TaskGroup> CollectBackendGroups(const PipelineExec& exec,
-                                             std::size_t idx) const {
+                                              std::size_t idx) const {
     std::vector<TaskGroup> backend_groups;
 
     if (const auto& sink_backend = exec.Sink().backend; sink_backend.has_value()) {
@@ -605,9 +605,9 @@ class BrokenPipelinePipeExecTest : public ::testing::Test {
   }
 };
 
-TYPED_TEST_SUITE(BrokenPipelinePipeExecTest, PipeExecTestTypes);
+TYPED_TEST_SUITE(PipeExecTest, PipeExecTestTypes);
 
-TYPED_TEST(BrokenPipelinePipeExecTest, EmptySourceFinishesWithoutCallingSink) {
+TYPED_TEST(PipeExecTest, EmptySourceFinishesWithoutCallingSink) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces,
@@ -629,7 +629,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, EmptySourceFinishesWithoutCallingSink) {
   EXPECT_EQ(traces[0], (Trace{"Source", "Source", std::nullopt, "FINISHED"}));
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, EmptySourceNotReady) {
+TYPED_TEST(PipeExecTest, EmptySourceNotReady) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source", {{BlockedStep(), OutputStep(OpOutput::Finished())}},
@@ -665,7 +665,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, EmptySourceNotReady) {
   EXPECT_EQ(traces[1], (Trace{"Source", "Source", std::nullopt, "FINISHED"}));
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, TwoSourceOneNotReady) {
+TYPED_TEST(PipeExecTest, TwoSourceOneNotReady) {
   std::vector<Trace> traces;
 
   ScriptedSource source1("Source1", {{BlockedStep(), OutputStep(OpOutput::Finished())}},
@@ -706,7 +706,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, TwoSourceOneNotReady) {
   EXPECT_EQ(traces[2], (Trace{"Source1", "Source", std::nullopt, "FINISHED"}));
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, OnePass) {
+TYPED_TEST(PipeExecTest, OnePass) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -736,7 +736,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, OnePass) {
   EXPECT_EQ(traces[2], (Trace{"Source", "Source", std::nullopt, "FINISHED"}));
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, OnePassDirectFinish) {
+TYPED_TEST(PipeExecTest, OnePassDirectFinish) {
   std::vector<Trace> traces;
 
   ScriptedSource source(
@@ -763,7 +763,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, OnePassDirectFinish) {
   EXPECT_EQ(traces[1], (Trace{"Sink", "Sink", B(1), "PIPE_SINK_NEEDS_MORE"}));
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, OnePassWithPipe) {
+TYPED_TEST(PipeExecTest, OnePassWithPipe) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -792,7 +792,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, OnePassWithPipe) {
   EXPECT_EQ(traces[3], (Trace{"Source", "Source", std::nullopt, "FINISHED"}));
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, PipeNeedsMoreGoesBackToSource) {
+TYPED_TEST(PipeExecTest, PipeNeedsMoreGoesBackToSource) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -827,7 +827,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeNeedsMoreGoesBackToSource) {
   EXPECT_EQ(traces[4], (Trace{"Sink", "Sink", B(2), "PIPE_SINK_NEEDS_MORE"}));
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, PipeHasMoreResumesPipeBeforeSource) {
+TYPED_TEST(PipeExecTest, PipeHasMoreResumesPipeBeforeSource) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -867,7 +867,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeHasMoreResumesPipeBeforeSource) {
   EXPECT_EQ(traces[5], (Trace{"Source", "Source", std::nullopt, "FINISHED"}));
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, PipeYieldHandshake) {
+TYPED_TEST(PipeExecTest, PipeYieldHandshake) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -904,7 +904,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeYieldHandshake) {
   EXPECT_EQ(traces[2], (Trace{"Pipe", "Pipe", std::nullopt, "PIPE_YIELD_BACK"}));
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, PipeAsyncSpill) {
+TYPED_TEST(PipeExecTest, PipeAsyncSpill) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -933,7 +933,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeAsyncSpill) {
   EXPECT_EQ(traces[3], (Trace{"Source", "Source", std::nullopt, "FINISHED"}));
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, PipeBlockedResumesWithNullInput) {
+TYPED_TEST(PipeExecTest, PipeBlockedResumesWithNullInput) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -976,7 +976,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeBlockedResumesWithNullInput) {
   EXPECT_EQ(traces[1], (Trace{"Pipe", "Pipe", B(1), "BLOCKED"}));
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, SinkBackpressureResumesWithNullInput) {
+TYPED_TEST(PipeExecTest, SinkBackpressureResumesWithNullInput) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -1018,7 +1018,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, SinkBackpressureResumesWithNullInput) {
   EXPECT_EQ(traces[2], (Trace{"Sink", "Sink", std::nullopt, "BLOCKED"}));
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, DrainProducesTailOutput) {
+TYPED_TEST(PipeExecTest, DrainProducesTailOutput) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces,
@@ -1052,7 +1052,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, DrainProducesTailOutput) {
   EXPECT_EQ(traces[4], (Trace{"Sink", "Sink", B(2), "PIPE_SINK_NEEDS_MORE"}));
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, Drain) {
+TYPED_TEST(PipeExecTest, Drain) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -1110,7 +1110,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, Drain) {
   EXPECT_EQ(traces[14], (Trace{"Sink", "Sink", B(32), "PIPE_SINK_NEEDS_MORE"}));
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, ImplicitSource) {
+TYPED_TEST(PipeExecTest, ImplicitSource) {
   std::vector<Trace> traces;
 
   auto implicit_source_up = std::make_unique<ScriptedSource>(
@@ -1151,7 +1151,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, ImplicitSource) {
   EXPECT_EQ(traces[4], (Trace{"Sink", "Sink", B(2), "PIPE_SINK_NEEDS_MORE"}));
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, Backpressure) {
+TYPED_TEST(PipeExecTest, Backpressure) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -1190,7 +1190,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, Backpressure) {
   EXPECT_EQ(traces[7], (Trace{"Sink", "Sink", B(20), "PIPE_SINK_NEEDS_MORE"}));
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, MultiPipe) {
+TYPED_TEST(PipeExecTest, MultiPipe) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -1257,7 +1257,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, MultiPipe) {
   EXPECT_EQ(traces[16], (Trace{"Sink", "Sink", B(300), "PIPE_SINK_NEEDS_MORE"}));
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, MultiDrain) {
+TYPED_TEST(PipeExecTest, MultiDrain) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces,
@@ -1306,7 +1306,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, MultiDrain) {
   EXPECT_EQ(traces[9], (Trace{"Sink", "Sink", B(2), "PIPE_SINK_NEEDS_MORE"}));
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, MultiChannel) {
+TYPED_TEST(PipeExecTest, MultiChannel) {
   std::vector<Trace> traces;
 
   ScriptedSource source1(
@@ -1391,7 +1391,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, MultiChannel) {
   EXPECT_EQ(traces[11], (Trace{"Source2", "Source", std::nullopt, "FINISHED"}));
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, MultiChannelAllBlockedReturnsTaskBlocked) {
+TYPED_TEST(PipeExecTest, MultiChannelAllBlockedReturnsTaskBlocked) {
   std::vector<Trace> traces;
 
   ScriptedSource source1("Source1", {{BlockedStep()}}, &traces);
@@ -1412,7 +1412,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, MultiChannelAllBlockedReturnsTaskBlocked)
   ASSERT_EQ(resumers->size(), 2);
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, ErrorCancelsSubsequentCalls) {
+TYPED_TEST(PipeExecTest, ErrorCancelsSubsequentCalls) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source", {{ErrorStep(Status::UnknownError("boom"))}}, &traces);
@@ -1431,7 +1431,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, ErrorCancelsSubsequentCalls) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, DirectSourceError) {
+TYPED_TEST(PipeExecTest, DirectSourceError) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source", {{ErrorStep(Status::UnknownError("42"))}}, &traces,
@@ -1454,7 +1454,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, DirectSourceError) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, SourceErrorAfterBlocked) {
+TYPED_TEST(PipeExecTest, SourceErrorAfterBlocked) {
   std::vector<Trace> traces;
 
   ScriptedSource source(
@@ -1478,7 +1478,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, SourceErrorAfterBlocked) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, SourceError) {
+TYPED_TEST(PipeExecTest, SourceError) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -1504,7 +1504,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, SourceError) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, PipeError) {
+TYPED_TEST(PipeExecTest, PipeError) {
   std::vector<Trace> traces;
 
   ScriptedSource source(
@@ -1531,7 +1531,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeError) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, PipeErrorAfterEven) {
+TYPED_TEST(PipeExecTest, PipeErrorAfterEven) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -1563,7 +1563,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeErrorAfterEven) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, PipeErrorAfterNeedsMore) {
+TYPED_TEST(PipeExecTest, PipeErrorAfterNeedsMore) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -1593,7 +1593,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeErrorAfterNeedsMore) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, PipeErrorAfterHasMore) {
+TYPED_TEST(PipeExecTest, PipeErrorAfterHasMore) {
   std::vector<Trace> traces;
 
   ScriptedSource source(
@@ -1624,7 +1624,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeErrorAfterHasMore) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, PipeErrorAfterYieldBack) {
+TYPED_TEST(PipeExecTest, PipeErrorAfterYieldBack) {
   std::vector<Trace> traces;
 
   ScriptedSource source(
@@ -1654,7 +1654,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeErrorAfterYieldBack) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, PipeErrorAfterBlocked) {
+TYPED_TEST(PipeExecTest, PipeErrorAfterBlocked) {
   std::vector<Trace> traces;
 
   ScriptedSource source(
@@ -1683,7 +1683,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, PipeErrorAfterBlocked) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, DrainError) {
+TYPED_TEST(PipeExecTest, DrainError) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces,
@@ -1709,7 +1709,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, DrainError) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, DrainErrorAfterHasMore) {
+TYPED_TEST(PipeExecTest, DrainErrorAfterHasMore) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces,
@@ -1738,7 +1738,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, DrainErrorAfterHasMore) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, DrainErrorAfterYieldBack) {
+TYPED_TEST(PipeExecTest, DrainErrorAfterYieldBack) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces,
@@ -1766,7 +1766,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, DrainErrorAfterYieldBack) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, DrainErrorAfterBlocked) {
+TYPED_TEST(PipeExecTest, DrainErrorAfterBlocked) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source", {{OutputStep(OpOutput::Finished())}}, &traces,
@@ -1792,7 +1792,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, DrainErrorAfterBlocked) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, SinkError) {
+TYPED_TEST(PipeExecTest, SinkError) {
   std::vector<Trace> traces;
 
   ScriptedSource source(
@@ -1818,7 +1818,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, SinkError) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, SinkErrorAfterNeedsMore) {
+TYPED_TEST(PipeExecTest, SinkErrorAfterNeedsMore) {
   std::vector<Trace> traces;
 
   ScriptedSource source("Source",
@@ -1849,7 +1849,7 @@ TYPED_TEST(BrokenPipelinePipeExecTest, SinkErrorAfterNeedsMore) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-TYPED_TEST(BrokenPipelinePipeExecTest, SinkErrorAfterBlocked) {
+TYPED_TEST(PipeExecTest, SinkErrorAfterBlocked) {
   std::vector<Trace> traces;
 
   ScriptedSource source(

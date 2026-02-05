@@ -17,7 +17,6 @@
 #include <folly/executors/CPUThreadPoolExecutor.h>
 #include <folly/executors/IOThreadPoolExecutor.h>
 
-#include <atomic>
 #include <cassert>
 #include <exception>
 #include <utility>
@@ -29,36 +28,29 @@ struct AsyncDualPoolScheduler::TaskState {
   TaskContext task_ctx;
   TaskId task_id;
 
-  std::size_t step_limit;
   std::shared_ptr<std::vector<TaskStatus>> status_log;
 
-  std::size_t steps = 0;
   Result<TaskStatus> result = TaskStatus::Continue();
 
-  TaskState(const Task& task_, TaskContext task_ctx_, TaskId task_id_, std::size_t step_limit_,
+  TaskState(const Task& task_, TaskContext task_ctx_, TaskId task_id_,
             std::shared_ptr<std::vector<TaskStatus>> status_log_)
       : task(task_),
         task_ctx(std::move(task_ctx_)),
         task_id(task_id_),
-        step_limit(step_limit_),
         status_log(std::move(status_log_)) {}
 };
 
 AsyncDualPoolScheduler::~AsyncDualPoolScheduler() = default;
 
-AsyncDualPoolScheduler::AsyncDualPoolScheduler(std::size_t cpu_threads, std::size_t io_threads,
-                                               std::size_t step_limit)
-    : step_limit_(step_limit),
-      owned_cpu_executor_(std::make_unique<folly::CPUThreadPoolExecutor>(cpu_threads)),
+AsyncDualPoolScheduler::AsyncDualPoolScheduler(std::size_t cpu_threads, std::size_t io_threads)
+    : owned_cpu_executor_(std::make_unique<folly::CPUThreadPoolExecutor>(cpu_threads)),
       owned_io_executor_(std::make_unique<folly::IOThreadPoolExecutor>(io_threads)),
       cpu_executor_(owned_cpu_executor_.get()),
       io_executor_(owned_io_executor_.get()) {}
 
 AsyncDualPoolScheduler::AsyncDualPoolScheduler(folly::Executor* cpu_executor,
-                                               folly::Executor* io_executor,
-                                               std::size_t step_limit)
-    : step_limit_(step_limit),
-      cpu_executor_(cpu_executor),
+                                               folly::Executor* io_executor)
+    : cpu_executor_(cpu_executor),
       io_executor_(io_executor) {}
 
 TaskContext AsyncDualPoolScheduler::MakeTaskContext(const Traits::Context* context) const {
@@ -80,8 +72,8 @@ TaskContext AsyncDualPoolScheduler::MakeTaskContext(const Traits::Context* conte
 AsyncDualPoolScheduler::TaskFuture AsyncDualPoolScheduler::MakeTaskFuture(
     const Task& task, TaskContext task_ctx, TaskId task_id,
     std::shared_ptr<std::vector<TaskStatus>> status_log) const {
-  auto state = std::make_shared<TaskState>(task, std::move(task_ctx), task_id, step_limit_,
-                                           std::move(status_log));
+  auto state =
+      std::make_shared<TaskState>(task, std::move(task_ctx), task_id, std::move(status_log));
 
   auto pred = [state]() {
     return state->result.ok() && !state->result->IsFinished() &&
@@ -89,11 +81,6 @@ AsyncDualPoolScheduler::TaskFuture AsyncDualPoolScheduler::MakeTaskFuture(
   };
 
   auto thunk = [this, state]() -> folly::Future<folly::Unit> {
-    if (++state->steps > state->step_limit) {
-      state->result = Status::Invalid("AsyncDualPoolScheduler: task step limit exceeded");
-      return folly::makeFuture();
-    }
-
     if (state->result->IsBlocked()) {
       auto awaiter = std::dynamic_pointer_cast<AsyncAwaiter>(state->result->GetAwaiter());
       if (!awaiter) {

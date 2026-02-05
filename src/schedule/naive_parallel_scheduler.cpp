@@ -43,14 +43,8 @@ NaiveParallelScheduler::ConcreteTask NaiveParallelScheduler::MakeTask(
                     [this, task, task_ctx, task_id,
                      status_log = std::move(status_log)]() -> Result<TaskStatus> {
                       Result<TaskStatus> result = TaskStatus::Continue();
-                      std::size_t steps = 0;
                       while (result.ok() && !result->IsFinished() &&
                              !result->IsCancelled()) {
-                        if (++steps > step_limit_) {
-                          return Status::Invalid(
-                              "NaiveParallelScheduler: task step limit exceeded");
-                        }
-
                         if (result->IsBlocked()) {
                           auto awaiter =
                               std::dynamic_pointer_cast<SyncAwaiter>(result->GetAwaiter());
