@@ -22,7 +22,7 @@
 /// `folly::SemiFuture` that completes when enough resumers have been resumed.
 
 #include "callback_resumer.h"
-#include "traits.h"
+#include "../traits.h"
 
 #include <cstddef>
 #include <memory>

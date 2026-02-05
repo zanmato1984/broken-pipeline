@@ -21,7 +21,7 @@
 /// `ConditionalAwaiter` aggregates one or more `CallbackResumer` instances and blocks the
 /// calling thread on a condition variable until enough resumers have fired.
 
-#include "traits.h"
+#include "../traits.h"
 #include "callback_resumer.h"
 
 #include <condition_variable>
