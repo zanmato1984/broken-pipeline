@@ -1,4 +1,4 @@
-#include <broken_pipeline_schedule/scheduler.h>
+#include <broken_pipeline/schedule/scheduler.h>
 
 namespace bp::schedule {
 

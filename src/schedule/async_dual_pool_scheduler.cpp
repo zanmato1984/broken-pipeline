@@ -1,4 +1,4 @@
-#include <broken_pipeline_schedule/async_dual_pool_scheduler.h>
+#include <broken_pipeline/schedule/async_dual_pool_scheduler.h>
 
 #include <folly/executors/CPUThreadPoolExecutor.h>
 #include <folly/executors/IOThreadPoolExecutor.h>

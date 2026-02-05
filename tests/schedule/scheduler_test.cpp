@@ -1,7 +1,7 @@
 #include "arrow_traits.h"
 
-#include <broken_pipeline_schedule/async_dual_pool_scheduler.h>
-#include <broken_pipeline_schedule/naive_parallel_scheduler.h>
+#include <broken_pipeline/schedule/async_dual_pool_scheduler.h>
+#include <broken_pipeline/schedule/naive_parallel_scheduler.h>
 
 #include <arrow/testing/gtest_util.h>
 

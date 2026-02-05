@@ -1,5 +1,5 @@
-#include <broken_pipeline_schedule/async_awaiter.h>
-#include <broken_pipeline_schedule/async_resumer.h>
+#include <broken_pipeline/schedule/async_awaiter.h>
+#include <broken_pipeline/schedule/async_resumer.h>
 
 #include <arrow/testing/gtest_util.h>
 

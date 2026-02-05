@@ -1,4 +1,4 @@
-#include <broken_pipeline_schedule/async_awaiter.h>
+#include <broken_pipeline/schedule/async_awaiter.h>
 
 #include <cstddef>
 #include <future>

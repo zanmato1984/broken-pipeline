@@ -102,12 +102,13 @@ endif()
 install(
   DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/broken_pipeline/"
   DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/broken_pipeline"
+  PATTERN "schedule" EXCLUDE
 )
 
 if(BROKEN_PIPELINE_BUILD_SCHEDULE)
   install(
-    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/broken_pipeline_schedule/"
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/broken_pipeline_schedule"
+    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/broken_pipeline/schedule/"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/broken_pipeline/schedule"
   )
 endif()
 

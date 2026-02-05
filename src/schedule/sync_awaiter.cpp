@@ -1,4 +1,4 @@
-#include <broken_pipeline_schedule/sync_awaiter.h>
+#include <broken_pipeline/schedule/sync_awaiter.h>
 
 namespace bp::schedule {
 

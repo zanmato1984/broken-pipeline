@@ -1,4 +1,4 @@
-#include <broken_pipeline_schedule/naive_parallel_scheduler.h>
+#include <broken_pipeline/schedule/naive_parallel_scheduler.h>
 
 #include <future>
 #include <utility>

@@ -1,5 +1,5 @@
-#include <broken_pipeline_schedule/sync_awaiter.h>
-#include <broken_pipeline_schedule/sync_resumer.h>
+#include <broken_pipeline/schedule/sync_awaiter.h>
+#include <broken_pipeline/schedule/sync_resumer.h>
 
 #include <arrow/testing/gtest_util.h>
 
