@@ -23,9 +23,16 @@
 
 #include <memory>
 
-namespace bp_test {
+namespace bp::test {
 
-using namespace bp::schedule;
+using bp::schedule::Awaiter;
+using bp::schedule::Continuation;
+using bp::schedule::Task;
+using bp::schedule::TaskContext;
+using bp::schedule::TaskGroup;
+using bp::schedule::TaskHint;
+using bp::schedule::TaskId;
+using bp::schedule::TaskStatus;
 
 namespace {
 
@@ -88,4 +95,4 @@ TEST(BrokenPipelineTaskTest, TaskHintDefaultsToCpu) {
   EXPECT_EQ(t.Hint().type, TaskHint::Type::CPU);
 }
 
-}  // namespace bp_test
+}  // namespace bp::test

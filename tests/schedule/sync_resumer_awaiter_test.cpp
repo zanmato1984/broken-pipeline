@@ -24,6 +24,8 @@
 #include <future>
 #include <thread>
 
+namespace bp::schedule::test {
+
 namespace {
 
 constexpr std::size_t kRaceRounds = 2000;
@@ -32,7 +34,7 @@ constexpr std::size_t kManyResumers = 256;
 }  // namespace
 
 TEST(SyncResumerTest, Basic) {
-  auto resumer = std::make_shared<bp::schedule::SyncResumer>();
+  auto resumer = std::make_shared<SyncResumer>();
   bool cb1_called = false, cb2_called = false, cb3_called = false;
   resumer->AddCallback([&]() { cb1_called = true; });
   resumer->AddCallback([&]() { cb2_called = cb1_called; });
@@ -48,7 +50,7 @@ TEST(SyncResumerTest, Basic) {
 }
 
 TEST(SyncResumerTest, Interleaving) {
-  auto resumer = std::make_shared<bp::schedule::SyncResumer>();
+  auto resumer = std::make_shared<SyncResumer>();
   std::atomic_bool cb1_called = false, cb2_called = false, cb3_called = false;
   resumer->AddCallback([&]() { cb1_called.store(true, std::memory_order_release); });
   resumer->AddCallback([&]() {
@@ -76,7 +78,7 @@ TEST(SyncResumerTest, Interleaving) {
 }
 
 TEST(SyncResumerTest, Interleaving2) {
-  auto resumer = std::make_shared<bp::schedule::SyncResumer>();
+  auto resumer = std::make_shared<SyncResumer>();
   std::atomic_bool cb1_called = false, cb2_called = false, cb3_called = false;
   resumer->AddCallback([&]() { cb1_called.store(true, std::memory_order_release); });
   resumer->AddCallback([&]() {
@@ -104,10 +106,9 @@ TEST(SyncResumerTest, Interleaving2) {
 }
 
 TEST(SyncAwaiterTest, SingleWaitFirst) {
-  std::shared_ptr<bp::Resumer> resumer = std::make_shared<bp::schedule::SyncResumer>();
+  std::shared_ptr<Resumer> resumer = std::make_shared<SyncResumer>();
   ASSERT_OK_AND_ASSIGN(auto awaiter,
-                       bp::schedule::SyncAwaiter::MakeSyncAwaiter(/*num_readies=*/1,
-                                                                  {resumer}));
+                       SyncAwaiter::MakeSyncAwaiter(/*num_readies=*/1, {resumer}));
 
   std::atomic_bool finished = false;
   auto future = std::async(std::launch::async, [&]() {
@@ -122,10 +123,9 @@ TEST(SyncAwaiterTest, SingleWaitFirst) {
 }
 
 TEST(SyncAwaiterTest, SingleResumeFirst) {
-  std::shared_ptr<bp::Resumer> resumer = std::make_shared<bp::schedule::SyncResumer>();
+  std::shared_ptr<Resumer> resumer = std::make_shared<SyncResumer>();
   ASSERT_OK_AND_ASSIGN(auto awaiter,
-                       bp::schedule::SyncAwaiter::MakeSyncAwaiter(/*num_readies=*/1,
-                                                                  {resumer}));
+                       SyncAwaiter::MakeSyncAwaiter(/*num_readies=*/1, {resumer}));
 
   resumer->Resume();
   auto future = std::async(std::launch::async, [&]() -> bool {
@@ -138,10 +138,9 @@ TEST(SyncAwaiterTest, SingleResumeFirst) {
 
 TEST(SyncAwaiterTest, Race) {
   for (std::size_t i = 0; i < kRaceRounds; ++i) {
-    std::shared_ptr<bp::Resumer> resumer = std::make_shared<bp::schedule::SyncResumer>();
+    std::shared_ptr<Resumer> resumer = std::make_shared<SyncResumer>();
     ASSERT_OK_AND_ASSIGN(auto awaiter,
-                         bp::schedule::SyncAwaiter::MakeSyncAwaiter(/*num_readies=*/1,
-                                                                    {resumer}));
+                         SyncAwaiter::MakeSyncAwaiter(/*num_readies=*/1, {resumer}));
 
     std::atomic_bool resumer_ready = false, awaiter_ready = false, kickoff = false;
     auto resume_future = std::async(std::launch::async, [&]() {
@@ -168,13 +167,12 @@ TEST(SyncAwaiterTest, Race) {
 
 TEST(SyncAwaiterTest, AnyWaitFirst) {
   constexpr std::size_t lucky = 42;
-  std::vector<std::shared_ptr<bp::Resumer>> resumers(kManyResumers);
+  std::vector<std::shared_ptr<Resumer>> resumers(kManyResumers);
   for (auto& resumer : resumers) {
-    resumer = std::make_shared<bp::schedule::SyncResumer>();
+    resumer = std::make_shared<SyncResumer>();
   }
   ASSERT_OK_AND_ASSIGN(auto awaiter,
-                       bp::schedule::SyncAwaiter::MakeSyncAwaiter(/*num_readies=*/1,
-                                                                  resumers));
+                       SyncAwaiter::MakeSyncAwaiter(/*num_readies=*/1, resumers));
 
   std::atomic_bool finished = false;
   auto future = std::async(std::launch::async, [&]() {
@@ -196,14 +194,13 @@ TEST(SyncAwaiterTest, AnyWaitFirst) {
 
 TEST(SyncAwaiterTest, AnyReentrantWait) {
   constexpr std::size_t lucky = 42;
-  std::vector<std::shared_ptr<bp::Resumer>> resumers(kManyResumers);
+  std::vector<std::shared_ptr<Resumer>> resumers(kManyResumers);
   for (auto& resumer : resumers) {
-    resumer = std::make_shared<bp::schedule::SyncResumer>();
+    resumer = std::make_shared<SyncResumer>();
   }
 
   ASSERT_OK_AND_ASSIGN(auto awaiter1,
-                       bp::schedule::SyncAwaiter::MakeSyncAwaiter(/*num_readies=*/1,
-                                                                  resumers));
+                       SyncAwaiter::MakeSyncAwaiter(/*num_readies=*/1, resumers));
   resumers[lucky]->Resume();
   awaiter1->Wait();
   for (std::size_t i = 0; i < kManyResumers; ++i) {
@@ -214,10 +211,9 @@ TEST(SyncAwaiterTest, AnyReentrantWait) {
     }
   }
 
-  resumers[lucky] = std::make_shared<bp::schedule::SyncResumer>();
+  resumers[lucky] = std::make_shared<SyncResumer>();
   ASSERT_OK_AND_ASSIGN(auto awaiter2,
-                       bp::schedule::SyncAwaiter::MakeSyncAwaiter(/*num_readies=*/1,
-                                                                  resumers));
+                       SyncAwaiter::MakeSyncAwaiter(/*num_readies=*/1, resumers));
   resumers[lucky]->Resume();
   awaiter2->Wait();
   for (std::size_t i = 0; i < kManyResumers; ++i) {
@@ -230,14 +226,13 @@ TEST(SyncAwaiterTest, AnyReentrantWait) {
 }
 
 TEST(SyncAwaiterTest, AnyResumeFirst) {
-  std::vector<std::shared_ptr<bp::Resumer>> resumers(kManyResumers);
+  std::vector<std::shared_ptr<Resumer>> resumers(kManyResumers);
   for (auto& resumer : resumers) {
-    resumer = std::make_shared<bp::schedule::SyncResumer>();
+    resumer = std::make_shared<SyncResumer>();
     resumer->Resume();
   }
   ASSERT_OK_AND_ASSIGN(auto awaiter,
-                       bp::schedule::SyncAwaiter::MakeSyncAwaiter(/*num_readies=*/1,
-                                                                  resumers));
+                       SyncAwaiter::MakeSyncAwaiter(/*num_readies=*/1, resumers));
 
   auto future = std::async(std::launch::async, [&]() -> bool {
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -252,13 +247,12 @@ TEST(SyncAwaiterTest, AnyResumeFirst) {
 
 TEST(SyncAwaiterTest, LifeSpan) {
   constexpr std::size_t lucky = 42;
-  std::vector<std::shared_ptr<bp::Resumer>> resumers(kManyResumers);
+  std::vector<std::shared_ptr<Resumer>> resumers(kManyResumers);
   for (auto& resumer : resumers) {
-    resumer = std::make_shared<bp::schedule::SyncResumer>();
+    resumer = std::make_shared<SyncResumer>();
   }
   ASSERT_OK_AND_ASSIGN(auto awaiter,
-                       bp::schedule::SyncAwaiter::MakeSyncAwaiter(/*num_readies=*/1,
-                                                                  resumers));
+                       SyncAwaiter::MakeSyncAwaiter(/*num_readies=*/1, resumers));
 
   std::atomic_bool finished = false;
   auto future = std::async(std::launch::async, [&]() {
@@ -279,3 +273,5 @@ TEST(SyncAwaiterTest, LifeSpan) {
   }
   future.get();
 }
+
+}  // namespace bp::schedule::test

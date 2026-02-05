@@ -31,7 +31,7 @@
 #include <unordered_set>
 #include <vector>
 
-using namespace bp::schedule;
+namespace bp::schedule::test {
 
 namespace {
 
@@ -166,7 +166,7 @@ TYPED_TEST(ScheduleTest, YieldTask) {
 TYPED_TEST(ScheduleTest, BlockedTask) {
   constexpr std::size_t num_tasks = 32;
   std::atomic<std::size_t> counter = 0;
-  std::vector<std::shared_ptr<bp::Resumer>> resumers(num_tasks);
+  std::vector<std::shared_ptr<Resumer>> resumers(num_tasks);
   std::atomic<std::size_t> num_resumers_set = 0;
 
   Task blocked_task(
@@ -174,7 +174,7 @@ TYPED_TEST(ScheduleTest, BlockedTask) {
       [&](const TaskContext& task_ctx, TaskId task_id) -> Result<TaskStatus> {
         if (resumers[task_id] == nullptr) {
           ARROW_ASSIGN_OR_RAISE(auto resumer, task_ctx.resumer_factory());
-          std::vector<std::shared_ptr<bp::Resumer>> one{resumer};
+          std::vector<std::shared_ptr<Resumer>> one{resumer};
           ARROW_ASSIGN_OR_RAISE(auto awaiter, task_ctx.awaiter_factory(std::move(one)));
           resumers[task_id] = std::move(resumer);
           num_resumers_set++;
@@ -228,7 +228,7 @@ TYPED_TEST(ScheduleTest, BlockedTaskResumerErrorNotify) {
   std::atomic<std::size_t> counter = 0;
 
   std::mutex resumers_mutex;
-  std::vector<std::shared_ptr<bp::Resumer>> resumers(num_tasks);
+  std::vector<std::shared_ptr<Resumer>> resumers(num_tasks);
   std::atomic<std::size_t> num_resumers_set = 0;
   std::atomic_bool resumer_task_errored = false;
   std::atomic_bool unblock_requested = false;
@@ -240,7 +240,7 @@ TYPED_TEST(ScheduleTest, BlockedTaskResumerErrorNotify) {
           std::lock_guard<std::mutex> lock(resumers_mutex);
           if (resumers[task_id] == nullptr) {
             ARROW_ASSIGN_OR_RAISE(auto resumer, task_ctx.resumer_factory());
-            std::vector<std::shared_ptr<bp::Resumer>> one{resumer};
+            std::vector<std::shared_ptr<Resumer>> one{resumer};
             ARROW_ASSIGN_OR_RAISE(auto awaiter, task_ctx.awaiter_factory(std::move(one)));
             resumers[task_id] = resumer;
             num_resumers_set++;
@@ -282,7 +282,7 @@ TYPED_TEST(ScheduleTest, BlockedTaskResumerErrorNotify) {
     while (!resumer_task_errored.load()) {
       if (std::chrono::steady_clock::now() > deadline) {
         unblock_requested = true;
-        std::vector<std::shared_ptr<bp::Resumer>> snapshot;
+        std::vector<std::shared_ptr<Resumer>> snapshot;
         {
           std::lock_guard<std::mutex> lock(resumers_mutex);
           snapshot = resumers;
@@ -298,7 +298,7 @@ TYPED_TEST(ScheduleTest, BlockedTaskResumerErrorNotify) {
     }
 
     unblock_requested = true;
-    std::vector<std::shared_ptr<bp::Resumer>> snapshot;
+    std::vector<std::shared_ptr<Resumer>> snapshot;
     {
       std::lock_guard<std::mutex> lock(resumers_mutex);
       snapshot = resumers;
@@ -355,3 +355,5 @@ TYPED_TEST(ScheduleTest, ErrorAndCancel) {
   ASSERT_EQ(result.status().message(), "42");
   kickoff.get();
 }
+
+}  // namespace bp::schedule::test

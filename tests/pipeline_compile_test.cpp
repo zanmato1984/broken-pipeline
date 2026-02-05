@@ -24,9 +24,24 @@
 #include <utility>
 #include <vector>
 
-namespace bp_test {
+namespace bp::test {
 
-using namespace bp::schedule;
+using bp::schedule::Batch;
+using bp::schedule::Compile;
+using bp::schedule::OpOutput;
+using bp::schedule::OpResult;
+using bp::schedule::PipeOp;
+using bp::schedule::Pipeline;
+using bp::schedule::PipelineChannel;
+using bp::schedule::PipelineDrain;
+using bp::schedule::PipelinePipe;
+using bp::schedule::PipelineSink;
+using bp::schedule::PipelineSource;
+using bp::schedule::SinkOp;
+using bp::schedule::SourceOp;
+using bp::schedule::TaskContext;
+using bp::schedule::TaskGroup;
+using bp::schedule::ThreadId;
 
 namespace {
 
@@ -284,4 +299,4 @@ TEST(BrokenPipelinePipelineCompileTest, OddQuadroStagePipeline) {
   ASSERT_EQ(seg3.Channels()[0].source_op, implicit_source4);
 }
 
-}  // namespace bp_test
+}  // namespace bp::test

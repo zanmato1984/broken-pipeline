@@ -31,9 +31,38 @@
 #include <utility>
 #include <vector>
 
-namespace bp_test {
+namespace bp::test {
 
-using namespace bp::schedule;
+using bp::schedule::AsyncAwaiter;
+using bp::schedule::AsyncDualPoolScheduler;
+using bp::schedule::Awaiter;
+using bp::schedule::Batch;
+using bp::schedule::Compile;
+using bp::schedule::Continuation;
+using bp::schedule::NaiveParallelScheduler;
+using bp::schedule::OpOutput;
+using bp::schedule::OpResult;
+using bp::schedule::PipeOp;
+using bp::schedule::Pipeline;
+using bp::schedule::PipelineChannel;
+using bp::schedule::PipelineDrain;
+using bp::schedule::PipelinePipe;
+using bp::schedule::PipelineSink;
+using bp::schedule::PipelineSource;
+using bp::schedule::Resumer;
+using bp::schedule::Result;
+using bp::schedule::SinkOp;
+using bp::schedule::SourceOp;
+using bp::schedule::Status;
+using bp::schedule::SyncAwaiter;
+using bp::schedule::Task;
+using bp::schedule::TaskContext;
+using bp::schedule::TaskGroup;
+using bp::schedule::TaskHint;
+using bp::schedule::TaskId;
+using bp::schedule::TaskStatus;
+using bp::schedule::ThreadId;
+using bp::schedule::Traits;
 
 namespace {
 
@@ -109,7 +138,7 @@ std::optional<std::optional<Batch>> ExpectInput(std::optional<Batch> input) {
   return std::optional<std::optional<Batch>>(std::move(input));
 }
 
-const std::vector<std::shared_ptr<bp::Resumer>>* GetResumers(const bp::Awaiter* awaiter) {
+const std::vector<std::shared_ptr<Resumer>>* GetResumers(const Awaiter* awaiter) {
   if (awaiter == nullptr) {
     return nullptr;
   }
@@ -1673,4 +1702,4 @@ TYPED_TEST(BrokenPipelinePipeExecTest, SinkErrorAfterBlocked) {
   ASSERT_TRUE(status_r2->IsCancelled());
 }
 
-}  // namespace bp_test
+}  // namespace bp::test
