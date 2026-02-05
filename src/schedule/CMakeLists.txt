@@ -33,7 +33,7 @@ add_library(broken_pipeline_schedule
   future_awaiter.cpp
   async_dual_pool_scheduler.cpp
   naive_parallel_scheduler.cpp
-  conditonal_awaiter.cpp
+  conditional_awaiter.cpp
 )
 add_library(broken_pipeline::schedule ALIAS broken_pipeline_schedule)
 

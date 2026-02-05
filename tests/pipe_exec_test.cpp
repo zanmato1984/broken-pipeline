@@ -55,7 +55,7 @@ using bp::schedule::Resumer;
 using bp::schedule::SinkOp;
 using bp::schedule::SourceOp;
 using bp::schedule::Status;
-using bp::schedule::detail::ConditonalAwaiter;
+using bp::schedule::detail::ConditionalAwaiter;
 using bp::schedule::Task;
 using bp::schedule::TaskContext;
 using bp::schedule::TaskGroup;
@@ -143,7 +143,7 @@ const std::vector<std::shared_ptr<Resumer>>* GetResumers(const Awaiter* awaiter)
   if (awaiter == nullptr) {
     return nullptr;
   }
-  if (auto* sync_awaiter = dynamic_cast<const ConditonalAwaiter*>(awaiter)) {
+  if (auto* sync_awaiter = dynamic_cast<const ConditionalAwaiter*>(awaiter)) {
     return &sync_awaiter->GetResumers();
   }
   if (auto* async_awaiter = dynamic_cast<const FutureAwaiter*>(awaiter)) {

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <broken_pipeline/schedule/detail/callback_resumer.h>
-#include <broken_pipeline/schedule/detail/conditonal_awaiter.h>
+#include <broken_pipeline/schedule/detail/conditional_awaiter.h>
 
 #include <arrow/testing/gtest_util.h>
 
@@ -34,7 +34,7 @@ constexpr std::size_t kManyResumers = 256;
 }  // namespace
 
 using detail::CallbackResumer;
-using detail::ConditonalAwaiter;
+using detail::ConditionalAwaiter;
 
 TEST(CallbackResumerTest, Basic) {
   auto resumer = std::make_shared<CallbackResumer>();
@@ -108,10 +108,10 @@ TEST(CallbackResumerTest, Interleaving2) {
   resume_future.get();
 }
 
-TEST(ConditonalAwaiterTest, SingleWaitFirst) {
+TEST(ConditionalAwaiterTest, SingleWaitFirst) {
   std::shared_ptr<Resumer> resumer = std::make_shared<CallbackResumer>();
   ASSERT_OK_AND_ASSIGN(auto awaiter,
-                       ConditonalAwaiter::MakeConditonalAwaiter(/*num_readies=*/1, {resumer}));
+                       ConditionalAwaiter::MakeConditionalAwaiter(/*num_readies=*/1, {resumer}));
 
   std::atomic_bool finished = false;
   auto future = std::async(std::launch::async, [&]() {
@@ -125,10 +125,10 @@ TEST(ConditonalAwaiterTest, SingleWaitFirst) {
   future.get();
 }
 
-TEST(ConditonalAwaiterTest, SingleResumeFirst) {
+TEST(ConditionalAwaiterTest, SingleResumeFirst) {
   std::shared_ptr<Resumer> resumer = std::make_shared<CallbackResumer>();
   ASSERT_OK_AND_ASSIGN(auto awaiter,
-                       ConditonalAwaiter::MakeConditonalAwaiter(/*num_readies=*/1, {resumer}));
+                       ConditionalAwaiter::MakeConditionalAwaiter(/*num_readies=*/1, {resumer}));
 
   resumer->Resume();
   auto future = std::async(std::launch::async, [&]() -> bool {
@@ -139,11 +139,11 @@ TEST(ConditonalAwaiterTest, SingleResumeFirst) {
   ASSERT_TRUE(future.get());
 }
 
-TEST(ConditonalAwaiterTest, Race) {
+TEST(ConditionalAwaiterTest, Race) {
   for (std::size_t i = 0; i < kRaceRounds; ++i) {
     std::shared_ptr<Resumer> resumer = std::make_shared<CallbackResumer>();
     ASSERT_OK_AND_ASSIGN(auto awaiter,
-                         ConditonalAwaiter::MakeConditonalAwaiter(/*num_readies=*/1, {resumer}));
+                         ConditionalAwaiter::MakeConditionalAwaiter(/*num_readies=*/1, {resumer}));
 
     std::atomic_bool resumer_ready = false, awaiter_ready = false, kickoff = false;
     auto resume_future = std::async(std::launch::async, [&]() {
@@ -168,14 +168,14 @@ TEST(ConditonalAwaiterTest, Race) {
   }
 }
 
-TEST(ConditonalAwaiterTest, AnyWaitFirst) {
+TEST(ConditionalAwaiterTest, AnyWaitFirst) {
   constexpr std::size_t lucky = 42;
   std::vector<std::shared_ptr<Resumer>> resumers(kManyResumers);
   for (auto& resumer : resumers) {
     resumer = std::make_shared<CallbackResumer>();
   }
   ASSERT_OK_AND_ASSIGN(auto awaiter,
-                       ConditonalAwaiter::MakeConditonalAwaiter(/*num_readies=*/1, resumers));
+                       ConditionalAwaiter::MakeConditionalAwaiter(/*num_readies=*/1, resumers));
 
   std::atomic_bool finished = false;
   auto future = std::async(std::launch::async, [&]() {
@@ -195,7 +195,7 @@ TEST(ConditonalAwaiterTest, AnyWaitFirst) {
   future.get();
 }
 
-TEST(ConditonalAwaiterTest, AnyReentrantWait) {
+TEST(ConditionalAwaiterTest, AnyReentrantWait) {
   constexpr std::size_t lucky = 42;
   std::vector<std::shared_ptr<Resumer>> resumers(kManyResumers);
   for (auto& resumer : resumers) {
@@ -203,7 +203,7 @@ TEST(ConditonalAwaiterTest, AnyReentrantWait) {
   }
 
   ASSERT_OK_AND_ASSIGN(auto awaiter1,
-                       ConditonalAwaiter::MakeConditonalAwaiter(/*num_readies=*/1, resumers));
+                       ConditionalAwaiter::MakeConditionalAwaiter(/*num_readies=*/1, resumers));
   resumers[lucky]->Resume();
   awaiter1->Wait();
   for (std::size_t i = 0; i < kManyResumers; ++i) {
@@ -216,7 +216,7 @@ TEST(ConditonalAwaiterTest, AnyReentrantWait) {
 
   resumers[lucky] = std::make_shared<CallbackResumer>();
   ASSERT_OK_AND_ASSIGN(auto awaiter2,
-                       ConditonalAwaiter::MakeConditonalAwaiter(/*num_readies=*/1, resumers));
+                       ConditionalAwaiter::MakeConditionalAwaiter(/*num_readies=*/1, resumers));
   resumers[lucky]->Resume();
   awaiter2->Wait();
   for (std::size_t i = 0; i < kManyResumers; ++i) {
@@ -228,14 +228,14 @@ TEST(ConditonalAwaiterTest, AnyReentrantWait) {
   }
 }
 
-TEST(ConditonalAwaiterTest, AnyResumeFirst) {
+TEST(ConditionalAwaiterTest, AnyResumeFirst) {
   std::vector<std::shared_ptr<Resumer>> resumers(kManyResumers);
   for (auto& resumer : resumers) {
     resumer = std::make_shared<CallbackResumer>();
     resumer->Resume();
   }
   ASSERT_OK_AND_ASSIGN(auto awaiter,
-                       ConditonalAwaiter::MakeConditonalAwaiter(/*num_readies=*/1, resumers));
+                       ConditionalAwaiter::MakeConditionalAwaiter(/*num_readies=*/1, resumers));
 
   auto future = std::async(std::launch::async, [&]() -> bool {
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -248,14 +248,14 @@ TEST(ConditonalAwaiterTest, AnyResumeFirst) {
   ASSERT_TRUE(future.get());
 }
 
-TEST(ConditonalAwaiterTest, LifeSpan) {
+TEST(ConditionalAwaiterTest, LifeSpan) {
   constexpr std::size_t lucky = 42;
   std::vector<std::shared_ptr<Resumer>> resumers(kManyResumers);
   for (auto& resumer : resumers) {
     resumer = std::make_shared<CallbackResumer>();
   }
   ASSERT_OK_AND_ASSIGN(auto awaiter,
-                       ConditonalAwaiter::MakeConditonalAwaiter(/*num_readies=*/1, resumers));
+                       ConditionalAwaiter::MakeConditionalAwaiter(/*num_readies=*/1, resumers));
 
   std::atomic_bool finished = false;
   auto future = std::async(std::launch::async, [&]() {

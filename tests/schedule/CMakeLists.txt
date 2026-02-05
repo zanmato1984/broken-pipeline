@@ -13,8 +13,8 @@
 # limitations under the License.
 
 add_broken_pipeline_test(
-  broken-pipeline-schedule-conditonal-awaiter-test
-  "${CMAKE_CURRENT_SOURCE_DIR}/conditonal_awaiter_test.cpp"
+  broken-pipeline-schedule-conditional-awaiter-test
+  "${CMAKE_CURRENT_SOURCE_DIR}/conditional_awaiter_test.cpp"
 )
 
 add_broken_pipeline_test(

@@ -14,11 +14,11 @@
 
 #pragma once
 
-/// @file conditonal_awaiter.h
+/// @file conditional_awaiter.h
 ///
 /// @brief Blocking Awaiter implementation for synchronous schedulers.
 ///
-/// `ConditonalAwaiter` aggregates one or more `CallbackResumer` instances and blocks the
+/// `ConditionalAwaiter` aggregates one or more `CallbackResumer` instances and blocks the
 /// calling thread on a condition variable until enough resumers have fired.
 
 #include "traits.h"
@@ -34,27 +34,27 @@ namespace bp::schedule::detail {
 
 /// @brief Awaiter that blocks a thread until enough resumers are ready.
 ///
-/// `ConditonalAwaiter` is intended for simple or synchronous schedulers. It:
+/// `ConditionalAwaiter` is intended for simple or synchronous schedulers. It:
 /// - Registers callbacks on each `CallbackResumer`.
 /// - Counts resume signals until `num_readies` are observed.
 /// - Unblocks any thread waiting in `Wait()`.
-class ConditonalAwaiter final : public Awaiter,
-                                public std::enable_shared_from_this<ConditonalAwaiter> {
+class ConditionalAwaiter final : public Awaiter,
+                                public std::enable_shared_from_this<ConditionalAwaiter> {
  public:
   /// @brief Block the calling thread until `num_readies` resumers have fired.
   void Wait();
   /// @brief Access the underlying resumers that feed this awaiter.
   const std::vector<std::shared_ptr<Resumer>>& GetResumers() const { return resumers_; }
 
-  /// @brief Build a ConditonalAwaiter with the expected number of resumes.
+  /// @brief Build a ConditionalAwaiter with the expected number of resumes.
   ///
   /// `resumers` must be non-empty and must all be `CallbackResumer` instances. The
   /// awaiter unblocks once `num_readies` resumers have resumed.
-  static Result<std::shared_ptr<ConditonalAwaiter>> MakeConditonalAwaiter(
+  static Result<std::shared_ptr<ConditionalAwaiter>> MakeConditionalAwaiter(
       std::size_t num_readies, std::vector<std::shared_ptr<Resumer>> resumers);
 
  private:
-  ConditonalAwaiter(std::size_t num_readies, std::vector<std::shared_ptr<Resumer>> resumers);
+  ConditionalAwaiter(std::size_t num_readies, std::vector<std::shared_ptr<Resumer>> resumers);
 
   std::size_t num_readies_;
   std::vector<std::shared_ptr<Resumer>> resumers_;

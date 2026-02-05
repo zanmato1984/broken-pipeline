@@ -12,32 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <broken_pipeline/schedule/detail/conditonal_awaiter.h>
+#include <broken_pipeline/schedule/detail/conditional_awaiter.h>
 
 #include <cassert>
 
 namespace bp::schedule::detail {
 
-ConditonalAwaiter::ConditonalAwaiter(std::size_t num_readies,
-                                     std::vector<std::shared_ptr<Resumer>> resumers)
+ConditionalAwaiter::ConditionalAwaiter(std::size_t num_readies,
+                                       std::vector<std::shared_ptr<Resumer>> resumers)
     : num_readies_(num_readies), resumers_(std::move(resumers)) {}
 
-Result<std::shared_ptr<ConditonalAwaiter>> ConditonalAwaiter::MakeConditonalAwaiter(
+Result<std::shared_ptr<ConditionalAwaiter>> ConditionalAwaiter::MakeConditionalAwaiter(
     std::size_t num_readies, std::vector<std::shared_ptr<Resumer>> resumers) {
   if (resumers.empty()) {
-    return Status::Invalid("ConditonalAwaiter: empty resumers");
+    return Status::Invalid("ConditionalAwaiter: empty resumers");
   }
   if (num_readies == 0) {
-    return Status::Invalid("ConditonalAwaiter: num_readies must be > 0");
+    return Status::Invalid("ConditionalAwaiter: num_readies must be > 0");
   }
 
   auto awaiter =
-      std::shared_ptr<ConditonalAwaiter>(new ConditonalAwaiter(num_readies, std::move(resumers)));
+      std::shared_ptr<ConditionalAwaiter>(new ConditionalAwaiter(num_readies, std::move(resumers)));
   for (auto& resumer : awaiter->resumers_) {
     auto casted = std::dynamic_pointer_cast<CallbackResumer>(resumer);
     if (casted == nullptr) {
-      assert(false && "ConditonalAwaiter expects resumer type CallbackResumer");
-      return Status::Invalid("ConditonalAwaiter: unexpected resumer type");
+      assert(false && "ConditionalAwaiter expects resumer type CallbackResumer");
+      return Status::Invalid("ConditionalAwaiter: unexpected resumer type");
     }
     casted->AddCallback([awaiter]() {
       std::unique_lock<std::mutex> lock(awaiter->mutex_);
@@ -48,7 +48,7 @@ Result<std::shared_ptr<ConditonalAwaiter>> ConditonalAwaiter::MakeConditonalAwai
   return awaiter;
 }
 
-void ConditonalAwaiter::Wait() {
+void ConditionalAwaiter::Wait() {
   std::unique_lock<std::mutex> lock(mutex_);
   while (readies_ < num_readies_) {
     cv_.wait(lock);
