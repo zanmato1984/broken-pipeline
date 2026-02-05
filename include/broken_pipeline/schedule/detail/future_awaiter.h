@@ -14,14 +14,14 @@
 
 #pragma once
 
-/// @file async_awaiter.h
+/// @file future_awaiter.h
 ///
 /// @brief Folly-based Awaiter implementation for Broken Pipeline schedulers.
 ///
-/// `AsyncAwaiter` aggregates one or more `AsyncResumer` instances and exposes a
+/// `FutureAwaiter` aggregates one or more `CallbackResumer` instances and exposes a
 /// `folly::SemiFuture` that completes when enough resumers have been resumed.
 
-#include "async_resumer.h"
+#include "callback_resumer.h"
 #include "traits.h"
 
 #include <cstddef>
@@ -31,19 +31,19 @@
 
 #include <folly/futures/Future.h>
 
-namespace bp::schedule {
+namespace bp::schedule::detail {
 
 /// @brief Awaiter that completes a Folly future once enough resumers are ready.
 ///
-/// `AsyncAwaiter` is intended for asynchronous schedulers built on Folly. It:
-/// - Registers callbacks on each `AsyncResumer`.
+/// `FutureAwaiter` is intended for asynchronous schedulers built on Folly. It:
+/// - Registers callbacks on each `CallbackResumer`.
 /// - Counts resume signals until `num_readies` are observed.
 /// - Fulfills an internal promise, completing the `SemiFuture`.
 ///
 /// The scheduler typically waits on `GetFuture()` and reschedules the task when it
 /// becomes ready.
-class AsyncAwaiter final : public Awaiter,
-                           public std::enable_shared_from_this<AsyncAwaiter> {
+class FutureAwaiter final : public Awaiter,
+                            public std::enable_shared_from_this<FutureAwaiter> {
  public:
   using Future = folly::SemiFuture<folly::Unit>;
 
@@ -54,17 +54,16 @@ class AsyncAwaiter final : public Awaiter,
   /// @brief Access the underlying resumers that feed this awaiter.
   const std::vector<std::shared_ptr<Resumer>>& GetResumers() const { return resumers_; }
 
-  /// @brief Build an AsyncAwaiter with the expected number of resumes.
+  /// @brief Build a FutureAwaiter with the expected number of resumes.
   ///
-  /// `resumers` must be non-empty and must all be `AsyncResumer` instances. The
+  /// `resumers` must be non-empty and must all be `CallbackResumer` instances. The
   /// awaiter completes its future once `num_readies` resumers have resumed.
-  static Result<std::shared_ptr<AsyncAwaiter>> MakeAsyncAwaiter(std::size_t num_readies,
-                                                                std::vector<std::shared_ptr<Resumer>>
-                                                                    resumers);
+  static Result<std::shared_ptr<FutureAwaiter>> MakeFutureAwaiter(
+      std::size_t num_readies, std::vector<std::shared_ptr<Resumer>> resumers);
 
  private:
-  AsyncAwaiter(std::size_t num_readies, std::vector<std::shared_ptr<Resumer>> resumers,
-               std::shared_ptr<folly::Promise<folly::Unit>> promise, Future future);
+  FutureAwaiter(std::size_t num_readies, std::vector<std::shared_ptr<Resumer>> resumers,
+                std::shared_ptr<folly::Promise<folly::Unit>> promise, Future future);
 
   void OnResumed();
 
@@ -77,4 +76,4 @@ class AsyncAwaiter final : public Awaiter,
   Future future_;
 };
 
-}  // namespace bp::schedule
+}  // namespace bp::schedule::detail

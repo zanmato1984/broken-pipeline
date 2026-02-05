@@ -24,13 +24,13 @@ TaskContext NaiveParallelScheduler::MakeTaskContext(const Traits::Context* conte
   TaskContext task_ctx;
   task_ctx.context = context;
   task_ctx.resumer_factory = []() -> Result<std::shared_ptr<Resumer>> {
-    return std::make_shared<SyncResumer>();
+    return std::make_shared<detail::CallbackResumer>();
   };
   task_ctx.awaiter_factory =
       [](std::vector<std::shared_ptr<Resumer>> resumers) -> Result<std::shared_ptr<Awaiter>> {
     ARROW_ASSIGN_OR_RAISE(auto awaiter,
-                          SyncAwaiter::MakeSyncAwaiter(/*num_readies=*/1,
-                                                       std::move(resumers)));
+                          detail::ConditonalAwaiter::MakeConditonalAwaiter(/*num_readies=*/1,
+                                                                           std::move(resumers)));
     return std::static_pointer_cast<Awaiter>(std::move(awaiter));
   };
   return task_ctx;
@@ -47,10 +47,11 @@ NaiveParallelScheduler::ConcreteTask NaiveParallelScheduler::MakeTask(
                              !result->IsCancelled()) {
                         if (result->IsBlocked()) {
                           auto awaiter =
-                              std::dynamic_pointer_cast<SyncAwaiter>(result->GetAwaiter());
+                              std::dynamic_pointer_cast<detail::ConditonalAwaiter>(
+                                  result->GetAwaiter());
                           if (!awaiter) {
                             assert(false &&
-                                   "NaiveParallelScheduler expects awaiter type SyncAwaiter");
+                                   "NaiveParallelScheduler expects awaiter type detail::ConditonalAwaiter");
                             return Status::Invalid(
                                 "NaiveParallelScheduler: unexpected awaiter type");
                           }

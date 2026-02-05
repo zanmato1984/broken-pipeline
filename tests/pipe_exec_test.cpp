@@ -34,7 +34,7 @@
 
 namespace bp::test {
 
-using bp::schedule::AsyncAwaiter;
+using bp::schedule::detail::FutureAwaiter;
 using bp::schedule::AsyncDualPoolScheduler;
 using bp::schedule::Awaiter;
 using bp::schedule::Batch;
@@ -55,7 +55,7 @@ using bp::schedule::Resumer;
 using bp::schedule::SinkOp;
 using bp::schedule::SourceOp;
 using bp::schedule::Status;
-using bp::schedule::SyncAwaiter;
+using bp::schedule::detail::ConditonalAwaiter;
 using bp::schedule::Task;
 using bp::schedule::TaskContext;
 using bp::schedule::TaskGroup;
@@ -143,10 +143,10 @@ const std::vector<std::shared_ptr<Resumer>>* GetResumers(const Awaiter* awaiter)
   if (awaiter == nullptr) {
     return nullptr;
   }
-  if (auto* sync_awaiter = dynamic_cast<const SyncAwaiter*>(awaiter)) {
+  if (auto* sync_awaiter = dynamic_cast<const ConditonalAwaiter*>(awaiter)) {
     return &sync_awaiter->GetResumers();
   }
-  if (auto* async_awaiter = dynamic_cast<const AsyncAwaiter*>(awaiter)) {
+  if (auto* async_awaiter = dynamic_cast<const FutureAwaiter*>(awaiter)) {
     return &async_awaiter->GetResumers();
   }
   return nullptr;

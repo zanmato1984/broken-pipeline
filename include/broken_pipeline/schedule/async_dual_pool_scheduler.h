@@ -19,11 +19,11 @@
 /// @brief Folly-based dual-pool scheduler for Broken Pipeline task groups.
 ///
 /// This scheduler binds to Folly executors, routes CPU-bound work to a CPU pool,
-/// IO-bound work to an IO pool, and integrates with `AsyncResumer`/`AsyncAwaiter`
+/// IO-bound work to an IO pool, and integrates with `detail::CallbackResumer`/`detail::FutureAwaiter`
 /// for blocked tasks.
 
-#include "async_awaiter.h"
-#include "async_resumer.h"
+#include "detail/callback_resumer.h"
+#include "detail/future_awaiter.h"
 #include "traits.h"
 
 #include <folly/Executor.h>
@@ -44,7 +44,7 @@ namespace bp::schedule {
 /// @brief Production-oriented scheduler using separate CPU and IO pools.
 ///
 /// Behavior overview:
-/// - Uses `AsyncResumer` and `AsyncAwaiter` to suspend and resume blocked tasks.
+/// - Uses `detail::CallbackResumer` and `detail::FutureAwaiter` to suspend and resume blocked tasks.
 /// - Routes tasks to the IO pool when `TaskHint::Type::IO` is set.
 /// - Treats `TaskStatus::Yield()` as a handoff point to the IO pool for a single
 ///   step, then resumes normal scheduling.
@@ -67,7 +67,7 @@ class AsyncDualPoolScheduler {
   AsyncDualPoolScheduler(AsyncDualPoolScheduler&&) noexcept = default;
   AsyncDualPoolScheduler& operator=(AsyncDualPoolScheduler&&) noexcept = default;
 
-  /// @brief Create a TaskContext configured with async resumers/awaiters.
+  /// @brief Create a TaskContext configured with future-based resumers/awaiters.
   TaskContext MakeTaskContext(const Traits::Context* context = nullptr) const;
 
   /// @brief Handle returned by ScheduleTaskGroup for later waiting or inspection.

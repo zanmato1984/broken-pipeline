@@ -57,13 +57,13 @@ TaskContext AsyncDualPoolScheduler::MakeTaskContext(const Traits::Context* conte
   TaskContext task_ctx;
   task_ctx.context = context;
   task_ctx.resumer_factory = []() -> Result<std::shared_ptr<Resumer>> {
-    return std::make_shared<AsyncResumer>();
+    return std::make_shared<detail::CallbackResumer>();
   };
   task_ctx.awaiter_factory =
       [](std::vector<std::shared_ptr<Resumer>> resumers) -> Result<std::shared_ptr<Awaiter>> {
     ARROW_ASSIGN_OR_RAISE(auto awaiter,
-                          AsyncAwaiter::MakeAsyncAwaiter(/*num_readies=*/1,
-                                                        std::move(resumers)));
+                          detail::FutureAwaiter::MakeFutureAwaiter(/*num_readies=*/1,
+                                                                   std::move(resumers)));
     return std::static_pointer_cast<Awaiter>(std::move(awaiter));
   };
   return task_ctx;
@@ -82,9 +82,10 @@ AsyncDualPoolScheduler::TaskFuture AsyncDualPoolScheduler::MakeTaskFuture(
 
   auto thunk = [this, state]() -> folly::Future<folly::Unit> {
     if (state->result->IsBlocked()) {
-      auto awaiter = std::dynamic_pointer_cast<AsyncAwaiter>(state->result->GetAwaiter());
+      auto awaiter =
+          std::dynamic_pointer_cast<detail::FutureAwaiter>(state->result->GetAwaiter());
       if (!awaiter) {
-        assert(false && "AsyncDualPoolScheduler expects awaiter type AsyncAwaiter");
+        assert(false && "AsyncDualPoolScheduler expects awaiter type detail::FutureAwaiter");
         state->result = Status::Invalid("AsyncDualPoolScheduler: unexpected awaiter type");
         return folly::makeFuture();
       }

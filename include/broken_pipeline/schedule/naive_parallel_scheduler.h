@@ -22,8 +22,8 @@
 /// and launches each task instance via `std::async`. It is useful for tests,
 /// examples, and as a reference implementation.
 
-#include "sync_awaiter.h"
-#include "sync_resumer.h"
+#include "detail/callback_resumer.h"
+#include "detail/conditonal_awaiter.h"
 #include "traits.h"
 
 #include <cstddef>
@@ -36,7 +36,7 @@ namespace bp::schedule {
 /// @brief Minimal scheduler that runs each Task instance in a std::async thread.
 ///
 /// Behavior overview:
-/// - Uses `SyncResumer` and `SyncAwaiter` to block when tasks are `Blocked`.
+/// - Uses `detail::CallbackResumer` and `detail::ConditonalAwaiter` to block when tasks are `Blocked`.
 /// - Executes each task instance in its own `std::async` future.
 /// - Aggregates per-task results and optionally invokes the TaskGroup continuation.
 ///
@@ -48,7 +48,7 @@ class NaiveParallelScheduler {
   /// @brief Construct the scheduler (no internal state).
   NaiveParallelScheduler() = default;
 
-  /// @brief Create a TaskContext configured with synchronous resumers/awaiters.
+  /// @brief Create a TaskContext configured with blocking resumers/awaiters.
   TaskContext MakeTaskContext(const Traits::Context* context = nullptr) const;
 
   /// @brief Handle returned by ScheduleTaskGroup for later waiting or inspection.

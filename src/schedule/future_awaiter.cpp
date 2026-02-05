@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <broken_pipeline/schedule/async_awaiter.h>
+#include <broken_pipeline/schedule/detail/future_awaiter.h>
 
 #include <cassert>
 #include <cstddef>
@@ -20,38 +20,37 @@
 #include <mutex>
 #include <utility>
 
-namespace bp::schedule {
+namespace bp::schedule::detail {
 
-AsyncAwaiter::AsyncAwaiter(std::size_t num_readies,
-                           std::vector<std::shared_ptr<Resumer>> resumers,
-                           std::shared_ptr<folly::Promise<folly::Unit>> promise,
-                           Future future)
+FutureAwaiter::FutureAwaiter(std::size_t num_readies,
+                             std::vector<std::shared_ptr<Resumer>> resumers,
+                             std::shared_ptr<folly::Promise<folly::Unit>> promise,
+                             Future future)
     : num_readies_(num_readies),
       resumers_(std::move(resumers)),
       promise_(std::move(promise)),
       future_(std::move(future)) {}
 
-Result<std::shared_ptr<AsyncAwaiter>> AsyncAwaiter::MakeAsyncAwaiter(std::size_t num_readies,
-                                                                    std::vector<std::shared_ptr<Resumer>>
-                                                                        resumers) {
+Result<std::shared_ptr<FutureAwaiter>> FutureAwaiter::MakeFutureAwaiter(
+    std::size_t num_readies, std::vector<std::shared_ptr<Resumer>> resumers) {
   if (resumers.empty()) {
-    return Status::Invalid("AsyncAwaiter: empty resumers");
+    return Status::Invalid("FutureAwaiter: empty resumers");
   }
   if (num_readies == 0) {
-    return Status::Invalid("AsyncAwaiter: num_readies must be > 0");
+    return Status::Invalid("FutureAwaiter: num_readies must be > 0");
   }
 
   auto [p, f] = folly::makePromiseContract<folly::Unit>();
   auto promise = std::make_shared<folly::Promise<folly::Unit>>(std::move(p));
 
-  auto awaiter = std::shared_ptr<AsyncAwaiter>(new AsyncAwaiter(
+  auto awaiter = std::shared_ptr<FutureAwaiter>(new FutureAwaiter(
       num_readies, std::move(resumers), std::move(promise), std::move(f)));
 
   for (auto& resumer : awaiter->resumers_) {
-    auto casted = std::dynamic_pointer_cast<AsyncResumer>(resumer);
+    auto casted = std::dynamic_pointer_cast<CallbackResumer>(resumer);
     if (casted == nullptr) {
-      assert(false && "AsyncAwaiter expects resumer type AsyncResumer");
-      return Status::Invalid("AsyncAwaiter: unexpected resumer type");
+      assert(false && "FutureAwaiter expects resumer type CallbackResumer");
+      return Status::Invalid("FutureAwaiter: unexpected resumer type");
     }
     casted->AddCallback([awaiter]() { awaiter->OnResumed(); });
   }
@@ -59,7 +58,7 @@ Result<std::shared_ptr<AsyncAwaiter>> AsyncAwaiter::MakeAsyncAwaiter(std::size_t
   return awaiter;
 }
 
-void AsyncAwaiter::OnResumed() {
+void FutureAwaiter::OnResumed() {
   std::shared_ptr<folly::Promise<folly::Unit>> to_set;
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -77,4 +76,4 @@ void AsyncAwaiter::OnResumed() {
   }
 }
 
-}  // namespace bp::schedule
+}  // namespace bp::schedule::detail

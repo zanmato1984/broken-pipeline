@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <broken_pipeline/schedule/async_awaiter.h>
-#include <broken_pipeline/schedule/async_resumer.h>
+#include <broken_pipeline/schedule/detail/callback_resumer.h>
+#include <broken_pipeline/schedule/detail/future_awaiter.h>
 
 #include <arrow/testing/gtest_util.h>
 
@@ -34,17 +34,20 @@ constexpr std::size_t kManyResumers = 256;
 
 }  // namespace
 
-TEST(AsyncResumerTest, Basic) {
-  auto resumer = std::make_shared<AsyncResumer>();
+using detail::CallbackResumer;
+using detail::FutureAwaiter;
+
+TEST(CallbackResumerFutureTest, Basic) {
+  auto resumer = std::make_shared<CallbackResumer>();
   ASSERT_FALSE(resumer->IsResumed());
   resumer->Resume();
   ASSERT_TRUE(resumer->IsResumed());
 }
 
-TEST(AsyncAwaiterTest, SingleWaitFirst) {
-  std::shared_ptr<Resumer> resumer = std::make_shared<AsyncResumer>();
+TEST(FutureAwaiterTest, SingleWaitFirst) {
+  std::shared_ptr<Resumer> resumer = std::make_shared<CallbackResumer>();
   ASSERT_OK_AND_ASSIGN(auto awaiter,
-                       AsyncAwaiter::MakeAsyncAwaiter(/*num_readies=*/1, {resumer}));
+                       FutureAwaiter::MakeFutureAwaiter(/*num_readies=*/1, {resumer}));
 
   std::atomic_bool finished = false;
   auto future = std::async(std::launch::async, [&]() {
@@ -59,10 +62,10 @@ TEST(AsyncAwaiterTest, SingleWaitFirst) {
   future.get();
 }
 
-TEST(AsyncAwaiterTest, SingleResumeFirst) {
-  std::shared_ptr<Resumer> resumer = std::make_shared<AsyncResumer>();
+TEST(FutureAwaiterTest, SingleResumeFirst) {
+  std::shared_ptr<Resumer> resumer = std::make_shared<CallbackResumer>();
   ASSERT_OK_AND_ASSIGN(auto awaiter,
-                       AsyncAwaiter::MakeAsyncAwaiter(/*num_readies=*/1, {resumer}));
+                       FutureAwaiter::MakeFutureAwaiter(/*num_readies=*/1, {resumer}));
 
   resumer->Resume();
   auto future = std::async(std::launch::async, [&]() -> bool {
@@ -74,12 +77,12 @@ TEST(AsyncAwaiterTest, SingleResumeFirst) {
   ASSERT_TRUE(future.get());
 }
 
-TEST(AsyncAwaiterTest, Race) {
+TEST(FutureAwaiterTest, Race) {
   folly::CPUThreadPoolExecutor executor(4);
   for (std::size_t i = 0; i < kRaceRounds; ++i) {
-    std::shared_ptr<Resumer> resumer = std::make_shared<AsyncResumer>();
+    std::shared_ptr<Resumer> resumer = std::make_shared<CallbackResumer>();
     ASSERT_OK_AND_ASSIGN(auto awaiter,
-                         AsyncAwaiter::MakeAsyncAwaiter(/*num_readies=*/1, {resumer}));
+                         FutureAwaiter::MakeFutureAwaiter(/*num_readies=*/1, {resumer}));
 
     std::atomic_bool resumer_ready = false, awaiter_ready = false, kickoff = false;
     auto resume_future = std::async(std::launch::async, [&]() {
@@ -104,15 +107,15 @@ TEST(AsyncAwaiterTest, Race) {
   }
 }
 
-TEST(AsyncAwaiterTest, AnyWaitFirst) {
+TEST(FutureAwaiterTest, AnyWaitFirst) {
   folly::CPUThreadPoolExecutor executor(4);
   constexpr std::size_t lucky = 42;
   std::vector<std::shared_ptr<Resumer>> resumers(kManyResumers);
   for (auto& resumer : resumers) {
-    resumer = std::make_shared<AsyncResumer>();
+    resumer = std::make_shared<CallbackResumer>();
   }
   ASSERT_OK_AND_ASSIGN(auto awaiter,
-                       AsyncAwaiter::MakeAsyncAwaiter(/*num_readies=*/1, resumers));
+                       FutureAwaiter::MakeFutureAwaiter(/*num_readies=*/1, resumers));
 
   std::atomic_bool finished = false;
   auto future = std::async(std::launch::async, [&]() {
@@ -132,16 +135,16 @@ TEST(AsyncAwaiterTest, AnyWaitFirst) {
   future.get();
 }
 
-TEST(AsyncAwaiterTest, AnyReentrantWait) {
+TEST(FutureAwaiterTest, AnyReentrantWait) {
   folly::CPUThreadPoolExecutor executor(4);
   constexpr std::size_t lucky = 42;
   std::vector<std::shared_ptr<Resumer>> resumers(kManyResumers);
   for (auto& resumer : resumers) {
-    resumer = std::make_shared<AsyncResumer>();
+    resumer = std::make_shared<CallbackResumer>();
   }
 
   ASSERT_OK_AND_ASSIGN(auto awaiter1,
-                       AsyncAwaiter::MakeAsyncAwaiter(/*num_readies=*/1, resumers));
+                       FutureAwaiter::MakeFutureAwaiter(/*num_readies=*/1, resumers));
   resumers[lucky]->Resume();
   std::move(awaiter1->GetFuture()).via(&executor).wait();
   for (std::size_t i = 0; i < kManyResumers; ++i) {
@@ -152,9 +155,9 @@ TEST(AsyncAwaiterTest, AnyReentrantWait) {
     }
   }
 
-  resumers[lucky] = std::make_shared<AsyncResumer>();
+  resumers[lucky] = std::make_shared<CallbackResumer>();
   ASSERT_OK_AND_ASSIGN(auto awaiter2,
-                       AsyncAwaiter::MakeAsyncAwaiter(/*num_readies=*/1, resumers));
+                       FutureAwaiter::MakeFutureAwaiter(/*num_readies=*/1, resumers));
   resumers[lucky]->Resume();
   std::move(awaiter2->GetFuture()).via(&executor).wait();
   for (std::size_t i = 0; i < kManyResumers; ++i) {
@@ -166,15 +169,15 @@ TEST(AsyncAwaiterTest, AnyReentrantWait) {
   }
 }
 
-TEST(AsyncAwaiterTest, AnyResumeFirst) {
+TEST(FutureAwaiterTest, AnyResumeFirst) {
   folly::CPUThreadPoolExecutor executor(4);
   std::vector<std::shared_ptr<Resumer>> resumers(kManyResumers);
   for (auto& resumer : resumers) {
-    resumer = std::make_shared<AsyncResumer>();
+    resumer = std::make_shared<CallbackResumer>();
     resumer->Resume();
   }
   ASSERT_OK_AND_ASSIGN(auto awaiter,
-                       AsyncAwaiter::MakeAsyncAwaiter(/*num_readies=*/1, resumers));
+                       FutureAwaiter::MakeFutureAwaiter(/*num_readies=*/1, resumers));
 
   auto future = std::async(std::launch::async, [&]() -> bool {
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -187,15 +190,15 @@ TEST(AsyncAwaiterTest, AnyResumeFirst) {
   ASSERT_TRUE(future.get());
 }
 
-TEST(AsyncAwaiterTest, LifeSpan) {
+TEST(FutureAwaiterTest, LifeSpan) {
   folly::CPUThreadPoolExecutor executor(4);
   constexpr std::size_t lucky = 42;
   std::vector<std::shared_ptr<Resumer>> resumers(kManyResumers);
   for (auto& resumer : resumers) {
-    resumer = std::make_shared<AsyncResumer>();
+    resumer = std::make_shared<CallbackResumer>();
   }
   ASSERT_OK_AND_ASSIGN(auto awaiter,
-                       AsyncAwaiter::MakeAsyncAwaiter(/*num_readies=*/1, resumers));
+                       FutureAwaiter::MakeFutureAwaiter(/*num_readies=*/1, resumers));
 
   std::atomic_bool finished = false;
   auto future = std::async(std::launch::async, [&]() {

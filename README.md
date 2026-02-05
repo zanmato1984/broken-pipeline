@@ -40,8 +40,8 @@ Optional schedule runtime (Apache Arrow + Folly):
 - `include/broken_pipeline/schedule/traits.h`
 - `include/broken_pipeline/schedule/naive_parallel_scheduler.h`
 - `include/broken_pipeline/schedule/async_dual_pool_scheduler.h`
-- `include/broken_pipeline/schedule/sync_awaiter.h`, `include/broken_pipeline/schedule/async_awaiter.h`
-- `include/broken_pipeline/schedule/sync_resumer.h`, `include/broken_pipeline/schedule/async_resumer.h`
+- `include/broken_pipeline/schedule/detail/conditonal_awaiter.h`, `include/broken_pipeline/schedule/detail/future_awaiter.h`
+- `include/broken_pipeline/schedule/detail/callback_resumer.h`
 
 CMake target:
 - `broken_pipeline` (INTERFACE)
@@ -342,7 +342,7 @@ their own Traits binding or resumer/awaiter primitives.
 What it provides:
 - Arrow binding (`bp::schedule::Traits`, `bp::schedule::Batch`, `bp::schedule::Status`,
   `bp::schedule::Result<T>`).
-- Scheduler primitives: `SyncResumer`/`SyncAwaiter` and `AsyncResumer`/`AsyncAwaiter`.
+- Scheduler primitives: `detail::CallbackResumer`, `detail::ConditonalAwaiter`, and `detail::FutureAwaiter`.
 - Scheduler implementations:
   - `AsyncDualPoolScheduler`: Folly-based dual CPU/IO pools; routes work using
     `TaskHint::Type::IO` and honors `TaskStatus::Yield` as an IO handoff point.

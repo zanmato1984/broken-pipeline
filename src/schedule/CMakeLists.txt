@@ -30,10 +30,10 @@ find_package(folly CONFIG REQUIRED)
 find_package(glog CONFIG REQUIRED)
 
 add_library(broken_pipeline_schedule
-  async_awaiter.cpp
+  future_awaiter.cpp
   async_dual_pool_scheduler.cpp
   naive_parallel_scheduler.cpp
-  sync_awaiter.cpp
+  conditonal_awaiter.cpp
 )
 add_library(broken_pipeline::schedule ALIAS broken_pipeline_schedule)
 

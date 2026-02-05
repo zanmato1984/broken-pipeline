@@ -14,15 +14,15 @@
 
 #pragma once
 
-/// @file sync_awaiter.h
+/// @file conditonal_awaiter.h
 ///
 /// @brief Blocking Awaiter implementation for synchronous schedulers.
 ///
-/// `SyncAwaiter` aggregates one or more `SyncResumer` instances and blocks the
+/// `ConditonalAwaiter` aggregates one or more `CallbackResumer` instances and blocks the
 /// calling thread on a condition variable until enough resumers have fired.
 
 #include "traits.h"
-#include "sync_resumer.h"
+#include "callback_resumer.h"
 
 #include <condition_variable>
 #include <cstddef>
@@ -30,32 +30,31 @@
 #include <mutex>
 #include <vector>
 
-namespace bp::schedule {
+namespace bp::schedule::detail {
 
 /// @brief Awaiter that blocks a thread until enough resumers are ready.
 ///
-/// `SyncAwaiter` is intended for simple or synchronous schedulers. It:
-/// - Registers callbacks on each `SyncResumer`.
+/// `ConditonalAwaiter` is intended for simple or synchronous schedulers. It:
+/// - Registers callbacks on each `CallbackResumer`.
 /// - Counts resume signals until `num_readies` are observed.
 /// - Unblocks any thread waiting in `Wait()`.
-class SyncAwaiter final : public Awaiter,
-                          public std::enable_shared_from_this<SyncAwaiter> {
+class ConditonalAwaiter final : public Awaiter,
+                                public std::enable_shared_from_this<ConditonalAwaiter> {
  public:
   /// @brief Block the calling thread until `num_readies` resumers have fired.
   void Wait();
   /// @brief Access the underlying resumers that feed this awaiter.
   const std::vector<std::shared_ptr<Resumer>>& GetResumers() const { return resumers_; }
 
-  /// @brief Build a SyncAwaiter with the expected number of resumes.
+  /// @brief Build a ConditonalAwaiter with the expected number of resumes.
   ///
-  /// `resumers` must be non-empty and must all be `SyncResumer` instances. The
+  /// `resumers` must be non-empty and must all be `CallbackResumer` instances. The
   /// awaiter unblocks once `num_readies` resumers have resumed.
-  static Result<std::shared_ptr<SyncAwaiter>> MakeSyncAwaiter(std::size_t num_readies,
-                                                              std::vector<std::shared_ptr<Resumer>>
-                                                                  resumers);
+  static Result<std::shared_ptr<ConditonalAwaiter>> MakeConditonalAwaiter(
+      std::size_t num_readies, std::vector<std::shared_ptr<Resumer>> resumers);
 
  private:
-  SyncAwaiter(std::size_t num_readies, std::vector<std::shared_ptr<Resumer>> resumers);
+  ConditonalAwaiter(std::size_t num_readies, std::vector<std::shared_ptr<Resumer>> resumers);
 
   std::size_t num_readies_;
   std::vector<std::shared_ptr<Resumer>> resumers_;
@@ -65,4 +64,4 @@ class SyncAwaiter final : public Awaiter,
   std::size_t readies_{0};
 };
 
-}  // namespace bp::schedule
+}  // namespace bp::schedule::detail
