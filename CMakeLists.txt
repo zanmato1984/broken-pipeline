@@ -80,7 +80,7 @@ if(BROKEN_PIPELINE_BUILD_SCHEDULE)
 endif()
 
 if(BROKEN_PIPELINE_BUILD_TESTS)
-  include(cmake/testing/testing.cmake)
+  include(cmake/testing.cmake)
   add_subdirectory(tests)
 endif()
 

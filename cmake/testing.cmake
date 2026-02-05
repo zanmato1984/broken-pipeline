@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-include("${CMAKE_CURRENT_LIST_DIR}/../deps.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/deps.cmake")
 
 broken_pipeline_resolve_arrow_core_target(BROKEN_PIPELINE_ARROW_CORE_TARGET_RESOLVED)
 broken_pipeline_resolve_arrow_compute_target(BROKEN_PIPELINE_ARROW_COMPUTE_TARGET_RESOLVED)
