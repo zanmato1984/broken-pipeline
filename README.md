@@ -326,7 +326,8 @@ execution loop and shows how to map Traits to Arrow's Status and Result types.
 
 ## Build
 
-This repo is header-only.
+The core library is header-only. The optional `broken_pipeline::schedule` runtime is a compiled
+library.
 
 Build the interface target:
 
@@ -335,12 +336,12 @@ cmake -S . -B build
 cmake --build build
 ```
 
-Build and run tests (requires Arrow C++ CMake packages (Arrow, ArrowCompute) and GoogleTest):
+Build and run tests (requires Arrow C++ CMake package, Folly, glog, and GoogleTest):
 
 ```bash
-cmake -S . -B build -DBROKEN_PIPELINE_BUILD_TESTS=ON
-cmake --build build
-ctest --test-dir build
+cmake --preset tests
+cmake --build --preset tests
+ctest --preset tests
 ```
 
 ## Examples

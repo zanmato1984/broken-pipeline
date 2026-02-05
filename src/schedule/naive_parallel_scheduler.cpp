@@ -12,7 +12,7 @@ TaskContext NaiveParallelScheduler::MakeTaskContext(const void* context) const {
     return std::make_shared<SyncResumer>();
   };
   task_ctx.awaiter_factory = [](Resumers resumers) -> Result<std::shared_ptr<Awaiter>> {
-    return SyncAwaiter::MakeAny(std::move(resumers));
+    return SyncAwaiter::Make(std::move(resumers));
   };
   return task_ctx;
 }

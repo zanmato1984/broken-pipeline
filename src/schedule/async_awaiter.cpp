@@ -59,21 +59,8 @@ void AsyncAwaiter::OnResumed() {
   }
 }
 
-Result<std::shared_ptr<Awaiter>> AsyncAwaiter::MakeSingle(ResumerPtr resumer) {
-  Resumers resumers;
-  resumers.push_back(std::move(resumer));
+Result<std::shared_ptr<Awaiter>> AsyncAwaiter::Make(Resumers resumers) {
   ARROW_ASSIGN_OR_RAISE(auto awaiter, MakeAsyncAwaiter(1, std::move(resumers)));
-  return std::static_pointer_cast<Awaiter>(std::move(awaiter));
-}
-
-Result<std::shared_ptr<Awaiter>> AsyncAwaiter::MakeAny(Resumers resumers) {
-  ARROW_ASSIGN_OR_RAISE(auto awaiter, MakeAsyncAwaiter(1, std::move(resumers)));
-  return std::static_pointer_cast<Awaiter>(std::move(awaiter));
-}
-
-Result<std::shared_ptr<Awaiter>> AsyncAwaiter::MakeAll(Resumers resumers) {
-  const auto num_readies = resumers.size();
-  ARROW_ASSIGN_OR_RAISE(auto awaiter, MakeAsyncAwaiter(num_readies, std::move(resumers)));
   return std::static_pointer_cast<Awaiter>(std::move(awaiter));
 }
 

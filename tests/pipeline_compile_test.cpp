@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "arrow_traits.h"
+#include <broken_pipeline/schedule/arrow_traits.h>
 
 #include <broken_pipeline/pipeline_exec.h>
 
@@ -25,6 +25,8 @@
 #include <vector>
 
 namespace bp_test {
+
+using namespace bp::schedule::arrow;
 
 namespace {
 

@@ -16,12 +16,10 @@
 
 /// @file arrow_traits.h
 ///
-/// @brief Example Broken Pipeline Traits implementation backed by Apache Arrow.
+/// @brief Broken Pipeline Traits implementation backed by Apache Arrow.
 ///
-/// Broken Pipeline does not define its own Status/Result type. All Broken Pipeline APIs
-/// are parameterized by `Traits::Status` and `Traits::Result<T>`.
-///
-/// In this example:
+/// Broken Pipeline core is traits-based and does not define its own Status/Result/Batch
+/// types. This header provides the project's unified Arrow binding:
 /// - `Status` maps to `arrow::Status`
 /// - `Result<T>` maps to `arrow::Result<T>`
 /// - `Batch` maps to `std::shared_ptr<arrow::RecordBatch>`
@@ -34,22 +32,22 @@
 
 #include <broken_pipeline/broken_pipeline.h>
 
-namespace bp_arrow {
+namespace bp::schedule::arrow {
 
 struct Context {
-  const char* query_name = "broken-pipeline-arrow";
+  const char* query_name = "broken-pipeline";
 };
 
 struct Traits {
-  using Batch = std::shared_ptr<arrow::RecordBatch>;
-  using Context = bp_arrow::Context;
-  using Status = arrow::Status;
+  using Batch = std::shared_ptr<::arrow::RecordBatch>;
+  using Context = bp::schedule::arrow::Context;
+  using Status = ::arrow::Status;
 
   template <class T>
-  using Result = arrow::Result<T>;
+  using Result = ::arrow::Result<T>;
 };
 
-// Convenience aliases for the example so other headers don't have to repeat the plumbing.
+// Convenience aliases so callers don't have to repeat the plumbing.
 using Batch = Traits::Batch;
 using Status = Traits::Status;
 
@@ -84,4 +82,4 @@ using PipelineChannel = Pipeline::Channel;
 
 using bp::Compile;
 
-}  // namespace bp_arrow
+}  // namespace bp::schedule::arrow

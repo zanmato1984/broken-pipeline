@@ -12,35 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-include(../cmake/testing.cmake)
+include("${PROJECT_SOURCE_DIR}/cmake/testing.cmake")
 
-set(BROKEN_PIPELINE_TEST_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
-
-if(NOT TARGET broken_pipeline_schedule)
-  message(FATAL_ERROR
-    "broken_pipeline_schedule target not found. "
-    "Set BROKEN_PIPELINE_BUILD_SCHEDULE=ON (the tests preset does this)."
-  )
-endif()
-
-add_library(broken_pipeline_test_support INTERFACE)
-target_include_directories(
-  broken_pipeline_test_support
-  INTERFACE
-    "${BROKEN_PIPELINE_TEST_INCLUDE_DIR}"
-)
-
-function(add_broken_pipeline_unit_test TEST_NAME TEST_SRC)
-  add_broken_pipeline_test(${TEST_NAME} ${TEST_SRC})
-  target_link_libraries(${TEST_NAME} PRIVATE broken_pipeline_test_support)
-endfunction()
-
-add_broken_pipeline_unit_test(
+add_broken_pipeline_test(
   broken-pipeline-task-test "${CMAKE_CURRENT_SOURCE_DIR}/task_test.cpp")
-add_broken_pipeline_unit_test(
+add_broken_pipeline_test(
   broken-pipeline-pipeline-compile-test "${CMAKE_CURRENT_SOURCE_DIR}/pipeline_compile_test.cpp")
-add_broken_pipeline_unit_test(
+add_broken_pipeline_test(
   broken-pipeline-pipe-exec-test "${CMAKE_CURRENT_SOURCE_DIR}/pipe_exec_test.cpp")
-target_link_libraries(broken-pipeline-pipe-exec-test PRIVATE broken_pipeline_schedule)
 
 add_subdirectory(schedule)

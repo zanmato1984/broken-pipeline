@@ -17,9 +17,7 @@ class SyncAwaiter final : public ResumersAwaiter,
   void Wait();
   const Resumers& GetResumers() const override { return resumers_; }
 
-  static Result<std::shared_ptr<Awaiter>> MakeSingle(ResumerPtr resumer);
-  static Result<std::shared_ptr<Awaiter>> MakeAny(Resumers resumers);
-  static Result<std::shared_ptr<Awaiter>> MakeAll(Resumers resumers);
+  static Result<std::shared_ptr<Awaiter>> Make(Resumers resumers);
 
  private:
   SyncAwaiter(std::size_t num_readies, Resumers resumers);

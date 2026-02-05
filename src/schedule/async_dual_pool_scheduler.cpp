@@ -57,7 +57,7 @@ TaskContext AsyncDualPoolScheduler::MakeTaskContext(const void* context) const {
     return std::make_shared<AsyncResumer>();
   };
   task_ctx.awaiter_factory = [](Resumers resumers) -> Result<std::shared_ptr<Awaiter>> {
-    return AsyncAwaiter::MakeAny(std::move(resumers));
+    return AsyncAwaiter::Make(std::move(resumers));
   };
   return task_ctx;
 }

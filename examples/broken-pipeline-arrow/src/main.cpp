@@ -21,7 +21,6 @@
 #include <broken_pipeline/broken_pipeline.h>
 
 #include "arrow_op.h"
-#include "arrow_traits.h"
 
 namespace bp_arrow {
 namespace {

@@ -20,10 +20,9 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-find_package(Arrow CONFIG REQUIRED)
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/arrow_targets.cmake")
 
 add_executable(broken-pipeline-arrow
-  src/arrow_traits.h
   src/arrow_op.h
   src/main.cpp
 )
@@ -33,14 +32,6 @@ target_include_directories(broken-pipeline-arrow PRIVATE
   ${CMAKE_CURRENT_LIST_DIR}/src
 )
 
-if(TARGET Arrow::arrow_shared)
-  target_link_libraries(broken-pipeline-arrow PRIVATE Arrow::arrow_shared)
-elseif(TARGET Arrow::arrow_static)
-  target_link_libraries(broken-pipeline-arrow PRIVATE Arrow::arrow_static)
-elseif(TARGET Arrow::arrow)
-  target_link_libraries(broken-pipeline-arrow PRIVATE Arrow::arrow)
-else()
-  message(FATAL_ERROR "Arrow CMake target (Arrow::arrow_*) not found")
-endif()
+target_link_libraries(broken-pipeline-arrow PRIVATE Arrow::arrow)
 
 target_compile_features(broken-pipeline-arrow PRIVATE cxx_std_20)

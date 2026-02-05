@@ -36,21 +36,8 @@ void SyncAwaiter::Wait() {
   }
 }
 
-Result<std::shared_ptr<Awaiter>> SyncAwaiter::MakeSingle(ResumerPtr resumer) {
-  Resumers resumers;
-  resumers.push_back(std::move(resumer));
+Result<std::shared_ptr<Awaiter>> SyncAwaiter::Make(Resumers resumers) {
   ARROW_ASSIGN_OR_RAISE(auto awaiter, MakeSyncAwaiter(1, std::move(resumers)));
-  return std::static_pointer_cast<Awaiter>(std::move(awaiter));
-}
-
-Result<std::shared_ptr<Awaiter>> SyncAwaiter::MakeAny(Resumers resumers) {
-  ARROW_ASSIGN_OR_RAISE(auto awaiter, MakeSyncAwaiter(1, std::move(resumers)));
-  return std::static_pointer_cast<Awaiter>(std::move(awaiter));
-}
-
-Result<std::shared_ptr<Awaiter>> SyncAwaiter::MakeAll(Resumers resumers) {
-  const auto num_readies = resumers.size();
-  ARROW_ASSIGN_OR_RAISE(auto awaiter, MakeSyncAwaiter(num_readies, std::move(resumers)));
   return std::static_pointer_cast<Awaiter>(std::move(awaiter));
 }
 

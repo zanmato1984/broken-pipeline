@@ -23,16 +23,12 @@ target_include_directories(broken_pipeline INTERFACE
   $<INSTALL_INTERFACE:include>
 )
 
-set(BROKEN_PIPELINE_ARROW_CORE_TARGET "" CACHE STRING
-  "Override the Arrow CMake target to link against (e.g. Arrow::arrow_shared, Arrow::arrow_static, arrow_shared)"
-)
-set(BROKEN_PIPELINE_ARROW_COMPUTE_TARGET "" CACHE STRING
-  "Override the ArrowCompute CMake target to link against (tests only)"
-)
-mark_as_advanced(BROKEN_PIPELINE_ARROW_CORE_TARGET BROKEN_PIPELINE_ARROW_COMPUTE_TARGET)
-
 option(BROKEN_PIPELINE_BUILD_SCHEDULE "Build broken_pipeline schedule library" OFF)
 option(BROKEN_PIPELINE_BUILD_TESTS "Build broken_pipeline tests" OFF)
+
+if(BROKEN_PIPELINE_BUILD_TESTS AND NOT BROKEN_PIPELINE_BUILD_SCHEDULE)
+  message(FATAL_ERROR "BROKEN_PIPELINE_BUILD_TESTS requires BROKEN_PIPELINE_BUILD_SCHEDULE=ON.")
+endif()
 
 if(BROKEN_PIPELINE_BUILD_SCHEDULE)
   add_subdirectory(src/schedule)

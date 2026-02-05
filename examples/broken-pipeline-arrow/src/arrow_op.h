@@ -30,9 +30,11 @@
 #include <arrow/type.h>
 #include <broken_pipeline/broken_pipeline.h>
 
-#include "arrow_traits.h"
+#include <broken_pipeline/schedule/arrow_traits.h>
 
 namespace bp_arrow {
+
+using namespace bp::schedule::arrow;
 
 inline Result<Batch> MakeInt32Batch(const std::shared_ptr<arrow::Schema>& schema,
                                     std::int32_t start, std::int32_t length) {

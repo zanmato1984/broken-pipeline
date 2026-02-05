@@ -30,7 +30,7 @@ class NaiveParallelScheduler {
     task_ctx.awaiter_factory =
         [](std::vector<std::shared_ptr<bp::Resumer>> resumers)
             -> bp::Result<Traits, std::shared_ptr<bp::Awaiter>> {
-      return SyncAwaiter::MakeAny(std::move(resumers));
+      return SyncAwaiter::Make(std::move(resumers));
     };
     return task_ctx;
   }
