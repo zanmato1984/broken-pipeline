@@ -12,17 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-find_package(Arrow CONFIG REQUIRED)
+if (PROJECT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+  if (TARGET Arrow::arrow)
+    message(FATAL_ERROR "Arrow::arrow is already defined. When building broken_pipeline standalone, let find_package(Arrow) provide the Arrow::arrow target instead.")
+  endif()
 
-set(_broken_pipeline_arrow_target "")
-if(BUILD_SHARED_LIBS AND TARGET Arrow::arrow_shared)
-  set(_broken_pipeline_arrow_target Arrow::arrow_shared)
-elseif(TARGET Arrow::arrow_static)
-  set(_broken_pipeline_arrow_target Arrow::arrow_static)
-elseif(TARGET Arrow::arrow_shared)
-  set(_broken_pipeline_arrow_target Arrow::arrow_shared)
-else()
-  message(FATAL_ERROR "Expected Arrow::arrow_shared or Arrow::arrow_static")
+  find_package(Arrow CONFIG REQUIRED)
+  if (TARGET Arrow::arrow_shared)
+    add_library(Arrow::arrow ALIAS Arrow::arrow_shared)
+  elseif (TARGET Arrow::arrow_static)
+    add_library(Arrow::arrow ALIAS Arrow::arrow_static)
+  endif()
+endif()
+
+if (NOT TARGET Arrow::arrow)
+  message(FATAL_ERROR "Arrow::arrow target must be provided before enabling broken_pipeline schedule")
 endif()
 
 find_package(folly CONFIG REQUIRED)
@@ -56,7 +60,7 @@ target_include_directories(broken_pipeline_schedule
 target_link_libraries(broken_pipeline_schedule
   PUBLIC
     broken_pipeline
-    ${_broken_pipeline_arrow_target}
+    Arrow::arrow
     Folly::folly
     glog::glog
 )
