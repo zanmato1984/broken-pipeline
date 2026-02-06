@@ -59,7 +59,8 @@
 /// - An async runtime dependency
 ///
 /// Notes:
-/// - All public symbols live in namespace `bp`.
+/// - Core public symbols live in namespace `bp`; optional adapters live under
+///   `bp::traits::*`.
 /// - `Compile` splits pipelines only on `PipeOp::ImplicitSource()`.
 /// `SinkOp::ImplicitSource()`
 ///   is provided for host orchestration and is not used by `Compile`.

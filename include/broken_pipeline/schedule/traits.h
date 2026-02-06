@@ -16,34 +16,18 @@
 
 /// @file traits.h
 ///
-/// @brief Broken Pipeline Traits implementation backed by Apache Arrow.
+/// @brief Schedule convenience aliases for the Arrow-backed core Traits.
 ///
-/// Broken Pipeline core is traits-based and does not define its own Status/Result/Batch
-/// types. This header provides the project's unified Arrow binding:
-/// - `Status` maps to `arrow::Status`
-/// - `Result<T>` maps to `arrow::Result<T>`
-/// - `Batch` maps to `std::shared_ptr<arrow::RecordBatch>`
-
-#include <memory>
-
-#include <arrow/record_batch.h>
-#include <arrow/result.h>
-#include <arrow/status.h>
+/// The Arrow-backed Traits live in `broken_pipeline/traits/arrow.h`. This header
+/// re-exports them into the `bp::schedule` namespace alongside the schedule helpers.
 
 #include <broken_pipeline/broken_pipeline.h>
+#include <broken_pipeline/traits/arrow.h>
 
 namespace bp::schedule {
 
 /// @brief Arrow-backed Traits binding for Broken Pipeline.
-///
-/// - `Batch` is an `arrow::RecordBatch`.
-/// - `Status` / `Result<T>` are Arrow's transport types.
-struct Traits {
-  using Batch = std::shared_ptr<::arrow::RecordBatch>;
-  using Status = ::arrow::Status;
-  template <class T>
-  using Result = ::arrow::Result<T>;
-};
+using Traits = bp::traits::arrow::Traits;
 
 // Convenience aliases so callers don't have to repeat the plumbing.
 using Batch = Traits::Batch;

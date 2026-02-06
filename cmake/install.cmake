@@ -33,6 +33,12 @@ install(
   DIRECTORY "${PROJECT_SOURCE_DIR}/include/broken_pipeline/"
   DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/broken_pipeline"
   PATTERN "schedule" EXCLUDE
+  PATTERN "traits" EXCLUDE
+)
+
+install(
+  DIRECTORY "${PROJECT_SOURCE_DIR}/include/broken_pipeline/traits/"
+  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/broken_pipeline/traits"
 )
 
 if(BROKEN_PIPELINE_BUILD_SCHEDULE)

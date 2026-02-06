@@ -26,7 +26,8 @@ Arrow-based schedulers for host applications that want one.
 
 ## Public API and layout
 
-All public symbols are in namespace bp (no sub-namespaces).
+Core public symbols are in namespace bp. Optional adapters live under `bp::traits::*`
+(for example, `bp::traits::arrow`).
 
 Headers:
 - `include/broken_pipeline/broken_pipeline.h` (umbrella header)
@@ -35,8 +36,9 @@ Headers:
 - `include/broken_pipeline/operator.h`
 - `include/broken_pipeline/pipeline.h`
 - `include/broken_pipeline/pipeline_exec.h`
+- `include/broken_pipeline/traits/arrow.h` (optional Apache Arrow Traits adapter)
 
-Optional schedule runtime (Apache Arrow + Folly):
+Optional schedule runtime (Apache Arrow + Folly, re-exporting Arrow traits):
 - `include/broken_pipeline/schedule/traits.h`
 - `include/broken_pipeline/schedule/naive_parallel_scheduler.h`
 - `include/broken_pipeline/schedule/async_dual_pool_scheduler.h`
@@ -68,6 +70,12 @@ Include everything:
 
 Broken Pipeline is parameterized by a Traits type that satisfies `bp::PipelineBreaker`
 (`include/broken_pipeline/concepts.h`).
+
+If you use Apache Arrow, the optional adapter lives in
+`include/broken_pipeline/traits/arrow.h` under `bp::traits::arrow`. The schedule
+runtime re-exports it via `bp::schedule::Traits` in
+`include/broken_pipeline/schedule/traits.h`. Hosts that include the Arrow adapter are
+responsible for providing Arrow include paths and link libraries.
 
 Your Traits must provide:
 - `using Batch = ...;` (movable)
