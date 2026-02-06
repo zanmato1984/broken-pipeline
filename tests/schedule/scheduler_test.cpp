@@ -16,6 +16,8 @@
 
 #include <broken_pipeline/schedule/async_dual_pool_scheduler.h>
 #include <broken_pipeline/schedule/naive_parallel_scheduler.h>
+#include <broken_pipeline/schedule/parallel_coro_scheduler.h>
+#include <broken_pipeline/schedule/sequential_coro_scheduler.h>
 
 #include <arrow/testing/gtest_util.h>
 
@@ -50,6 +52,14 @@ struct NaiveParallelSchedulerHolder {
   NaiveParallelScheduler scheduler;
 };
 
+struct ParallelCoroSchedulerHolder {
+  ParallelCoroScheduler scheduler;
+};
+
+struct SequentialCoroSchedulerHolder {
+  SequentialCoroScheduler scheduler;
+};
+
 template <typename SchedulerHolder>
 class ScheduleTest : public ::testing::Test {
  protected:
@@ -64,7 +74,8 @@ class ScheduleTest : public ::testing::Test {
 };
 
 using SchedulerTypes =
-    ::testing::Types<AsyncDualPoolSchedulerHolder, NaiveParallelSchedulerHolder>;
+    ::testing::Types<AsyncDualPoolSchedulerHolder, NaiveParallelSchedulerHolder,
+                     ParallelCoroSchedulerHolder, SequentialCoroSchedulerHolder>;
 TYPED_TEST_SUITE(ScheduleTest, SchedulerTypes);
 
 }  // namespace

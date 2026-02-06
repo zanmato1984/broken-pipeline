@@ -16,6 +16,11 @@
 
 #include <broken_pipeline/schedule/async_dual_pool_scheduler.h>
 #include <broken_pipeline/schedule/naive_parallel_scheduler.h>
+#include <broken_pipeline/schedule/parallel_coro_scheduler.h>
+#include <broken_pipeline/schedule/sequential_coro_scheduler.h>
+
+#include <broken_pipeline/schedule/detail/coro_awaiter.h>
+#include <broken_pipeline/schedule/detail/single_thread_awaiter.h>
 
 #include <arrow/testing/gtest_util.h>
 
@@ -34,13 +39,13 @@
 
 namespace bp::test {
 
-using bp::schedule::detail::FutureAwaiter;
 using bp::schedule::AsyncDualPoolScheduler;
 using bp::schedule::Awaiter;
 using bp::schedule::Batch;
 using bp::schedule::Compile;
 using bp::schedule::Continuation;
 using bp::schedule::NaiveParallelScheduler;
+using bp::schedule::ParallelCoroScheduler;
 using bp::schedule::OpOutput;
 using bp::schedule::OpResult;
 using bp::schedule::Pipeline;
@@ -56,6 +61,10 @@ using bp::schedule::SinkOp;
 using bp::schedule::SourceOp;
 using bp::schedule::Status;
 using bp::schedule::detail::ConditionalAwaiter;
+using bp::schedule::detail::CoroAwaiter;
+using bp::schedule::detail::FutureAwaiter;
+using bp::schedule::detail::SingleThreadAwaiter;
+using bp::schedule::SequentialCoroScheduler;
 using bp::schedule::Task;
 using bp::schedule::TaskContext;
 using bp::schedule::TaskGroup;
@@ -145,6 +154,12 @@ const std::vector<std::shared_ptr<Resumer>>* GetResumers(const Awaiter* awaiter)
   }
   if (auto* sync_awaiter = dynamic_cast<const ConditionalAwaiter*>(awaiter)) {
     return &sync_awaiter->GetResumers();
+  }
+  if (auto* single_awaiter = dynamic_cast<const SingleThreadAwaiter*>(awaiter)) {
+    return &single_awaiter->GetResumers();
+  }
+  if (auto* coro_awaiter = dynamic_cast<const CoroAwaiter*>(awaiter)) {
+    return &coro_awaiter->GetResumers();
   }
   if (auto* async_awaiter = dynamic_cast<const FutureAwaiter*>(awaiter)) {
     return &async_awaiter->GetResumers();
@@ -531,8 +546,12 @@ struct PipeExecTestType {
 using PipeExecTestTypes =
     ::testing::Types<PipeExecTestType<LegacyPipeExecRunner, NaiveParallelScheduler>,
                      PipeExecTestType<LegacyPipeExecRunner, AsyncDualPoolScheduler>,
+                     PipeExecTestType<LegacyPipeExecRunner, ParallelCoroScheduler>,
+                     PipeExecTestType<LegacyPipeExecRunner, SequentialCoroScheduler>,
                      PipeExecTestType<CoroPipeExecRunner, NaiveParallelScheduler>,
-                     PipeExecTestType<CoroPipeExecRunner, AsyncDualPoolScheduler>>;
+                     PipeExecTestType<CoroPipeExecRunner, AsyncDualPoolScheduler>,
+                     PipeExecTestType<CoroPipeExecRunner, ParallelCoroScheduler>,
+                     PipeExecTestType<CoroPipeExecRunner, SequentialCoroScheduler>>;
 
 template <class Param>
 class PipeExecTest : public ::testing::Test {

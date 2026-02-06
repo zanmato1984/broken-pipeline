@@ -18,8 +18,18 @@ add_broken_pipeline_test(
 )
 
 add_broken_pipeline_test(
+  broken-pipeline-schedule-coro-awaiter-test
+  "${CMAKE_CURRENT_SOURCE_DIR}/coro_awaiter_test.cpp"
+)
+
+add_broken_pipeline_test(
   broken-pipeline-schedule-future-awaiter-test
   "${CMAKE_CURRENT_SOURCE_DIR}/future_awaiter_test.cpp"
+)
+
+add_broken_pipeline_test(
+  broken-pipeline-schedule-single-thread-awaiter-test
+  "${CMAKE_CURRENT_SOURCE_DIR}/single_thread_awaiter_test.cpp"
 )
 
 add_broken_pipeline_test(
