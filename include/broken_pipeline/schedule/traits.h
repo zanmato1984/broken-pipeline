@@ -34,23 +34,12 @@
 
 namespace bp::schedule {
 
-/// @brief Optional query-level context carried through TaskContext.
-///
-/// Schedulers in `bp::schedule` pass a pointer to this struct in
-/// `TaskContext::context`. Host applications can extend or replace it in their own
-/// Traits if needed.
-struct Context {
-  /// @brief Optional human-readable identifier for the running query/plan.
-  const char* query_name = "broken-pipeline";
-};
-
 /// @brief Arrow-backed Traits binding for Broken Pipeline.
 ///
 /// - `Batch` is an `arrow::RecordBatch`.
 /// - `Status` / `Result<T>` are Arrow's transport types.
 struct Traits {
   using Batch = std::shared_ptr<::arrow::RecordBatch>;
-  using Context = bp::schedule::Context;
   using Status = ::arrow::Status;
 
   template <class T>

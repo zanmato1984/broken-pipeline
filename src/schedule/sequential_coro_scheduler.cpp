@@ -393,7 +393,7 @@ void detail::SequentialCoroEngine::Unregister(detail::SequentialCoroHandle* hand
                ready_.end());
 }
 
-TaskContext SequentialCoroScheduler::MakeTaskContext(const Traits::Context* context) const {
+TaskContext SequentialCoroScheduler::MakeTaskContext(const void* context) const {
   TaskContext task_ctx;
   task_ctx.context = context;
   task_ctx.resumer_factory = []() -> Result<std::shared_ptr<Resumer>> {
@@ -430,7 +430,7 @@ Result<TaskStatus> SequentialCoroScheduler::WaitTaskGroup(TaskGroupHandle& handl
 }
 
 Result<TaskStatus> SequentialCoroScheduler::ScheduleAndWait(const TaskGroup& group,
-                                                            const Traits::Context* context,
+                                                            const void* context,
                                                             std::vector<TaskStatus>* statuses) {
   auto task_ctx = MakeTaskContext(context);
   auto handle = ScheduleTaskGroup(group, std::move(task_ctx), statuses);

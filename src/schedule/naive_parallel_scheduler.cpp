@@ -20,7 +20,7 @@
 
 namespace bp::schedule {
 
-TaskContext NaiveParallelScheduler::MakeTaskContext(const Traits::Context* context) const {
+TaskContext NaiveParallelScheduler::MakeTaskContext(const void* context) const {
   TaskContext task_ctx;
   task_ctx.context = context;
   task_ctx.resumer_factory = []() -> Result<std::shared_ptr<Resumer>> {
@@ -140,7 +140,7 @@ Result<TaskStatus> NaiveParallelScheduler::WaitTaskGroup(TaskGroupHandle& handle
 }
 
 Result<TaskStatus> NaiveParallelScheduler::ScheduleAndWait(const TaskGroup& group,
-                                                           const Traits::Context* context,
+                                                           const void* context,
                                                            std::vector<TaskStatus>* statuses) const {
   auto task_ctx = MakeTaskContext(context);
   auto handle = ScheduleTaskGroup(group, std::move(task_ctx), statuses);

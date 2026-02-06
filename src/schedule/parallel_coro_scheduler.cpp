@@ -146,7 +146,7 @@ TaskCoro MakeTaskCoro(CoroReadyQueue& queue, const Task& task,
 
 }  // namespace
 
-TaskContext ParallelCoroScheduler::MakeTaskContext(const Traits::Context* context) const {
+TaskContext ParallelCoroScheduler::MakeTaskContext(const void* context) const {
   TaskContext task_ctx;
   task_ctx.context = context;
   task_ctx.resumer_factory = []() -> Result<std::shared_ptr<Resumer>> {
@@ -275,7 +275,7 @@ Result<TaskStatus> ParallelCoroScheduler::WaitTaskGroup(TaskGroupHandle& handle)
 }
 
 Result<TaskStatus> ParallelCoroScheduler::ScheduleAndWait(const TaskGroup& group,
-                                                          const Traits::Context* context,
+                                                          const void* context,
                                                           std::vector<TaskStatus>* statuses) const {
   auto task_ctx = MakeTaskContext(context);
   auto handle = ScheduleTaskGroup(group, std::move(task_ctx), statuses);

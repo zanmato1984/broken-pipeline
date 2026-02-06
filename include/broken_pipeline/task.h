@@ -76,7 +76,7 @@ using AwaiterFactory = std::function<Result<Traits, std::shared_ptr<Awaiter>>(
 /// A scheduler is expected to create one `TaskContext` and pass it to all task instances
 /// in a `TaskGroup`. Broken Pipeline does not construct these.
 ///
-/// - `context` is an optional user-defined pointer to query-level state (can be null).
+/// - `context` is an optional, type-erased pointer to query-level state (can be null).
 /// - The factories provide scheduler-specific primitives for blocked waiting and wake-up.
 ///
 /// When a task returns `TaskStatus::Blocked(awaiter)`, the scheduler is responsible for:
@@ -84,9 +84,21 @@ using AwaiterFactory = std::function<Result<Traits, std::shared_ptr<Awaiter>>(
 /// - re-scheduling the task instance after one or more resumers are resumed
 template <BrokenPipelineTraits Traits>
 struct TaskContext {
-  const typename Traits::Context* context = nullptr;
+  /// @brief Optional, type-erased query-level context pointer (may be null).
+  const void* context = nullptr;
   ResumerFactory<Traits> resumer_factory;
   AwaiterFactory<Traits> awaiter_factory;
+
+  template <class T>
+  const T* ContextAs() const {
+    return static_cast<const T*>(context);
+  }
+
+  template <class T>
+  const T& ContextRef() const {
+    assert(context != nullptr);
+    return *static_cast<const T*>(context);
+  }
 };
 
 /// @brief The control protocol between a Task and a Scheduler.

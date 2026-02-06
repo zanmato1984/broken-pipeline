@@ -53,7 +53,7 @@ AsyncDualPoolScheduler::AsyncDualPoolScheduler(folly::Executor* cpu_executor,
     : cpu_executor_(cpu_executor),
       io_executor_(io_executor) {}
 
-TaskContext AsyncDualPoolScheduler::MakeTaskContext(const Traits::Context* context) const {
+TaskContext AsyncDualPoolScheduler::MakeTaskContext(const void* context) const {
   TaskContext task_ctx;
   task_ctx.context = context;
   task_ctx.resumer_factory = []() -> Result<std::shared_ptr<Resumer>> {
@@ -205,7 +205,7 @@ Result<TaskStatus> AsyncDualPoolScheduler::WaitTaskGroup(TaskGroupHandle& handle
 }
 
 Result<TaskStatus> AsyncDualPoolScheduler::ScheduleAndWait(const TaskGroup& group,
-                                                           const Traits::Context* context,
+                                                           const void* context,
                                                            std::vector<TaskStatus>* statuses) {
   auto task_ctx = MakeTaskContext(context);
   auto handle = ScheduleTaskGroup(group, std::move(task_ctx), statuses);

@@ -58,8 +58,10 @@ using Status = typename Traits::Status;
 ///
 /// You provide a `Traits` type to parametrize Broken Pipeline over:
 /// - The batch type (`Batch`)
-/// - An optional query-level context type (`Context`)
 /// - Your error/result transport (`Status` + `Result<T>`)
+///
+/// Query-level context is carried separately as a type-erased pointer in
+/// `bp::TaskContext<Traits>`.
 ///
 /// Broken Pipeline expects an Arrow-like API (zero-overhead when using Arrow directly):
 ///
@@ -87,11 +89,9 @@ template <class Traits>
 concept BrokenPipelineTraits =
     requires {
       typename Traits::Batch;
-      typename Traits::Context;
       typename Traits::Status;
       typename Result<Traits, int>;
     } && std::movable<typename Traits::Batch> &&
-    std::is_object_v<typename Traits::Context> &&
     requires {
       { Traits::Status::OK() } -> std::same_as<typename Traits::Status>;
     } &&

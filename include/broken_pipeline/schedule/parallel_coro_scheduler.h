@@ -38,7 +38,7 @@ class ParallelCoroScheduler {
   ParallelCoroScheduler() = default;
 
   /// @brief Create a TaskContext configured with coroutine resumers/awaiters.
-  TaskContext MakeTaskContext(const Traits::Context* context = nullptr) const;
+  TaskContext MakeTaskContext(const void* context = nullptr) const;
 
   /// @brief Handle returned by ScheduleTaskGroup for later waiting or inspection.
   struct TaskGroupHandle {
@@ -54,8 +54,7 @@ class ParallelCoroScheduler {
   Result<TaskStatus> WaitTaskGroup(TaskGroupHandle& handle) const;
 
   /// @brief Convenience helper to schedule a TaskGroup and wait for completion.
-  Result<TaskStatus> ScheduleAndWait(const TaskGroup& group,
-                                     const Traits::Context* context = nullptr,
+  Result<TaskStatus> ScheduleAndWait(const TaskGroup& group, const void* context = nullptr,
                                      std::vector<TaskStatus>* statuses = nullptr) const;
 };
 

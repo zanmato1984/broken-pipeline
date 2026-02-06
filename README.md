@@ -71,7 +71,6 @@ Broken Pipeline is parameterized by a Traits type that satisfies `bp::BrokenPipe
 
 Your Traits must provide:
 - `using Batch = ...;` (movable)
-- `using Context = ...;` (an object type; can be `std::monostate`)
 - `using Status = ...;` with `Status::OK()` and `status.ok()`
 - `template<class T> using Result = ...;` with an Arrow-like surface:
   - `result.ok()`, `result.status()`, `result.ValueOrDie()`
@@ -115,7 +114,6 @@ class Result {
 
 struct Traits {
   using Batch = MyBatch;
-  using Context = MyQueryContext;
   using Status = ::Status;
 
   template<class T>
@@ -132,6 +130,10 @@ The core task types are defined in `include/broken_pipeline/task.h`:
 - `bp::Continuation<Traits>`
 - `bp::Resumer`, `bp::Awaiter`
 - `bp::TaskContext<Traits>`
+
+`TaskContext` carries an optional, type-erased query context pointer:
+- `const void* context` (may be null)
+- `ContextAs<T>()` / `ContextRef<T>()` helpers to recover the concrete type
 
 Task and continuation entrypoints return `bp::TaskResult<Traits>`, which is an alias of
 `Traits::Result<bp::TaskStatus>`.
@@ -327,7 +329,8 @@ Concurrency requirements:
 ## Orchestration
 
 PipelineExec only provides building blocks. A host scheduler/executor is responsible for:
-- Creating a `TaskContext` with `resumer_factory` and `awaiter_factory`.
+- Creating a `TaskContext` with an optional `context` pointer plus `resumer_factory` and
+  `awaiter_factory`.
 - Scheduling frontend/backend task groups (source frontend before pipelinexes, sink frontend
   after pipelinexes, and backends as IO-readiness tasks typically scheduled ahead).
 - Executing each Pipelinexe PipeExec task group with the desired scheduling policy.
@@ -355,7 +358,11 @@ Minimal usage:
 #include <broken_pipeline/schedule/async_dual_pool_scheduler.h>
 #include <broken_pipeline/schedule/traits.h>
 
-bp::schedule::Context ctx{.query_name = "demo"};
+struct QueryContext {
+  const char* query_name = "demo";
+};
+
+QueryContext ctx{};
 bp::schedule::AsyncDualPoolScheduler scheduler(8, 2);
 
 bp::schedule::TaskGroup group = /* from PipelineExec / Pipelinexe */;

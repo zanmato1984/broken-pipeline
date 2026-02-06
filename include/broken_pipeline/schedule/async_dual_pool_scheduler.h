@@ -68,7 +68,7 @@ class AsyncDualPoolScheduler {
   AsyncDualPoolScheduler& operator=(AsyncDualPoolScheduler&&) noexcept = default;
 
   /// @brief Create a TaskContext configured with future-based resumers/awaiters.
-  TaskContext MakeTaskContext(const Traits::Context* context = nullptr) const;
+  TaskContext MakeTaskContext(const void* context = nullptr) const;
 
   /// @brief Handle returned by ScheduleTaskGroup for later waiting or inspection.
   ///
@@ -89,8 +89,7 @@ class AsyncDualPoolScheduler {
   Result<TaskStatus> WaitTaskGroup(TaskGroupHandle& handle) const;
 
   /// @brief Convenience helper to schedule a TaskGroup and wait for completion.
-  Result<TaskStatus> ScheduleAndWait(const TaskGroup& group,
-                                     const Traits::Context* context = nullptr,
+  Result<TaskStatus> ScheduleAndWait(const TaskGroup& group, const void* context = nullptr,
                                      std::vector<TaskStatus>* statuses = nullptr);
 
  private:
