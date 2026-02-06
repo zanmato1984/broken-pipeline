@@ -65,6 +65,8 @@
 ///   is provided for host orchestration and is not used by `Compile`.
 
 #include <broken_pipeline/concepts.h>
+#include <broken_pipeline/result.h>
+#include <broken_pipeline/types.h>
 
 #include <broken_pipeline/operator.h>
 #include <broken_pipeline/pipeline.h>

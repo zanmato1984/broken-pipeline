@@ -31,7 +31,9 @@
 #include <broken_pipeline/concepts.h>
 #include <broken_pipeline/operator.h>
 #include <broken_pipeline/pipeline.h>
+#include <broken_pipeline/result.h>
 #include <broken_pipeline/task.h>
+#include <broken_pipeline/types.h>
 
 namespace bp {
 

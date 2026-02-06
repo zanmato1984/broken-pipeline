@@ -15,44 +15,11 @@
 #pragma once
 
 #include <concepts>
-#include <cstddef>
-#include <type_traits>
 #include <utility>
 
+#include <broken_pipeline/result.h>
+
 namespace bp {
-
-/// @brief Task instance id within a `TaskGroup`.
-///
-/// Broken Pipeline intentionally keeps ids simple and uniform: task instances are indexed
-/// 0..N-1 within their group.
-///
-/// Type: `std::size_t`.
-using TaskId = std::size_t;
-
-/// @brief Execution lane id.
-///
-/// Many operator implementations keep per-lane state indexed by `ThreadId`. In the
-/// reference runtime (`PipeExec`), a task instance typically uses
-/// `TaskId` as its `ThreadId`.
-///
-/// Type: `std::size_t`.
-using ThreadId = std::size_t;
-
-/// @brief Alias helper for `Traits::Result<T>`.
-///
-/// Broken Pipeline never assumes a particular error type or transport. Instead, all APIs
-/// return `Traits::Result<T>` and rely on an Arrow-like result surface:
-/// - `result.ok()`
-/// - `result.status()`
-/// - `result.ValueOrDie()`
-template <class Traits, class T>
-using Result = typename Traits::template Result<T>;
-
-/// @brief Status type (success-or-error) used by Broken Pipeline.
-///
-/// This is `Traits::Status` (Arrow-style, separate from `Result<T>`).
-template <class Traits>
-using Status = typename Traits::Status;
 
 /// @brief Concept defining the required "Traits" surface (PipelineBreaker) for Broken Pipeline.
 ///

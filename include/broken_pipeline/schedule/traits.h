@@ -41,7 +41,6 @@ namespace bp::schedule {
 struct Traits {
   using Batch = std::shared_ptr<::arrow::RecordBatch>;
   using Status = ::arrow::Status;
-
   template <class T>
   using Result = ::arrow::Result<T>;
 };
@@ -49,7 +48,6 @@ struct Traits {
 // Convenience aliases so callers don't have to repeat the plumbing.
 using Batch = Traits::Batch;
 using Status = Traits::Status;
-
 template <class T>
 using Result = Traits::template Result<T>;
 
