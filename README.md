@@ -380,6 +380,10 @@ auto status = scheduler.ScheduleAndWait(group, &ctx);
 Build and link:
 - Configure with `-DBROKEN_PIPELINE_BUILD_SCHEDULE=ON`.
 - Link against `broken_pipeline::schedule` (which pulls in Arrow, Folly, and glog).
+- Provide the Arrow CMake target: when building as a subproject, the host must
+  define `Arrow::arrow` before enabling schedule. When building broken_pipeline
+  standalone, CMake will `find_package(Arrow CONFIG REQUIRED)` and alias
+  `Arrow::arrow` if only shared/static targets are available.
 
 ## Build
 
