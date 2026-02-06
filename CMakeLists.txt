@@ -22,6 +22,7 @@ target_include_directories(broken_pipeline INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
+add_library(broken_pipeline::broken_pipeline ALIAS broken_pipeline)
 
 option(BROKEN_PIPELINE_BUILD_SCHEDULE "Build broken_pipeline schedule library" OFF)
 option(BROKEN_PIPELINE_BUILD_TESTS "Build broken_pipeline tests" OFF)
