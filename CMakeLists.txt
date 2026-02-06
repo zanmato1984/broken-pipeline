@@ -14,7 +14,7 @@
 
 cmake_minimum_required(VERSION 3.20)
 
-project(broken-pipeline VERSION 0.1.0 LANGUAGES CXX)
+project(broken-pipeline VERSION 0.1.1 LANGUAGES CXX)
 
 add_library(broken_pipeline INTERFACE)
 target_compile_features(broken_pipeline INTERFACE cxx_std_20)
