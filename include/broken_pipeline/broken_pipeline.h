@@ -22,7 +22,7 @@
 /// batch-at-a-time execution pipelines that can be driven without blocking threads.
 ///
 /// The library is traits-based: you provide a `Traits` type (see
-/// `bp::BrokenPipelineTraits`) that defines `Traits::Batch` and an Arrow-like
+/// `bp::PipelineBreaker`) that defines `Traits::Batch` and an Arrow-like
 /// `Traits::Status` / `Traits::Result<T>` transport.
 ///
 /// The core execution model is:

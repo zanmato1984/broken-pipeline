@@ -22,13 +22,13 @@
 
 namespace bp {
 
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 class SourceOp;
 
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 class PipeOp;
 
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 class SinkOp;
 
 /// @brief A pipeline graph: (one or more channels) -> (shared sink).
@@ -46,7 +46,7 @@ class SinkOp;
 /// - A pipeline may be split into multiple stages if any `PipeOp` returns a
 ///   non-null `ImplicitSource()`. In that case, the downstream pipe chain becomes a new
 ///   channel rooted at the implicit source in a later pipelinexe.
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 class Pipeline {
  public:
   struct Channel {

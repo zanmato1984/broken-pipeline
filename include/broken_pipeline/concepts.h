@@ -54,7 +54,7 @@ using Result = typename Traits::template Result<T>;
 template <class Traits>
 using Status = typename Traits::Status;
 
-/// @brief Concept defining the required "Traits" surface for Broken Pipeline.
+/// @brief Concept defining the required "Traits" surface (PipelineBreaker) for Broken Pipeline.
 ///
 /// You provide a `Traits` type to parametrize Broken Pipeline over:
 /// - The batch type (`Batch`)
@@ -85,25 +85,25 @@ using Status = typename Traits::Status;
 ///
 /// For other transports (e.g. `std::expected`), provide a thin wrapper type that exposes
 /// an equivalent surface (`OK()/ok()/status()/ValueOrDie()`).
-template <class Traits>
-concept BrokenPipelineTraits =
+template <class T>
+concept PipelineBreaker =
     requires {
-      typename Traits::Batch;
-      typename Traits::Status;
-      typename Result<Traits, int>;
-    } && std::movable<typename Traits::Batch> &&
+      typename T::Batch;
+      typename T::Status;
+      typename Result<T, int>;
+    } && std::movable<typename T::Batch> &&
     requires {
-      { Traits::Status::OK() } -> std::same_as<typename Traits::Status>;
+      { T::Status::OK() } -> std::same_as<typename T::Status>;
     } &&
-    requires(const typename Traits::Status& status) {
+    requires(const typename T::Status& status) {
       { status.ok() } -> std::same_as<bool>;
-    } && std::constructible_from<Result<Traits, int>, int> &&
-    std::constructible_from<Result<Traits, int>, typename Traits::Status> &&
-    requires(Result<Traits, int> result, const Result<Traits, int>& cresult) {
+    } && std::constructible_from<Result<T, int>, int> &&
+    std::constructible_from<Result<T, int>, typename T::Status> &&
+    requires(Result<T, int> result, const Result<T, int>& cresult) {
       { result.ok() } -> std::same_as<bool>;
       { cresult.ok() } -> std::same_as<bool>;
-      { result.status() } -> std::convertible_to<typename Traits::Status>;
-      { cresult.status() } -> std::convertible_to<typename Traits::Status>;
+      { result.status() } -> std::convertible_to<typename T::Status>;
+      { cresult.status() } -> std::convertible_to<typename T::Status>;
       { result.ValueOrDie() } -> std::same_as<int&>;
       { cresult.ValueOrDie() } -> std::same_as<const int&>;
       { std::move(result).ValueOrDie() } -> std::convertible_to<int>;

@@ -64,10 +64,10 @@ class Awaiter {
   virtual ~Awaiter() = default;
 };
 
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 using ResumerFactory = std::function<Result<Traits, std::shared_ptr<Resumer>>()>;
 
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 using AwaiterFactory = std::function<Result<Traits, std::shared_ptr<Awaiter>>(
     std::vector<std::shared_ptr<Resumer>>)>;
 
@@ -82,7 +82,7 @@ using AwaiterFactory = std::function<Result<Traits, std::shared_ptr<Awaiter>>(
 /// When a task returns `TaskStatus::Blocked(awaiter)`, the scheduler is responsible for:
 /// - waiting/suspending using the awaiter
 /// - re-scheduling the task instance after one or more resumers are resumed
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 struct TaskContext {
   /// @brief Optional, type-erased query-level context pointer (may be null).
   const void* context = nullptr;
@@ -185,14 +185,14 @@ struct TaskHint {
   Type type = Type::CPU;
 };
 
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 using TaskResult = Result<Traits, TaskStatus>;
 
 /// @brief Task instance id within a group.
 ///
 /// Broken Pipeline uses a uniform `std::size_t` task id. It is typically interpreted as a
 /// lane index for operators.
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 class Task {
  public:
   /// @brief Task entrypoint.
@@ -222,7 +222,7 @@ class Task {
   TaskHint hint_;
 };
 
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 class Continuation {
  public:
   /// @brief Continuation entrypoint executed after all task instances in the group
@@ -249,7 +249,7 @@ class Continuation {
   TaskHint hint_;
 };
 
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 class TaskGroup {
  public:
   /// @brief A conceptual group of N parallel instances of the same task.

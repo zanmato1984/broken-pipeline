@@ -29,10 +29,10 @@ namespace bp {
 
 class Resumer;
 
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 struct TaskContext;
 
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 class TaskGroup;
 
 /// @brief Output/control signal returned by operator callbacks to the pipeline runtime.
@@ -62,7 +62,7 @@ class TaskGroup;
 /// - Re-entering an operator (invoking it again, often with `input=nullopt`) is distinct
 ///   from `Resumer::Resume()`, which is the wake-up mechanism used only for
 ///   `OpOutput::Blocked(resumer)`.
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 class OpOutput {
  public:
   enum class Code {
@@ -190,7 +190,7 @@ class OpOutput {
 /// @brief Result type for operator callbacks.
 ///
 /// Operators return `Traits::Result<OpOutput<Traits>>`.
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 using OpResult = Result<Traits, OpOutput<Traits>>;
 
 /// @brief Source callback signature.
@@ -204,7 +204,7 @@ using OpResult = Result<Traits, OpOutput<Traits>>;
 /// - `Finished(batch)` to signal end-of-stream while also producing a final batch
 /// - `Blocked(resumer)` if it needs to wait for an external event (async IO /
 /// backpressure)
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 using PipelineSource =
     std::function<OpResult<Traits>(const TaskContext<Traits>&, ThreadId)>;
 
@@ -219,7 +219,7 @@ using PipelineSource =
 /// Terminology note:
 /// - Re-entering an operator is distinct from `Resumer::Resume()`, which is the wake-up
 ///   mechanism used only for `OpOutput::Blocked(resumer)`.
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 using PipelinePipe = std::function<OpResult<Traits>(
     const TaskContext<Traits>&, ThreadId, std::optional<typename Traits::Batch>)>;
 
@@ -229,11 +229,11 @@ using PipelinePipe = std::function<OpResult<Traits>(
 /// They allow operators to flush tail output that can only be produced at end-of-stream.
 ///
 /// An operator that does not need draining should return an empty `std::function{}`.
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 using PipelineDrain =
     std::function<OpResult<Traits>(const TaskContext<Traits>&, ThreadId)>;
 
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 using PipelineSink = PipelinePipe<Traits>;
 
 /// @brief Source operator interface.
@@ -251,7 +251,7 @@ using PipelineSink = PipelinePipe<Traits>;
 ///
 /// Broken Pipeline does not impose a specific scheduler or ordering for these task
 /// groups; the host orchestration decides.
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 class SourceOp {
  public:
   explicit SourceOp(std::string name = {}) : name_(std::move(name)) {}
@@ -284,7 +284,7 @@ class SourceOp {
 /// hash
 ///   table to emit unmatched rows. Representing that scan phase as an implicit source
 ///   makes it a separate downstream pipelinexe.
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 class PipeOp {
  public:
   explicit PipeOp(std::string name = {}) : name_(std::move(name)) {}
@@ -322,7 +322,7 @@ class PipeOp {
 /// Example:
 /// - An aggregation implemented as a sink can use `ImplicitSource()` to provide a source
 ///   that emits group-by results into a subsequent pipeline stage.
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 class SinkOp {
  public:
   explicit SinkOp(std::string name = {}) : name_(std::move(name)) {}

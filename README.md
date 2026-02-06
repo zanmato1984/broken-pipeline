@@ -66,7 +66,7 @@ Include everything:
 
 ## Traits
 
-Broken Pipeline is parameterized by a Traits type that satisfies `bp::BrokenPipelineTraits`
+Broken Pipeline is parameterized by a Traits type that satisfies `bp::PipelineBreaker`
 (`include/broken_pipeline/concepts.h`).
 
 Your Traits must provide:

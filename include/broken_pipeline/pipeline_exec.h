@@ -44,7 +44,7 @@ namespace bp {
 ///
 /// These task groups are opaque to Broken Pipeline core. A scheduler may route them using
 /// `TaskHint` (for example, CPU vs IO pools).
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 struct SourceExec {
   /// @brief Source frontend task groups.
   std::vector<TaskGroup<Traits>> frontend;
@@ -62,7 +62,7 @@ struct SourceExec {
 ///
 /// These task groups are opaque to Broken Pipeline core. A scheduler may route them using
 /// `TaskHint` (for example, CPU vs IO pools).
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 struct SinkExec {
   /// @brief Sink frontend task groups.
   std::vector<TaskGroup<Traits>> frontend;
@@ -71,7 +71,7 @@ struct SinkExec {
   std::optional<TaskGroup<Traits>> backend;
 };
 
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 class Pipelinexe;
 
 /// @brief Reference small-step runtime for a pipelinexe.
@@ -98,7 +98,7 @@ class Pipelinexe;
 ///   resumers.
 /// - `TaskStatus::Finished()` is returned when all channels are finished.
 /// - After an error, subsequent calls return `TaskStatus::Cancelled()`.
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 class PipeExec {
  public:
   bp::TaskGroup<Traits> TaskGroup() const {
@@ -517,7 +517,7 @@ class CoroStepper {
 /// Note:
 /// - This runtime does not introduce any threads; it is still driven by repeated
 ///   synchronous calls from a scheduler.
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 class PipeExecCoro {
  public:
   bp::TaskGroup<Traits> TaskGroup() const {
@@ -895,7 +895,7 @@ class PipeExecCoro {
 };
 
 namespace detail {
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 class PipelineCompiler;
 }  // namespace detail
 
@@ -912,7 +912,7 @@ class PipelineCompiler;
 ///   the duration of the compiled plan.
 ///
 /// Pipelinexes are executed in sequence order by the host.
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 class Pipelinexe {
  public:
   const std::string& Name() const noexcept { return name_; }
@@ -979,7 +979,7 @@ class Pipelinexe {
 ///
 /// The host is responsible for orchestrating ordering between pipelinexes and the
 /// source/sink frontend/backend task groups.
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 class PipelineExec {
  public:
   const std::string& Name() const noexcept { return name_; }
@@ -1023,7 +1023,7 @@ namespace detail {
 /// - `SinkOp::ImplicitSource()` is intentionally not used by this compiler. It is a
 ///   host-orchestration hook for chaining a sink's output into a subsequent pipeline
 ///   stage (for example, an aggregation sink emitting group-by results).
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 class PipelineCompiler {
  public:
   PipelineCompiler(const Pipeline<Traits>& pipeline, std::size_t dop)
@@ -1143,7 +1143,7 @@ class PipelineCompiler {
 /// - owns implicit sources returned from `PipeOp::ImplicitSource()` to keep them alive
 ///
 /// This function does not call `SinkOp::ImplicitSource()`.
-template <BrokenPipelineTraits Traits>
+template <PipelineBreaker Traits>
 PipelineExec<Traits> Compile(const Pipeline<Traits>& pipeline, std::size_t dop) {
   return detail::PipelineCompiler<Traits>(pipeline, dop).Compile();
 }
