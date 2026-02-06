@@ -46,6 +46,8 @@ Output value: 42
 
 ## Notes
 
+- The example source lives in `examples/arrow-common/main.cpp` and is shared with
+  the system Arrow example.
 - The example sets `dop=1` so operator state can be stored directly on the
   operator instances. Increase DOP only after making the operators thread-safe.
 - Update the Arrow URL/version in `examples/bundled-arrow/CMakeLists.txt` to

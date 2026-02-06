@@ -1,3 +1,17 @@
+# Copyright 2026 Rossi Sun
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 cmake_minimum_required(VERSION 3.20)
 
 project(bundled-arrow LANGUAGES CXX)
@@ -54,8 +68,11 @@ set(BROKEN_PIPELINE_BUILD_SCHEDULE ON CACHE BOOL "" FORCE)
 set(BROKEN_PIPELINE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../.. broken_pipeline_build)
 
-add_executable(bundled-arrow main.cpp)
+set(EXAMPLE_MAIN "${CMAKE_CURRENT_LIST_DIR}/../arrow-common/main.cpp")
+
+add_executable(bundled-arrow ${EXAMPLE_MAIN})
 target_compile_features(bundled-arrow PRIVATE cxx_std_20)
+target_compile_definitions(bundled-arrow PRIVATE EXAMPLE_PIPELINE_NAME="bundled-arrow")
 
 target_link_libraries(bundled-arrow
   PRIVATE

@@ -14,7 +14,7 @@
 
 if (PROJECT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
   if (TARGET Arrow::arrow)
-    message(FATAL_ERROR "Arrow::arrow is already defined. When building broken_pipeline standalone, let find_package(Arrow) provide the Arrow::arrow target instead.")
+    message(FATAL_ERROR "Arrow::arrow is already defined.")
   endif()
 
   find_package(Arrow CONFIG REQUIRED)
