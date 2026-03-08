@@ -36,6 +36,7 @@ if(BROKEN_PIPELINE_BUILD_SCHEDULE)
 endif()
 
 if(BROKEN_PIPELINE_BUILD_TESTS)
+  enable_testing()
   add_subdirectory(tests)
 endif()
 

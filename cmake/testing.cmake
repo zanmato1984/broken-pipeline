@@ -17,8 +17,6 @@ include_guard(GLOBAL)
 find_package(GTest REQUIRED)
 find_package(Threads REQUIRED)
 
-enable_testing()
-
 function(add_broken_pipeline_test TEST_NAME TEST_SRC)
   add_executable(${TEST_NAME} ${TEST_SRC})
   target_link_libraries(
